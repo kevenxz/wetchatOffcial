@@ -1,0 +1,36 @@
+/* ===== TaskDetail 页面样式 ===== */
+
+.container {
+  max-width: 860px;
+  margin: var(--space-xl) auto;
+}
+
+.backBtn {
+  margin-bottom: var(--space-md);
+  color: var(--text-secondary);
+}
+
+.loadingWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+}
+
+.sectionTitle {
+  margin-bottom: var(--space-md);
+  font-size: var(--font-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.progressBar {
+  margin-bottom: var(--space-lg);
+}
+
+.taskTitle {
+  margin: 0;
+}
+
+.taskIdText {
+  font-size: var(--font-xs);
+}
