@@ -69,6 +69,49 @@ async def create_task(body: CreateTaskRequest) -> TaskResponse:
     return task
 
 
+async def _retry_task(task_id: str, keywords: str, memory_state: dict) -> None:
+    """后台任务：从指定状态恢复并重试 LangGraph 工作流。"""
+    try:
+        await run_workflow(task_id, keywords, progress_callback=_progress_callback, resume_state=memory_state)
+    except Exception as exc:
+        logger.exception("background_task_retry_failed", task_id=task_id, error=str(exc))
+
+
+@router.post("/{task_id}/retry", response_model=TaskResponse)
+async def retry_task(
+    task_id: Annotated[str, Path(description="任务 ID")],
+) -> TaskResponse:
+    """重新执行失败的任务，将从失败跳过的节点继续执行。"""
+    task = task_store.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail=f"任务 {task_id!r} 不存在")
+        
+    if task.status not in (TaskStatus.failed, TaskStatus.done):
+        raise HTTPException(status_code=400, detail="只能重试失败或已终止的任务")
+        
+    # 重置外层任务状态为等待中
+    task.status = TaskStatus.pending
+    task.error = None
+    save_tasks()
+    
+    # 尝试将 Pydantic model 转换回 state 期望的 dict 结构以供恢复
+    memory_state = {
+        "task_id": task.task_id,
+        "keywords": task.keywords,
+        "generated_article": task.generated_article or {},
+        "draft_info": task.draft_info,
+        # 很多提取的信息没有通过 TaskResponse 落盘，如果在实际中我们需要完整恢复，应该将 run_workflow 的 final_state 返回持久化。
+        # 这里为了简化，只透传必要字段，对于丢失的 content 列表，如果在此阶段之后还需要可能就会失败。
+        # 由于失败往往是在推送报错，到了这步 generated_article 已经存在了。
+    }
+    
+    # 异步启动工作流
+    asyncio.create_task(_retry_task(task.task_id, task.keywords, memory_state))
+    
+    logger.info("task_retry_started", task_id=task.task_id)
+    return task
+
+
 @router.get("", response_model=list[TaskResponse])
 async def list_tasks() -> list[TaskResponse]:
     """获取所有任务列表（按创建时间倒序）。"""

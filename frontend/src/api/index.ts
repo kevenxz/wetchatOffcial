@@ -51,6 +51,9 @@ export const listTasks = (): Promise<TaskResponse[]> => http.get('/tasks')
 export const deleteTask = (taskId: string): Promise<void> =>
   http.delete(`/tasks/${taskId}`)
 
+export const retryTask = (taskId: string): Promise<TaskResponse> =>
+  http.post(`/tasks/${taskId}/retry`)
+
 /**
  * 创建到指定任务的 WebSocket 连接。
  * 调用方负责监听 onmessage / onclose 事件。
@@ -59,3 +62,11 @@ export function createTaskWs(taskId: string): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
   return new WebSocket(`${protocol}://${window.location.host}/ws/tasks/${taskId}`)
 }
+
+export type StyleConfig = Record<string, string>
+
+export const getStyleConfig = (): Promise<StyleConfig> =>
+  http.get('/config/style')
+
+export const updateStyleConfig = (config: StyleConfig): Promise<StyleConfig> =>
+  http.put('/config/style', config)

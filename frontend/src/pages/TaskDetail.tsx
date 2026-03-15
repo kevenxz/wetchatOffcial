@@ -12,6 +12,7 @@ import {
   Result,
   Spin,
   Divider,
+  message,
 } from 'antd'
 import {
   ArrowLeftOutlined,
@@ -19,8 +20,9 @@ import {
   CloseCircleOutlined,
   LoadingOutlined,
   ClockCircleOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons'
-import { getTask, type TaskResponse } from '@/api'
+import { getTask, retryTask, type TaskResponse } from '@/api'
 import styles from './TaskDetail.module.css'
 
 const { Title, Text } = Typography
@@ -97,11 +99,28 @@ export default function TaskDetail() {
   const [statusMessage, setStatusMessage] = useState<string>('正在连接…')
 
   const wsRef = useRef<WebSocket | null>(null)
+  
+  const handleRetry = async () => {
+    if (!taskId) return
+    try {
+      await retryTask(taskId)
+      message.success('已触发重传')
+      setWsStatus('pending')
+      setStatusMessage('尝试恢复重传连接…')
+    } catch (e: any) {
+      message.error(e.message || '重传请求失败')
+    }
+  }
 
   // 初始加载任务信息
   useEffect(() => {
     if (!taskId) return
-    getTask(taskId).then(setTask).catch(() => undefined)
+    getTask(taskId).then((res) => {
+      setTask(res)
+      setWsStatus(res.status)
+      if (res.status === 'done') setStatusMessage('任务执行完成')
+      if (res.status === 'failed') setStatusMessage(res.error || '任务执行失败')
+    }).catch(() => undefined)
   }, [taskId])
 
   // 建立 WebSocket 连接
@@ -277,9 +296,17 @@ export default function TaskDetail() {
                 title="任务执行失败"
                 subTitle={statusMessage || task.error || '未知错误'}
                 extra={
-                  <Button type="primary" onClick={() => navigate('/task')}>
-                    重新创建
-                  </Button>
+                  <Space>
+                    <Button type="primary" onClick={() => navigate('/task')}>
+                      创建一个新任务
+                    </Button>
+                    <Button 
+                      icon={<ReloadOutlined />} 
+                      onClick={handleRetry}
+                    >
+                      从断点重新执行
+                    </Button>
+                  </Space>
                 }
               />
             </Card>

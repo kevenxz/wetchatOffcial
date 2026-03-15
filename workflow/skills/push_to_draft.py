@@ -11,6 +11,8 @@ import httpx
 import structlog
 
 from workflow.state import WorkflowState
+from workflow.utils.wechat_api import upload_cover_material, upload_article_image
+from workflow.utils.markdown_to_wechat import markdown_to_wechat_html
 
 logger = structlog.get_logger(__name__)
 
@@ -39,26 +41,7 @@ async def _get_access_token(app_id: str, app_secret: str, client: httpx.AsyncCli
     return token
 
 
-def _build_html_content(article: dict) -> str:
-    """将正文和插图替换合并为最终的 HTML 格式文本。"""
-    content = article.get("content", "")
-    illustrations = article.get("illustrations", [])
-    
-    # 替换 [插图N] 为 <img> 标签
-    def replacer(match):
-        idx_str = match.group(1)
-        idx = int(idx_str) - 1
-        if 0 <= idx < len(illustrations):
-            img_url = illustrations[idx]
-            return f'<br><img src="{img_url}" style="max-width: 100%;"><br>'
-        return match.group(0) # 没找到对应图片则保留原样
-        
-    html_content = re.sub(r"\[插图(\d+)\]", replacer, content)
-    # 将段落换行替换为 <p> 或 <br>
-    html_content = html_content.replace("\n\n", "</p><p>")
-    html_content = f"<p>{html_content}</p>"
-    
-    return html_content
+
 
 
 async def push_to_draft_node(state: WorkflowState) -> dict:
@@ -93,30 +76,60 @@ async def push_to_draft_node(state: WorkflowState) -> dict:
             }
         }
         
-    html_content = _build_html_content(article)
-    
-    # 构建请求体
-    draft_payload = {
-        "articles": [
-            {
-                "title": article.get("title", "自动生成的文章"),
-                "content": html_content,
-                # "thumb_media_id": "..." 此处应当是已上传图片的 media_id。为简化此处省略，实际微信强求封面图
-                # 如果没有 thumb_media_id 会报错，这里在实际调用中必须提供。
-            }
-        ]
-    }
-    
     retry_count = 0
     max_retries = 3
     final_media_id = None
     error_msg = None
     
     async with httpx.AsyncClient(timeout=10.0) as client:
+        # 在此循环外预处理图片，无论重试几次，图片上传复用
+        # 如果获取 token 出错或者需要获取，必须在这个阶段先拿到一次 token
+        try:
+            token = await _get_access_token(app_id, app_secret, client)
+        except Exception as e:
+            error_msg = str(e)
+            logger.error("skill_failed", task_id=task_id, skill="push_to_draft", status="failed", duration_ms=round((time.monotonic() - start_time) * 1000), error=error_msg)
+            return {"status": "failed", "current_skill": "push_to_draft", "error": error_msg}
+            
+        # 1. 上传封面图，获取 media_id
+        thumb_media_id = ""
+        if article.get("cover_image"):
+            logger.info("uploading_cover_image", task_id=task_id, url=article["cover_image"])
+            thumb_media_id = await upload_cover_material(client, article["cover_image"], token)
+        
+        # 2. 上传插图，把外部链接替换为微信的 qpic 图床链接
+        illustrations = list(article.get("illustrations", []))
+        wechat_illustrations = []
+        for i, img_url in enumerate(illustrations):
+            logger.info("uploading_illustration", task_id=task_id, index=i+1, url=img_url)
+            wx_url = await upload_article_image(client, img_url, token)
+            wechat_illustrations.append(wx_url)
+            
+        # 重构带真实微信图片的 html 内容
+        html_content = markdown_to_wechat_html(
+            md_text=article.get("content", ""), 
+            illustrations=wechat_illustrations
+        )
+        
+        # 3. 构建草稿 Payload
+        draft_payload = {
+            "articles": [
+                {
+                    "title": article.get("title", "自动生成的文章"),
+                    "content": html_content,
+                    "thumb_media_id": thumb_media_id,
+                }
+            ]
+        }
+        
+        # 因为在测试或者没有好图源时，封面可能是必填的，但如果是自己测试可以模拟
+        if not thumb_media_id:
+            logger.warning("missing_thumb_media_id", task_id=task_id, message="封面图 media_id 为空，调用微信接口必定报错(40007)")
         while retry_count < max_retries:
             try:
-                token = await _get_access_token(app_id, app_secret, client)
-                url = f"https://api.weixin.qq.com/cgi-bin/draft/add?access_token={token}"
+                # 重新校验/刷新一次 token
+                current_token = await _get_access_token(app_id, app_secret, client)
+                url = f"https://api.weixin.qq.com/cgi-bin/draft/add?access_token={current_token}"
                 
                 resp = await client.post(url, json=draft_payload)
                 resp.raise_for_status()

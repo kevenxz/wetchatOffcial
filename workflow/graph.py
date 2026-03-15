@@ -110,6 +110,7 @@ async def run_workflow(
     task_id: str,
     keywords: str,
     progress_callback: ProgressCallback | None = None,
+    resume_state: dict | None = None,
 ) -> WorkflowState:
     """异步运行工作流，并在每个节点完成后调用进度回调。
 
@@ -117,33 +118,51 @@ async def run_workflow(
         task_id: 任务唯一 ID。
         keywords: 用户输入的关键词。
         progress_callback: 可选的进度回调函数。
+        resume_state: 如果提供，将从此状态恢复执行。
 
     Returns:
         最终的 WorkflowState。
     """
     start = time.monotonic()
 
-    initial_state: WorkflowState = {
-        "task_id": task_id,
-        "keywords": keywords,
-        "search_results": [],
-        "extracted_contents": [],
-        "generated_article": {},
-        "draft_info": None,
-        "retry_count": 0,
-        "error": None,
-        "status": "pending",
-        "current_skill": "",
-        "progress": 0,
-    }
+    if resume_state:
+        # 从给定状态恢复
+        initial_state = dict(resume_state)
+        # 强制重置状态和重试计数，以便进行重新路由
+        initial_state["status"] = "running"
+        initial_state["error"] = None
+        initial_state["retry_count"] = 0
+        
+        logger.info(
+            "workflow_resume",
+            task_id=task_id,
+            skill="workflow",
+            status="running",
+            resume_from=initial_state.get("current_skill", "unknown"),
+        )
+    else:
+        # 新任务初始化
+        initial_state: WorkflowState = {
+            "task_id": task_id,
+            "keywords": keywords,
+            "search_results": [],
+            "extracted_contents": [],
+            "generated_article": {},
+            "draft_info": None,
+            "retry_count": 0,
+            "error": None,
+            "status": "pending",
+            "current_skill": "",
+            "progress": 0,
+        }
 
-    logger.info(
-        "workflow_start",
-        task_id=task_id,
-        skill="workflow",
-        status="running",
-        keywords=keywords,
-    )
+        logger.info(
+            "workflow_start",
+            task_id=task_id,
+            skill="workflow",
+            status="running",
+            keywords=keywords,
+        )
 
     # 通知客户端任务已开始
     if progress_callback:
@@ -156,12 +175,15 @@ async def run_workflow(
             "result": None,
         })
 
-    final_state: WorkflowState | None = None
+    final_state: dict | None = None
+    current_state = dict(initial_state)
 
     try:
         async for event in _compiled_graph.astream(initial_state):
             # LangGraph astream 每一步返回 {node_name: output_dict}
             for node_name, output in event.items():
+                current_state.update(output)
+                final_state = current_state
                 if progress_callback:
                     await progress_callback(task_id, {
                         "task_id": task_id,
@@ -171,7 +193,6 @@ async def run_workflow(
                         "message": f"节点 [{node_name}] 执行完成",
                         "result": None,
                     })
-                final_state = output  # type: ignore[assignment]
 
         duration_ms = round((time.monotonic() - start) * 1000)
         

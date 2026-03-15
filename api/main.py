@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.logging_config import setup_logging
-from api.routers import tasks, ws
+from api.routers import tasks, ws, config
 
 # 加载 .env 环境变量
 load_dotenv()
@@ -32,4 +32,5 @@ app.add_middleware(
 )
 
 app.include_router(tasks.router, prefix="/api")
+app.include_router(config.router, prefix="/api")
 app.include_router(ws.router)

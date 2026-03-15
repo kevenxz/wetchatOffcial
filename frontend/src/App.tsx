@@ -11,6 +11,7 @@ import type { MenuProps } from 'antd'
 import TaskCreate from '@/pages/TaskCreate'
 import TaskDetail from '@/pages/TaskDetail'
 import History from '@/pages/History'
+import StyleConfigPage from '@/pages/StyleConfig'
 
 const { Sider, Content } = Layout
 
@@ -30,7 +31,7 @@ function AppLayout() {
   const selectedKey = '/' + location.pathname.split('/')[1]
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ height: '100vh', overflow: 'hidden' }}>
       <Sider collapsible collapsed={collapsed} onCollapse={setCollapsed} width={220}>
         <div
           style={{
@@ -60,38 +61,18 @@ function AppLayout() {
         />
       </Sider>
 
-      <Layout>
-        <Content>
+      <Layout style={{ overflow: 'hidden' }}>
+        <Content style={{ height: '100%', overflow: 'auto', backgroundColor: '#f5f5f5' }}>
           <Routes>
             <Route path="/" element={<Navigate to="/task" replace />} />
             <Route path="/task" element={<TaskCreate />} />
             <Route path="/task/:id" element={<TaskDetail />} />
             <Route path="/history" element={<History />} />
-            <Route path="/settings" element={<PagePlaceholder title="系统设置" />} />
+            <Route path="/settings" element={<StyleConfigPage />} />
           </Routes>
         </Content>
       </Layout>
     </Layout>
-  )
-}
-
-function PagePlaceholder({ title }: { title: string }) {
-  return (
-    <div
-      style={{
-        background: '#fff',
-        borderRadius: 8,
-        padding: 24,
-        minHeight: 360,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: 'rgba(0,0,0,0.45)',
-        fontSize: 16,
-      }}
-    >
-      {title} — 页面开发中
-    </div>
   )
 }
 
