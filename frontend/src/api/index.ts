@@ -75,3 +75,20 @@ export type PresetThemes = Record<string, StyleConfig>
 
 export const getPresetThemes = (): Promise<PresetThemes> =>
   http.get('/config/themes')
+
+export type CustomThemes = Record<string, StyleConfig>
+
+export const getCustomThemes = (): Promise<CustomThemes> =>
+  http.get('/config/themes/custom')
+
+export const createCustomTheme = (name: string, config: StyleConfig): Promise<CustomThemes> =>
+  http.post('/config/themes/custom', { name, config })
+
+export const updateCustomTheme = (themeName: string, name: string, config: StyleConfig): Promise<CustomThemes> =>
+  http.put(`/config/themes/custom/${encodeURIComponent(themeName)}`, { name, config })
+
+export const deleteCustomTheme = (themeName: string): Promise<CustomThemes> =>
+  http.delete(`/config/themes/custom/${encodeURIComponent(themeName)}`)
+
+export const importCustomThemes = (themes: CustomThemes): Promise<CustomThemes> =>
+  http.post('/config/themes/custom/import', themes)

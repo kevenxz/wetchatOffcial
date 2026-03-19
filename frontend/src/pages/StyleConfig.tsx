@@ -1,15 +1,51 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Button, Card, Col, Form, Input, Menu, Modal, Row, Space, Spin, Typography, message } from 'antd'
-import { EditOutlined, FormatPainterOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Button,
+  Card,
+  Col,
+  Divider,
+  Input,
+  Menu,
+  Modal,
+  Popconfirm,
+  Row,
+  Space,
+  Spin,
+  Tag,
+  Typography,
+  message,
+} from 'antd'
+import {
+  BgColorsOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  ImportOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SaveOutlined,
+} from '@ant-design/icons'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
-import { getPresetThemes, getStyleConfig, updateStyleConfig, type PresetThemes, type StyleConfig } from '@/api'
+import {
+  createCustomTheme,
+  deleteCustomTheme,
+  getCustomThemes,
+  getPresetThemes,
+  getStyleConfig,
+  importCustomThemes,
+  updateCustomTheme,
+  updateStyleConfig,
+  type CustomThemes,
+  type PresetThemes,
+  type StyleConfig,
+} from '@/api'
 
 const { Title, Text } = Typography
 const { TextArea } = Input
 
-const CUSTOM_THEME_NAME = '当前配置（自定义）'
+const CURRENT_THEME_KEY = '__current__'
+const EMPTY_THEME_NAME = '未命名主题'
 
 const DEFAULT_PREVIEW_MARKDOWN = `
 # 微信公众号主题预览
@@ -45,33 +81,36 @@ def hello():
 `
 
 const STYLE_FIELDS = [
-  { name: 'container', label: '容器 (container)', tooltip: '文章最外层容器样式' },
-  { name: 'h1', label: '一级标题 (h1)', tooltip: '文章主标题' },
-  { name: 'h2', label: '二级标题 (h2)', tooltip: '段落标题' },
-  { name: 'h3', label: '三级标题 (h3)', tooltip: '次级段落标题' },
-  { name: 'h4', label: '四级标题 (h4)', tooltip: '补充标题层级' },
-  { name: 'h5', label: '五级标题 (h5)', tooltip: '补充标题层级' },
-  { name: 'h6', label: '六级标题 (h6)', tooltip: '补充标题层级' },
-  { name: 'p', label: '正文段落 (p)', tooltip: '普通正文文本' },
-  { name: 'strong', label: '强调 (strong)', tooltip: '粗体强调文本' },
-  { name: 'em', label: '斜体 (em)', tooltip: '斜体文本' },
-  { name: 'del', label: '删除线 (del)', tooltip: '删除线文本' },
-  { name: 'blockquote', label: '引用 (blockquote)', tooltip: '引用块内容' },
-  { name: 'ul', label: '无序列表 (ul)', tooltip: '无序列表容器' },
-  { name: 'ol', label: '有序列表 (ol)', tooltip: '有序列表容器' },
-  { name: 'li', label: '列表项 (li)', tooltip: '列表项文本' },
-  { name: 'a', label: '链接 (a)', tooltip: '超链接文本' },
-  { name: 'hr', label: '分隔线 (hr)', tooltip: '分隔线样式' },
-  { name: 'img', label: '图片 (img)', tooltip: '图片元素样式' },
-  { name: 'figure', label: '图片容器 (figure)', tooltip: '图片和说明容器' },
-  { name: 'figcaption', label: '图片说明 (figcaption)', tooltip: '图片说明文字' },
-  { name: 'code', label: '行内代码 (code)', tooltip: '行内代码默认样式' },
-  { name: 'pre', label: '代码块容器 (pre)', tooltip: '代码块外层容器' },
-  { name: 'pre code', label: '代码块内容 (pre code)', tooltip: '代码块内容样式' },
-  { name: 'table', label: '表格 (table)', tooltip: '表格整体样式' },
-  { name: 'th', label: '表头 (th)', tooltip: '表头单元格' },
-  { name: 'td', label: '表格单元格 (td)', tooltip: '表格内容单元格' },
-]
+  'container',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+  'p',
+  'strong',
+  'em',
+  'del',
+  'blockquote',
+  'ul',
+  'ol',
+  'li',
+  'a',
+  'hr',
+  'img',
+  'figure',
+  'figcaption',
+  'code',
+  'pre',
+  'pre code',
+  'table',
+  'th',
+  'td',
+] as const
+
+type ThemeSource = 'current' | 'preset' | 'custom'
+type EditorMode = 'browse' | 'create' | 'edit'
 
 function mergeStyle(existing: string | null, next: string) {
   if (!existing) return next
@@ -103,24 +142,102 @@ function buildPreviewHtml(markdownText: string, config: StyleConfig) {
   return container.outerHTML
 }
 
+function toCssText(config: StyleConfig) {
+  return STYLE_FIELDS.map((name) => {
+    const body = (config[name] || '')
+      .split(';')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => `  ${line};`)
+      .join('\n')
+    return `${name === 'container' ? '.wx-article-container' : name} {\n${body}\n}`
+  }).join('\n\n')
+}
+
+function fromCssText(cssText: string, fallback: StyleConfig) {
+  const nextConfig = { ...fallback }
+  const blocks = cssText.match(/([^{}]+)\{([^{}]*)\}/g) || []
+
+  STYLE_FIELDS.forEach((field) => {
+    if (!(field in nextConfig)) {
+      nextConfig[field] = ''
+    }
+  })
+
+  blocks.forEach((block) => {
+    const matched = block.match(/([^{}]+)\{([^{}]*)\}/)
+    if (!matched) return
+
+    const rawSelector = matched[1].trim()
+    const selector = rawSelector === '.wx-article-container' ? 'container' : rawSelector
+    if (!STYLE_FIELDS.includes(selector as (typeof STYLE_FIELDS)[number])) return
+
+    nextConfig[selector] = matched[2]
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+  })
+
+  return nextConfig
+}
+
+function normalizeThemeConfig(config: StyleConfig) {
+  const normalized: StyleConfig = {}
+  STYLE_FIELDS.forEach((field) => {
+    normalized[field] = config[field] || ''
+  })
+  return normalized
+}
+
+function downloadJson(filename: string, payload: unknown) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
 export default function StyleConfigPage() {
-  const [form] = Form.useForm<StyleConfig>()
+  const importRef = useRef<HTMLInputElement | null>(null)
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [themeSaving, setThemeSaving] = useState(false)
   const [currentConfig, setCurrentConfig] = useState<StyleConfig>({})
-  const [themes, setThemes] = useState<PresetThemes>({})
-  const [activeTheme, setActiveTheme] = useState<string>(CUSTOM_THEME_NAME)
+  const [presetThemes, setPresetThemes] = useState<PresetThemes>({})
+  const [customThemes, setCustomThemes] = useState<CustomThemes>({})
+  const [activeThemeName, setActiveThemeName] = useState('当前主题')
   const [previewMarkdown, setPreviewMarkdown] = useState(DEFAULT_PREVIEW_MARKDOWN)
-  const [isEditingContent, setIsEditingContent] = useState(false)
-  const [tempMarkdown, setTempMarkdown] = useState(DEFAULT_PREVIEW_MARKDOWN)
+  const [themeManagerOpen, setThemeManagerOpen] = useState(false)
+  const [themeCssText, setThemeCssText] = useState('')
+  const [editorMode, setEditorMode] = useState<EditorMode>('browse')
+  const [draftThemeName, setDraftThemeName] = useState(EMPTY_THEME_NAME)
+  const [themeDraftConfig, setThemeDraftConfig] = useState<StyleConfig>({})
+  const [selectedThemeKey, setSelectedThemeKey] = useState(CURRENT_THEME_KEY)
+  const [selectedThemeSource, setSelectedThemeSource] = useState<ThemeSource>('current')
 
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [configData, themesData] = await Promise.all([getStyleConfig(), getPresetThemes()])
-      setCurrentConfig(configData)
-      form.setFieldsValue(configData)
-      setThemes(themesData)
+      const [configData, presetData, customData] = await Promise.all([
+        getStyleConfig(),
+        getPresetThemes(),
+        getCustomThemes(),
+      ])
+      const normalized = normalizeThemeConfig(configData)
+      setCurrentConfig(normalized)
+      setPresetThemes(presetData)
+      setCustomThemes(customData)
+      setDraftThemeName('当前主题')
+      setThemeDraftConfig(normalized)
+      setThemeCssText(toCssText(normalized))
+      setSelectedThemeKey(CURRENT_THEME_KEY)
+      setSelectedThemeSource('current')
+      setEditorMode('browse')
     } catch (err: any) {
       message.error(err.message || '加载样式配置失败')
     } finally {
@@ -132,20 +249,78 @@ export default function StyleConfigPage() {
     fetchData()
   }, [])
 
-  const formValues = Form.useWatch([], form)
+  const pagePreviewHtml = useMemo(
+    () => buildPreviewHtml(previewMarkdown, currentConfig),
+    [previewMarkdown, currentConfig],
+  )
 
-  useEffect(() => {
-    if (formValues) {
-      setCurrentConfig((prev) => ({ ...prev, ...formValues }))
+  const draftPreviewHtml = useMemo(
+    () => buildPreviewHtml(previewMarkdown, themeDraftConfig),
+    [previewMarkdown, themeDraftConfig],
+  )
+
+  const openThemeManager = () => {
+    const normalized = normalizeThemeConfig(currentConfig)
+    setThemeDraftConfig(normalized)
+    setThemeCssText(toCssText(normalized))
+    setDraftThemeName(activeThemeName)
+    setSelectedThemeKey(CURRENT_THEME_KEY)
+    setSelectedThemeSource('current')
+    setEditorMode('browse')
+    setThemeManagerOpen(true)
+  }
+
+  const loadThemeToEditor = (name: string, config: StyleConfig, source: ThemeSource) => {
+    const normalized = normalizeThemeConfig(config)
+    setDraftThemeName(name)
+    setThemeDraftConfig(normalized)
+    setThemeCssText(toCssText(normalized))
+    setSelectedThemeKey(source === 'current' ? CURRENT_THEME_KEY : name)
+    setSelectedThemeSource(source)
+    setEditorMode(source === 'custom' ? 'edit' : 'browse')
+  }
+
+  const handleThemeSelect = (key: string) => {
+    if (key === CURRENT_THEME_KEY) {
+      loadThemeToEditor('当前主题', currentConfig, 'current')
+      return
     }
-  }, [formValues])
+    if (customThemes[key]) {
+      loadThemeToEditor(key, customThemes[key], 'custom')
+      return
+    }
+    if (presetThemes[key]) {
+      loadThemeToEditor(key, presetThemes[key], 'preset')
+    }
+  }
 
-  const handleSave = async (values: StyleConfig) => {
+  const handleCreateTheme = () => {
+    const base = normalizeThemeConfig(currentConfig)
+    setDraftThemeName('新建主题')
+    setThemeDraftConfig(base)
+    setThemeCssText(toCssText(base))
+    setSelectedThemeKey('__new__')
+    setSelectedThemeSource('custom')
+    setEditorMode('create')
+  }
+
+  const handleCssChange = (value: string) => {
+    setThemeCssText(value)
+    setThemeDraftConfig(fromCssText(value, themeDraftConfig))
+  }
+
+  const handleApplyTheme = () => {
+    setCurrentConfig(normalizeThemeConfig(themeDraftConfig))
+    setActiveThemeName(draftThemeName || '当前主题')
+    setThemeManagerOpen(false)
+    message.success('主题已应用到当前预览')
+  }
+
+  const handleSaveConfig = async () => {
     setSaving(true)
     try {
-      await updateStyleConfig(values)
-      message.success('样式配置已保存')
-      setActiveTheme(CUSTOM_THEME_NAME)
+      await updateStyleConfig(currentConfig)
+      message.success('系统配置已保存')
     } catch (err: any) {
       message.error(err.message || '保存失败')
     } finally {
@@ -153,16 +328,91 @@ export default function StyleConfigPage() {
     }
   }
 
-  const applyTheme = (themeName: string) => {
-    const themeConfig = themes[themeName]
-    if (!themeConfig) return
-    setCurrentConfig(themeConfig)
-    form.setFieldsValue(themeConfig)
-    setActiveTheme(themeName)
-    message.info(`已应用主题：${themeName}`)
+  const handleSaveTheme = async () => {
+    const name = draftThemeName.trim()
+    if (!name) {
+      message.warning('请输入主题名称')
+      return
+    }
+
+    setThemeSaving(true)
+    try {
+      let themes: CustomThemes
+      if (editorMode === 'edit' && selectedThemeSource === 'custom' && customThemes[selectedThemeKey]) {
+        themes = await updateCustomTheme(selectedThemeKey, name, themeDraftConfig)
+      } else {
+        themes = await createCustomTheme(name, themeDraftConfig)
+      }
+      setCustomThemes(themes)
+      setSelectedThemeKey(name)
+      setSelectedThemeSource('custom')
+      setEditorMode('edit')
+      message.success('主题已保存')
+    } catch (err: any) {
+      message.error(err.message || '保存主题失败')
+    } finally {
+      setThemeSaving(false)
+    }
   }
 
-  const previewHtml = useMemo(() => buildPreviewHtml(previewMarkdown, currentConfig), [currentConfig, previewMarkdown])
+  const handleDeleteTheme = async () => {
+    if (!customThemes[selectedThemeKey]) return
+    try {
+      const nextThemes = await deleteCustomTheme(selectedThemeKey)
+      setCustomThemes(nextThemes)
+      loadThemeToEditor('当前主题', currentConfig, 'current')
+      message.success('主题已删除')
+    } catch (err: any) {
+      message.error(err.message || '删除主题失败')
+    }
+  }
+
+  const handleImportThemes = async (file: File) => {
+    try {
+      const text = await file.text()
+      const payload = JSON.parse(text) as CustomThemes
+      const nextThemes = await importCustomThemes(payload)
+      setCustomThemes(nextThemes)
+      message.success(`已导入 ${Object.keys(payload).length} 个主题`)
+    } catch (err: any) {
+      message.error(err.message || '导入主题失败，请检查 JSON 格式')
+    }
+  }
+
+  const selectedThemeTag = selectedThemeSource === 'preset'
+    ? '内置主题'
+    : selectedThemeSource === 'custom'
+      ? '自定义主题'
+      : '当前配置'
+
+  const themeMenuItems = [
+    {
+      key: 'group-current',
+      type: 'group' as const,
+      label: '当前配置',
+      children: [{ key: CURRENT_THEME_KEY, icon: <EditOutlined />, label: '当前主题' }],
+    },
+    {
+      key: 'group-preset',
+      type: 'group' as const,
+      label: '内置主题',
+      children: Object.keys(presetThemes).map((name) => ({
+        key: name,
+        icon: <BgColorsOutlined />,
+        label: name,
+      })),
+    },
+    {
+      key: 'group-custom',
+      type: 'group' as const,
+      label: '自定义主题',
+      children: Object.keys(customThemes).map((name) => ({
+        key: name,
+        icon: <SaveOutlined />,
+        label: name,
+      })),
+    },
+  ]
 
   if (loading) {
     return (
@@ -173,128 +423,255 @@ export default function StyleConfigPage() {
   }
 
   return (
-    <div style={{ maxWidth: 1600, margin: '24px auto', padding: '0 24px' }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
+    <div style={{ maxWidth: 1680, margin: '24px auto', padding: '0 24px' }}>
+      <Row justify="space-between" align="middle" style={{ marginBottom: 20 }}>
         <Col>
           <Title level={2} style={{ margin: 0 }}>系统配置</Title>
-          <Text type="secondary">配置微信公众号文章默认主题，并实时预览 Markdown 渲染效果。</Text>
+          <Text type="secondary">默认展示 Markdown 文本和实时效果，样式编辑通过顶部主题管理进入。</Text>
         </Col>
         <Col>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              fetchData()
-              setActiveTheme(CUSTOM_THEME_NAME)
-            }}
-            style={{ marginRight: 16 }}
-          >
-            重新加载
-          </Button>
-          <Button type="primary" icon={<SaveOutlined />} onClick={() => form.submit()} loading={saving}>
-            保存配置
-          </Button>
+          <Space size={12}>
+            <Button icon={<ReloadOutlined />} onClick={fetchData}>重新加载</Button>
+            <Button icon={<BgColorsOutlined />} onClick={openThemeManager}>主题管理</Button>
+            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSaveConfig}>保存配置</Button>
+          </Space>
         </Col>
       </Row>
 
-      <Row gutter={24} style={{ alignItems: 'stretch' }}>
-        <Col xs={24} md={5} lg={4}>
-          <Card title="预设主题" styles={{ body: { padding: 0 } }} style={{ height: '100%' }}>
-            <Menu
-              mode="vertical"
-              selectedKeys={[activeTheme]}
-              onSelect={({ key }) => applyTheme(String(key))}
-              items={Object.keys(themes).map((name) => ({
-                key: name,
-                icon: <FormatPainterOutlined />,
-                label: name,
-              }))}
+      <Row gutter={24}>
+        <Col xs={24} lg={14}>
+          <Card
+            title={(
+              <Space size={8}>
+                <span style={{ width: 8, height: 8, borderRadius: 999, background: '#22c55e', display: 'inline-block' }} />
+                <span>MARKDOWN 编辑器</span>
+              </Space>
+            )}
+            styles={{ body: { padding: 0 } }}
+          >
+            <div style={{ borderBottom: '1px solid #f0f0f0', padding: '10px 16px', color: '#64748b', fontSize: 13 }}>
+              当前主题：{activeThemeName}
+            </div>
+            <TextArea
+              value={previewMarkdown}
+              onChange={(e) => setPreviewMarkdown(e.target.value)}
+              autoSize={{ minRows: 28, maxRows: 28 }}
+              bordered={false}
+              style={{ padding: 20, fontFamily: 'Consolas, Monaco, monospace', fontSize: 14, lineHeight: 1.8 }}
             />
           </Card>
         </Col>
 
-        <Col xs={24} md={10} lg={11}>
+        <Col xs={24} lg={10}>
           <Card
             title={(
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Space size={8}>
                 <span>实时预览</span>
-                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => setIsEditingContent(true)}>
-                  编辑示例内容
-                </Button>
-              </div>
+                <Text type="secondary">微信公众号效果</Text>
+              </Space>
             )}
-            styles={{ body: { padding: '40px 0', backgroundColor: '#f0f2f5', minHeight: 600 } }}
+            styles={{ body: { background: '#f8fafc', minHeight: 780 } }}
           >
             <div
               style={{
-                width: '100%',
                 maxWidth: 414,
+                minHeight: 720,
                 margin: '0 auto',
-                border: '1px solid #e8e8e8',
-                padding: 20,
-                backgroundColor: '#fff',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-                minHeight: 600,
+                padding: '24px 20px',
+                background: '#fff',
+                border: '1px solid #e5e7eb',
+                boxShadow: '0 12px 30px rgba(15, 23, 42, 0.08)',
+                overflow: 'auto',
               }}
             >
-              <div
-                className="wx-article-preview"
-                dangerouslySetInnerHTML={{ __html: previewHtml }}
-                style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}
-              />
+              <div dangerouslySetInnerHTML={{ __html: pagePreviewHtml }} style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }} />
             </div>
-          </Card>
-        </Col>
-
-        <Col xs={24} md={9} lg={9}>
-          <Card
-            title={(
-              <Space>
-                <FormatPainterOutlined />
-                <span>样式编辑器</span>
-                <Text type="secondary" style={{ fontSize: 13, fontWeight: 'normal' }}>
-                  ({activeTheme})
-                </Text>
-              </Space>
-            )}
-          >
-            <Form form={form} layout="vertical" onFinish={handleSave}>
-              <Row gutter={16}>
-                {STYLE_FIELDS.map((field) => (
-                  <Col span={24} key={field.name}>
-                    <Form.Item name={field.name} label={field.label} tooltip={field.tooltip}>
-                      <TextArea
-                        rows={3}
-                        placeholder="例如: font-size: 16px; color: #333; line-height: 1.6;"
-                        style={{ fontFamily: 'monospace', fontSize: 13 }}
-                      />
-                    </Form.Item>
-                  </Col>
-                ))}
-              </Row>
-            </Form>
           </Card>
         </Col>
       </Row>
 
+      <input
+        ref={importRef}
+        type="file"
+        accept="application/json"
+        style={{ display: 'none' }}
+        onChange={async (event) => {
+          const file = event.target.files?.[0]
+          if (file) {
+            await handleImportThemes(file)
+          }
+          event.target.value = ''
+        }}
+      />
+
       <Modal
-        title="编辑预览内容"
-        open={isEditingContent}
-        onOk={() => {
-          setPreviewMarkdown(tempMarkdown)
-          setIsEditingContent(false)
-        }}
-        onCancel={() => {
-          setTempMarkdown(previewMarkdown)
-          setIsEditingContent(false)
-        }}
-        width={800}
+        title="主题管理"
+        open={themeManagerOpen}
+        onCancel={() => setThemeManagerOpen(false)}
+        width={1440}
+        footer={(
+          <Space>
+            <Button onClick={() => setThemeManagerOpen(false)}>取消</Button>
+            <Button onClick={() => downloadJson('themes-export.json', customThemes)}>导出主题</Button>
+            <Button type="primary" onClick={handleApplyTheme}>应用主题</Button>
+          </Space>
+        )}
+        styles={{ body: { padding: 0 } }}
       >
-        <TextArea
-          value={tempMarkdown}
-          onChange={(e) => setTempMarkdown(e.target.value)}
-          rows={15}
-          style={{ fontFamily: 'monospace', marginTop: 16 }}
-        />
+        <div style={{ height: '72vh', minHeight: 620, maxHeight: 760, display: 'flex', overflow: 'hidden' }}>
+          <div
+            style={{
+              width: 260,
+              flexShrink: 0,
+              borderRight: '1px solid #f0f0f0',
+              background: '#fafafa',
+              padding: 18,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16,
+              overflow: 'hidden',
+            }}
+          >
+            <Button type="primary" icon={<PlusOutlined />} size="large" block onClick={handleCreateTheme}>
+              新建自定义主题
+            </Button>
+            <Button icon={<ImportOutlined />} size="large" block onClick={() => importRef.current?.click()}>
+              导入主题
+            </Button>
+            <div style={{ minHeight: 0, overflow: 'auto', paddingRight: 4 }}>
+              <Menu
+                mode="inline"
+                selectedKeys={[selectedThemeKey]}
+                onSelect={({ key }) => handleThemeSelect(String(key))}
+                items={themeMenuItems}
+                style={{ borderInlineEnd: 'none', background: 'transparent' }}
+              />
+            </div>
+          </div>
+
+          <div
+            style={{
+              flex: 1,
+              minWidth: 0,
+              borderRight: '1px solid #f0f0f0',
+              background: '#f8fafc',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
+              <Space size={10}>
+                <Text strong>实时预览</Text>
+                <Tag color={selectedThemeSource === 'preset' ? 'blue' : selectedThemeSource === 'custom' ? 'green' : 'default'}>
+                  {selectedThemeTag}
+                </Tag>
+              </Space>
+            </div>
+            <div style={{ padding: 24, overflow: 'auto', minHeight: 0 }}>
+              <div
+                style={{
+                  maxWidth: 414,
+                  minHeight: 560,
+                  margin: '0 auto',
+                  padding: '24px 20px',
+                  background: '#fff',
+                  border: '1px solid #e5e7eb',
+                  boxShadow: '0 12px 30px rgba(15, 23, 42, 0.08)',
+                }}
+              >
+                <div dangerouslySetInnerHTML={{ __html: draftPreviewHtml }} style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }} />
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              width: 440,
+              flexShrink: 0,
+              padding: 20,
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+              overflow: 'hidden',
+            }}
+          >
+            <Space align="center" style={{ justifyContent: 'space-between', width: '100%' }}>
+              <Space size={10}>
+                <Text strong style={{ fontSize: 16 }}>主题编辑</Text>
+                <Tag>{editorMode === 'create' ? '新建' : editorMode === 'edit' ? '编辑' : '浏览'}</Tag>
+              </Space>
+              <Space size={8}>
+                {selectedThemeSource === 'custom' && editorMode !== 'create' && (
+                  <Button size="small" onClick={() => setEditorMode('edit')}>编辑</Button>
+                )}
+                {selectedThemeSource === 'custom' && (
+                  <Popconfirm title="确定删除这个自定义主题吗？" onConfirm={handleDeleteTheme}>
+                    <Button size="small" danger icon={<DeleteOutlined />}>删除</Button>
+                  </Popconfirm>
+                )}
+              </Space>
+            </Space>
+
+            <Divider style={{ margin: '16px 0' }} />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minHeight: 0, overflow: 'hidden' }}>
+              <div>
+                <Text strong>主题名称</Text>
+                <Input
+                  value={draftThemeName}
+                  onChange={(e) => setDraftThemeName(e.target.value)}
+                  disabled={selectedThemeSource === 'preset' && editorMode === 'browse'}
+                  style={{ marginTop: 8 }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <Button size="small" onClick={() => navigator.clipboard.writeText(themeCssText).then(() => message.success('CSS 已复制'))}>
+                  复制 CSS
+                </Button>
+                <Button size="small" onClick={() => downloadJson(`${draftThemeName || 'theme'}.json`, { [draftThemeName || 'theme']: themeDraftConfig })}>
+                  导出当前主题
+                </Button>
+                {selectedThemeSource !== 'preset' && (
+                  <Button size="small" type="primary" loading={themeSaving} onClick={handleSaveTheme}>
+                    {editorMode === 'edit' ? '更新主题' : '保存为新主题'}
+                  </Button>
+                )}
+              </div>
+
+              <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                <Text strong>CSS 样式</Text>
+                <TextArea
+                  value={themeCssText}
+                  onChange={(e) => handleCssChange(e.target.value)}
+                  disabled={selectedThemeSource === 'preset' && editorMode === 'browse'}
+                  style={{
+                    marginTop: 8,
+                    height: '100%',
+                    minHeight: 420,
+                    resize: 'none',
+                    fontFamily: 'Consolas, Monaco, monospace',
+                    fontSize: 13,
+                    lineHeight: 1.7,
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  background: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  color: '#475569',
+                  fontSize: 13,
+                }}
+              >
+                内置主题默认只读。要修改它，请点击“新建自定义主题”或先应用后另存为自定义主题。
+              </div>
+            </div>
+          </div>
+        </div>
       </Modal>
     </div>
   )

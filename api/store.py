@@ -1,52 +1,49 @@
-"""共享内存存储。"""
+"""Shared in-memory and JSON-backed storage."""
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 from api.models import TaskResponse
 
 DATA_DIR = Path("data")
 TASKS_FILE = DATA_DIR / "tasks.json"
+STYLE_CONFIG_FILE = DATA_DIR / "style_config.json"
+CUSTOM_THEMES_FILE = DATA_DIR / "custom_themes.json"
 
-# 进程内内存任务存储：task_id -> TaskResponse
 task_store: dict[str, TaskResponse] = {}
 
+
+def _ensure_data_dir() -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _write_json(path: Path, payload: dict) -> None:
+    _ensure_data_dir()
+    temp_file = path.with_suffix(".tmp")
+    with open(temp_file, "w", encoding="utf-8") as file:
+        json.dump(payload, file, ensure_ascii=False, indent=2)
+    temp_file.replace(path)
+
+
 def load_tasks() -> None:
-    """从本地 JSON 文件加载任务到内存。"""
     if not TASKS_FILE.exists():
         return
     try:
-        with open(TASKS_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            for k, v in data.items():
-                task_store[k] = TaskResponse(**v)
-    except Exception as e:
-        import structlog
-        logger = structlog.get_logger(__name__)
-        logger.error("load_tasks_failed", error=str(e))
+        with open(TASKS_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        for task_id, payload in data.items():
+            task_store[task_id] = TaskResponse(**payload)
+    except Exception:
+        return
+
 
 def save_tasks() -> None:
-    """将内存中的任务持久化到本地 JSON 文件。"""
-    try:
-        if not DATA_DIR.exists():
-            DATA_DIR.mkdir(parents=True, exist_ok=True)
-            
-        data = {k: v.model_dump(mode="json") for k, v in task_store.items()}
-        # 写入临时文件再重命名，避免写一半崩溃导致数据损坏
-        temp_file = TASKS_FILE.with_suffix(".tmp")
-        with open(temp_file, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        temp_file.replace(TASKS_FILE)
-    except Exception as e:
-        import structlog
-        logger = structlog.get_logger(__name__)
-        logger.error("save_tasks_failed", error=str(e))
+    payload = {task_id: task.model_dump(mode="json") for task_id, task in task_store.items()}
+    _write_json(TASKS_FILE, payload)
 
-STYLE_CONFIG_FILE = DATA_DIR / "style_config.json"
 
-DEFAULT_STYLE = {
+DEFAULT_STYLE: dict[str, str] = {
     "container": "padding: 0 8px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; color: #2c3e50; line-height: 1.8; font-size: 16px; letter-spacing: 0.3px; word-break: break-word; overflow-wrap: break-word;",
     "h1": "font-size: 28px; font-weight: 700; color: #1a1a1a; margin: 10px 0 20px; text-align: center; padding-bottom: 12px; border-bottom: 2px solid #07c160; letter-spacing: 1px; line-height: 1.4;",
     "h2": "font-size: 22px; font-weight: 600; color: #2c3e50; margin: 20px 0 14px; padding-left: 12px; border-left: 4px solid #07c160; line-height: 1.4; letter-spacing: 0.5px;",
@@ -87,7 +84,7 @@ PRESET_THEMES: dict[str, dict[str, str]] = {
         "ul": "margin-bottom: 14px; padding-left: 24px; color: #333;",
         "ol": "margin-bottom: 14px; padding-left: 24px; color: #333;",
         "li": "font-size: 15px; line-height: 2; margin-bottom: 4px;",
-        "a": "color: #0645AD; text-decoration: underline;",
+        "a": "color: #0645ad; text-decoration: underline;",
     },
     "极光玻璃": {
         "h1": "font-size: 24px; font-weight: 800; margin-top: 28px; margin-bottom: 16px; color: #6366f1; line-height: 1.3; background: linear-gradient(90deg, #6366f1, #a855f7); -webkit-background-clip: text; -webkit-text-fill-color: transparent;",
@@ -139,51 +136,108 @@ PRESET_THEMES: dict[str, dict[str, str]] = {
     },
 }
 
-def get_preset_themes() -> dict[str, dict[str, str]]:
-    """获取所有预设主题。"""
-    return {theme_name: {**DEFAULT_STYLE, **theme_style} for theme_name, theme_style in PRESET_THEMES.items()}
-
 _style_config: dict[str, str] = {}
+_custom_themes: dict[str, dict[str, str]] = {}
+
+
+def _merge_default_style(config: dict[str, str]) -> dict[str, str]:
+    return {**DEFAULT_STYLE, **config}
+
+
+def _load_json(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    try:
+        with open(path, "r", encoding="utf-8") as file:
+            return json.load(file)
+    except Exception:
+        return {}
+
+
+def get_preset_themes() -> dict[str, dict[str, str]]:
+    return {name: _merge_default_style(config) for name, config in PRESET_THEMES.items()}
+
+
+def get_custom_themes() -> dict[str, dict[str, str]]:
+    global _custom_themes
+    if not _custom_themes:
+        raw_themes = _load_json(CUSTOM_THEMES_FILE)
+        _custom_themes = {name: _merge_default_style(config) for name, config in raw_themes.items()}
+    return dict(_custom_themes)
+
+
+def _save_custom_themes() -> None:
+    payload = {name: config for name, config in _custom_themes.items()}
+    _write_json(CUSTOM_THEMES_FILE, payload)
+
+
+def create_custom_theme(name: str, config: dict[str, str]) -> dict[str, dict[str, str]]:
+    cleaned_name = name.strip()
+    if not cleaned_name:
+        raise ValueError("主题名称不能为空")
+    if cleaned_name in PRESET_THEMES or cleaned_name in get_custom_themes():
+        raise ValueError("主题名称已存在")
+    _custom_themes[cleaned_name] = _merge_default_style(config)
+    _save_custom_themes()
+    return get_custom_themes()
+
+
+def update_custom_theme(theme_name: str, next_name: str, config: dict[str, str]) -> dict[str, dict[str, str]]:
+    themes = get_custom_themes()
+    if theme_name not in themes:
+        raise ValueError("未找到对应的自定义主题")
+    cleaned_name = next_name.strip()
+    if not cleaned_name:
+        raise ValueError("主题名称不能为空")
+    if cleaned_name != theme_name and (cleaned_name in PRESET_THEMES or cleaned_name in themes):
+        raise ValueError("主题名称已存在")
+    if cleaned_name != theme_name:
+        del _custom_themes[theme_name]
+    _custom_themes[cleaned_name] = _merge_default_style(config)
+    _save_custom_themes()
+    return get_custom_themes()
+
+
+def delete_custom_theme(theme_name: str) -> dict[str, dict[str, str]]:
+    themes = get_custom_themes()
+    if theme_name not in themes:
+        raise ValueError("未找到对应的自定义主题")
+    del _custom_themes[theme_name]
+    _save_custom_themes()
+    return get_custom_themes()
+
+
+def import_custom_themes(payload: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
+    if not payload:
+        raise ValueError("导入内容不能为空")
+    get_custom_themes()
+    for theme_name, config in payload.items():
+        cleaned_name = theme_name.strip()
+        if not cleaned_name:
+            raise ValueError("存在空主题名称")
+        if cleaned_name in PRESET_THEMES:
+            raise ValueError(f"主题名称冲突: {cleaned_name}")
+        _custom_themes[cleaned_name] = _merge_default_style(config)
+    _save_custom_themes()
+    return get_custom_themes()
+
 
 def get_style_config() -> dict[str, str]:
-    """获取样式配置。"""
     global _style_config
     if _style_config:
         return _style_config
-        
-    if not STYLE_CONFIG_FILE.exists():
-        _style_config = dict(DEFAULT_STYLE)
-        return _style_config
-        
-    try:
-        with open(STYLE_CONFIG_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            # 合并默认值以防缺少键
-            _style_config = {**DEFAULT_STYLE, **data}
-    except Exception as e:
-        import structlog
-        logger = structlog.get_logger(__name__)
-        logger.error("load_style_config_failed", error=str(e))
-        _style_config = dict(DEFAULT_STYLE)
-        
+    raw_config = _load_json(STYLE_CONFIG_FILE)
+    _style_config = _merge_default_style(raw_config) if raw_config else dict(DEFAULT_STYLE)
     return _style_config
+
 
 def save_style_config(new_style: dict[str, str]) -> dict[str, str]:
-    """保存样式配置。"""
     global _style_config
-    _style_config.update(new_style)
-    
-    try:
-        if not DATA_DIR.exists():
-            DATA_DIR.mkdir(parents=True, exist_ok=True)
-        with open(STYLE_CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(_style_config, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        import structlog
-        logger = structlog.get_logger(__name__)
-        logger.error("save_style_config_failed", error=str(e))
-        
-    return _style_config
+    current = get_style_config()
+    current.update(new_style)
+    _style_config = _merge_default_style(current)
+    _write_json(STYLE_CONFIG_FILE, _style_config)
+    return dict(_style_config)
 
-# 初始化时加载
+
 load_tasks()
