@@ -6,7 +6,7 @@ from typing import Any
 import structlog
 from fastapi import APIRouter, Body
 
-from api.store import get_style_config, save_style_config
+from api.store import get_style_config, save_style_config, get_preset_themes
 
 logger = structlog.get_logger(__name__)
 
@@ -25,3 +25,9 @@ async def update_styles(body: dict[str, str] = Body(...)) -> dict[str, str]:
     updated = save_style_config(body)
     logger.info("style_config_updated", keys_updated=len(updated))
     return updated
+
+
+@router.get("/themes")
+async def list_themes() -> dict[str, dict[str, str]]:
+    """获取所有预设主题列表。"""
+    return get_preset_themes()

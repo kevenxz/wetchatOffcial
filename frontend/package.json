@@ -10,6 +10,7 @@
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@uiw/react-color-sketch": "^2.9.6",
     "antd": "^5.22.0",
     "axios": "^1.7.9",
     "dayjs": "^1.11.20",

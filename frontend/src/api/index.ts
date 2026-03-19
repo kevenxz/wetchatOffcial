@@ -70,3 +70,8 @@ export const getStyleConfig = (): Promise<StyleConfig> =>
 
 export const updateStyleConfig = (config: StyleConfig): Promise<StyleConfig> =>
   http.put('/config/style', config)
+
+export type PresetThemes = Record<string, StyleConfig>
+
+export const getPresetThemes = (): Promise<PresetThemes> =>
+  http.get('/config/themes')
