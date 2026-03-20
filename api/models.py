@@ -52,3 +52,57 @@ class WsMessage(BaseModel):
     progress: int = Field(default=0, ge=0, le=100, description="进度百分比")
     message: str = Field(default="", description="可读状态描述")
     result: Optional[Any] = Field(default=None, description="结果数据")
+
+
+class PlatformType(str, Enum):
+    """平台类型枚举。"""
+
+    wechat_mp = "wechat_mp"  # 微信公众号
+    toutiao = "toutiao"  # 头条号
+
+
+class AccountConfig(BaseModel):
+    """账号配置数据模型。"""
+
+    account_id: str = Field(..., description="账号唯一 ID")
+    name: str = Field(..., min_length=1, max_length=100, description="显示名称")
+    platform: PlatformType = Field(..., description="平台类型")
+    app_id: str = Field(..., min_length=1, max_length=200, description="AppID")
+    app_secret: str = Field(..., min_length=1, max_length=200, description="AppSecret")
+    enabled: bool = Field(default=True, description="是否启用")
+    created_at: datetime = Field(..., description="创建时间")
+    updated_at: Optional[datetime] = Field(default=None, description="最后更新时间")
+
+
+class CreateAccountRequest(BaseModel):
+    """创建账号请求体。"""
+
+    name: str = Field(..., min_length=1, max_length=100)
+    platform: PlatformType
+    app_id: str = Field(..., min_length=1, max_length=200)
+    app_secret: str = Field(..., min_length=1, max_length=200)
+    enabled: bool = Field(default=True)
+
+    @field_validator("name", "app_id", "app_secret")
+    @classmethod
+    def not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("字段不能为空或纯空格")
+        return v.strip()
+
+
+class UpdateAccountRequest(BaseModel):
+    """更新账号请求体（所有字段可选）。"""
+
+    name: Optional[str] = None
+    platform: Optional[PlatformType] = None
+    app_id: Optional[str] = None
+    app_secret: Optional[str] = None
+    enabled: Optional[bool] = None
+
+
+class TestConnectionResponse(BaseModel):
+    """测试连接响应体。"""
+
+    success: bool
+    message: str

@@ -6,12 +6,14 @@ import {
   HistoryOutlined,
   SettingOutlined,
   WechatOutlined,
+  UserOutlined,
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import TaskCreate from '@/pages/TaskCreate'
 import TaskDetail from '@/pages/TaskDetail'
 import History from '@/pages/History'
 import StyleConfigPage from '@/pages/StyleConfig'
+import AccountConfigPage from '@/pages/AccountConfig'
 
 const { Sider, Content } = Layout
 
@@ -21,6 +23,7 @@ const menuItems: MenuItem[] = [
   { key: '/task', icon: <PlusCircleOutlined />, label: '创建任务' },
   { key: '/history', icon: <HistoryOutlined />, label: '历史任务' },
   { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
+  { key: '/accounts', icon: <UserOutlined />, label: '账号配置' },
 ]
 
 function AppLayout() {
@@ -69,6 +72,7 @@ function AppLayout() {
             <Route path="/task/:id" element={<TaskDetail />} />
             <Route path="/history" element={<History />} />
             <Route path="/settings" element={<StyleConfigPage />} />
+            <Route path="/accounts" element={<AccountConfigPage />} />
           </Routes>
         </Content>
       </Layout>

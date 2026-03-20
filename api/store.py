@@ -4,12 +4,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from api.models import TaskResponse
+from api.models import AccountConfig, TaskResponse
 
 DATA_DIR = Path("data")
 TASKS_FILE = DATA_DIR / "tasks.json"
 STYLE_CONFIG_FILE = DATA_DIR / "style_config.json"
 CUSTOM_THEMES_FILE = DATA_DIR / "custom_themes.json"
+ACCOUNTS_FILE = DATA_DIR / "accounts.json"
 
 task_store: dict[str, TaskResponse] = {}
 
@@ -240,4 +241,63 @@ def save_style_config(new_style: dict[str, str]) -> dict[str, str]:
     return dict(_style_config)
 
 
+_account_store: dict[str, AccountConfig] = {}
+
+
+def load_accounts() -> None:
+    """从 JSON 文件加载账号配置到内存。"""
+    if not ACCOUNTS_FILE.exists():
+        return
+    try:
+        with open(ACCOUNTS_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        for account_id, payload in data.items():
+            _account_store[account_id] = AccountConfig(**payload)
+    except Exception:
+        return
+
+
+def _save_accounts() -> None:
+    """原子写入账号配置到 JSON 文件。"""
+    payload = {aid: acc.model_dump(mode="json") for aid, acc in _account_store.items()}
+    _write_json(ACCOUNTS_FILE, payload)
+
+
+def list_accounts() -> list[AccountConfig]:
+    """返回所有账号，按创建时间倒序。"""
+    return sorted(_account_store.values(), key=lambda a: a.created_at, reverse=True)
+
+
+def get_account(account_id: str) -> AccountConfig | None:
+    """按 ID 查询账号。"""
+    return _account_store.get(account_id)
+
+
+def create_account(account: AccountConfig) -> AccountConfig:
+    """新增账号并持久化。"""
+    _account_store[account.account_id] = account
+    _save_accounts()
+    return account
+
+
+def update_account(account_id: str, patch: dict) -> AccountConfig:
+    """差量更新账号字段并持久化，返回更新后的对象。"""
+    account = _account_store.get(account_id)
+    if account is None:
+        raise ValueError(f"账号 {account_id!r} 不存在")
+    updated = account.model_copy(update=patch)
+    _account_store[account_id] = updated
+    _save_accounts()
+    return updated
+
+
+def delete_account(account_id: str) -> None:
+    """删除账号并持久化。"""
+    if account_id not in _account_store:
+        raise ValueError(f"账号 {account_id!r} 不存在")
+    del _account_store[account_id]
+    _save_accounts()
+
+
 load_tasks()
+load_accounts()

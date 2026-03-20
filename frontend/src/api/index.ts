@@ -92,3 +92,54 @@ export const deleteCustomTheme = (themeName: string): Promise<CustomThemes> =>
 
 export const importCustomThemes = (themes: CustomThemes): Promise<CustomThemes> =>
   http.post('/config/themes/custom/import', themes)
+
+// -------- 账号配置相关 --------
+
+export type PlatformType = 'wechat_mp' | 'toutiao'
+
+export interface AccountConfig {
+  account_id: string
+  name: string
+  platform: PlatformType
+  app_id: string
+  app_secret: string
+  enabled: boolean
+  created_at: string
+  updated_at: string | null
+}
+
+export interface CreateAccountRequest {
+  name: string
+  platform: PlatformType
+  app_id: string
+  app_secret: string
+  enabled: boolean
+}
+
+export interface UpdateAccountRequest {
+  name?: string
+  platform?: PlatformType
+  app_id?: string
+  app_secret?: string
+  enabled?: boolean
+}
+
+export interface TestConnectionResponse {
+  success: boolean
+  message: string
+}
+
+export const listAccounts = (): Promise<AccountConfig[]> =>
+  http.get('/accounts')
+
+export const createAccount = (data: CreateAccountRequest): Promise<AccountConfig> =>
+  http.post('/accounts', data)
+
+export const updateAccount = (accountId: string, data: UpdateAccountRequest): Promise<AccountConfig> =>
+  http.put(`/accounts/${accountId}`, data)
+
+export const deleteAccount = (accountId: string): Promise<void> =>
+  http.delete(`/accounts/${accountId}`)
+
+export const testAccountConnection = (accountId: string): Promise<TestConnectionResponse> =>
+  http.post(`/accounts/${accountId}/test`)
