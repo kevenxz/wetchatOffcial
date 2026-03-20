@@ -40,3 +40,6 @@ class WorkflowState(TypedDict):
 
     progress: int
     """任务进度百分比（0-100）。"""
+
+    skip_auto_push: bool
+    """Whether to skip push_to_draft skill and leave push to external logic."""

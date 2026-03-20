@@ -13,6 +13,8 @@ export interface TaskResponse {
   error: string | null
   generated_article?: Record<string, any> | null
   draft_info?: Record<string, any> | null
+  article_theme?: string | null
+  push_records?: PushRecord[]
 }
 
 export interface WsMessage {
@@ -143,3 +145,126 @@ export const deleteAccount = (accountId: string): Promise<void> =>
 
 export const testAccountConnection = (accountId: string): Promise<TestConnectionResponse> =>
   http.post(`/accounts/${accountId}/test`)
+
+// -------- 鏂囩珷绠＄悊 / 鎺ㄩ€佺浉鍏? --------
+
+export type PushStatus = 'success' | 'failed'
+
+export interface PushRecord {
+  push_id: string
+  account_id: string
+  account_name: string
+  platform: PlatformType
+  pushed_at: string
+  status: PushStatus
+  draft_info?: Record<string, any> | null
+  error?: string | null
+}
+
+export interface BatchPushResponse {
+  total: number
+  success: number
+  failed: number
+  results: Array<{
+    task_id: string
+    account_id: string
+    account_name: string
+    status: PushStatus
+    draft_info?: Record<string, any> | null
+    error?: string | null
+  }>
+}
+
+export const listArticles = (): Promise<TaskResponse[]> =>
+  http.get('/articles')
+
+export const pushArticle = (
+  taskId: string,
+  accountIds: string[],
+  themeName?: string,
+): Promise<BatchPushResponse> =>
+  http.post(`/articles/${taskId}/push`, { account_ids: accountIds, theme_name: themeName })
+
+export const batchPushArticles = (
+  taskIds: string[],
+  accountIds: string[],
+  taskThemes?: Record<string, string>,
+): Promise<BatchPushResponse> =>
+  http.post('/articles/batch-push', { task_ids: taskIds, account_ids: accountIds, task_themes: taskThemes })
+
+export const updateArticleTheme = (
+  taskId: string,
+  themeName: string,
+): Promise<TaskResponse> =>
+  http.put(`/articles/${taskId}/theme`, { theme_name: themeName })
+
+// -------- 瀹氭椂浠诲姟 --------
+
+export type ScheduleMode = 'once' | 'interval'
+export type ScheduleStatus = 'running' | 'stopped'
+
+export interface ScheduleConfig {
+  schedule_id: string
+  name: string
+  mode: ScheduleMode
+  run_at?: string | null
+  interval_minutes?: number | null
+  theme_name: string
+  account_ids: string[]
+  hot_topics: string[]
+  status: ScheduleStatus
+  enabled: boolean
+  last_run_at?: string | null
+  next_run_at?: string | null
+  last_error?: string | null
+  created_at: string
+  updated_at?: string | null
+}
+
+export interface CreateScheduleRequest {
+  name: string
+  mode: ScheduleMode
+  run_at?: string | null
+  interval_minutes?: number | null
+  theme_name: string
+  account_ids: string[]
+  hot_topics: string[]
+  enabled: boolean
+}
+
+export interface UpdateScheduleRequest {
+  name?: string
+  mode?: ScheduleMode
+  run_at?: string | null
+  interval_minutes?: number | null
+  theme_name?: string
+  account_ids?: string[]
+  hot_topics?: string[]
+  enabled?: boolean
+}
+
+export interface ScheduleExecuteResponse {
+  message: string
+  task_id?: string | null
+}
+
+export const listSchedules = (): Promise<ScheduleConfig[]> =>
+  http.get('/schedules')
+
+export const createSchedule = (data: CreateScheduleRequest): Promise<ScheduleConfig> =>
+  http.post('/schedules', data)
+
+export const updateSchedule = (scheduleId: string, data: UpdateScheduleRequest): Promise<ScheduleConfig> =>
+  http.put(`/schedules/${scheduleId}`, data)
+
+export const deleteSchedule = (scheduleId: string): Promise<void> =>
+  http.delete(`/schedules/${scheduleId}`)
+
+export const startSchedule = (scheduleId: string): Promise<ScheduleConfig> =>
+  http.post(`/schedules/${scheduleId}/start`)
+
+export const stopSchedule = (scheduleId: string): Promise<ScheduleConfig> =>
+  http.post(`/schedules/${scheduleId}/stop`)
+
+export const runScheduleNow = (scheduleId: string): Promise<ScheduleExecuteResponse> =>
+  http.post(`/schedules/${scheduleId}/run-now`)

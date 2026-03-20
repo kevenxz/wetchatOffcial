@@ -4,13 +4,14 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from api.models import AccountConfig, TaskResponse
+from api.models import AccountConfig, ScheduleConfig, TaskResponse
 
 DATA_DIR = Path("data")
 TASKS_FILE = DATA_DIR / "tasks.json"
 STYLE_CONFIG_FILE = DATA_DIR / "style_config.json"
 CUSTOM_THEMES_FILE = DATA_DIR / "custom_themes.json"
 ACCOUNTS_FILE = DATA_DIR / "accounts.json"
+SCHEDULES_FILE = DATA_DIR / "schedules.json"
 
 task_store: dict[str, TaskResponse] = {}
 
@@ -242,6 +243,7 @@ def save_style_config(new_style: dict[str, str]) -> dict[str, str]:
 
 
 _account_store: dict[str, AccountConfig] = {}
+schedule_store: dict[str, ScheduleConfig] = {}
 
 
 def load_accounts() -> None:
@@ -261,6 +263,25 @@ def _save_accounts() -> None:
     """原子写入账号配置到 JSON 文件。"""
     payload = {aid: acc.model_dump(mode="json") for aid, acc in _account_store.items()}
     _write_json(ACCOUNTS_FILE, payload)
+
+
+def load_schedules() -> None:
+    """Load schedule configs from JSON file."""
+    if not SCHEDULES_FILE.exists():
+        return
+    try:
+        with open(SCHEDULES_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        for schedule_id, payload in data.items():
+            schedule_store[schedule_id] = ScheduleConfig(**payload)
+    except Exception:
+        return
+
+
+def save_schedules() -> None:
+    """Persist schedule configs to JSON file."""
+    payload = {sid: schedule.model_dump(mode="json") for sid, schedule in schedule_store.items()}
+    _write_json(SCHEDULES_FILE, payload)
 
 
 def list_accounts() -> list[AccountConfig]:
@@ -301,3 +322,4 @@ def delete_account(account_id: str) -> None:
 
 load_tasks()
 load_accounts()
+load_schedules()

@@ -16,7 +16,11 @@ def _merge_style(existing_style: str, style_str: str) -> str:
     return f"{existing_style}{spacer}{style_str}"
 
 
-def markdown_to_wechat_html(md_text: str, illustrations: list[str]) -> str:
+def markdown_to_wechat_html(
+    md_text: str,
+    illustrations: list[str],
+    style_config: dict[str, str] | None = None,
+) -> str:
     """Convert Markdown into WeChat-friendly inline-styled HTML."""
     if not md_text:
         return ""
@@ -39,11 +43,11 @@ def markdown_to_wechat_html(md_text: str, illustrations: list[str]) -> str:
         extensions=["tables", "fenced_code", "nl2br", "sane_lists"],
     )
 
-    style_config = get_style_config()
-    container_style = style_config.get("container", "padding: 0 15px;")
+    style_source = style_config or get_style_config()
+    container_style = style_source.get("container", "padding: 0 15px;")
     soup = BeautifulSoup(html_content, "html.parser")
 
-    for selector, style_str in style_config.items():
+    for selector, style_str in style_source.items():
         if selector == "container" or not style_str:
             continue
         for element in soup.select(selector):

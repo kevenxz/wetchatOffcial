@@ -8,7 +8,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.logging_config import setup_logging
-from api.routers import tasks, ws, config, accounts
+from api.routers import tasks, ws, config, accounts, articles, schedules
+from api.scheduler import scheduler_engine
 
 # 加载 .env 环境变量
 load_dotenv()
@@ -34,4 +35,16 @@ app.add_middleware(
 app.include_router(tasks.router, prefix="/api")
 app.include_router(config.router, prefix="/api")
 app.include_router(accounts.router, prefix="/api")
+app.include_router(articles.router, prefix="/api")
+app.include_router(schedules.router, prefix="/api")
 app.include_router(ws.router)
+
+
+@app.on_event("startup")
+async def on_startup() -> None:
+    scheduler_engine.start()
+
+
+@app.on_event("shutdown")
+async def on_shutdown() -> None:
+    await scheduler_engine.stop()
