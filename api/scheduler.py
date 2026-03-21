@@ -91,6 +91,7 @@ class SchedulerEngine:
         """Initialize loop task holder and running guard set."""
         self._task: asyncio.Task | None = None
         self._running_schedule_ids: set[str] = set()
+        self._running_task_ids: dict[str, str] = {}
 
     def start(self) -> None:
         """Start background scheduler loop if not already running."""
@@ -115,6 +116,17 @@ class SchedulerEngine:
         schedule = schedule_store.get(schedule_id)
         if schedule is None:
             raise ValueError(f"schedule {schedule_id!r} not found")
+        # If an execution is already in progress, return the existing task id
+        # instead of raising, so "stop -> run now" won't fail with UX-level error.
+        if schedule_id in self._running_schedule_ids:
+            running_task_id = self._running_task_ids.get(schedule_id)
+            if running_task_id:
+                logger.info(
+                    "schedule_run_now_reused_running_task",
+                    schedule_id=schedule_id,
+                    task_id=running_task_id,
+                )
+                return running_task_id
         return await self._execute_schedule(schedule, trigger="manual")
 
     async def _run_loop(self) -> None:
@@ -165,6 +177,7 @@ class SchedulerEngine:
             article_theme=schedule.theme_name,
         )
         task_store[task.task_id] = task
+        self._running_task_ids[schedule.schedule_id] = task.task_id
         save_tasks()
 
         logger.info(
@@ -212,6 +225,7 @@ class SchedulerEngine:
             logger.exception("schedule_execute_failed", schedule_id=schedule.schedule_id, error=str(exc))
         finally:
             self._running_schedule_ids.discard(schedule.schedule_id)
+            self._running_task_ids.pop(schedule.schedule_id, None)
 
         return task.task_id
 

@@ -53,3 +53,17 @@ async def test_generate_images_no_article(mock_state):
     
     assert result["status"] == "failed"
     assert "缺少 generated_article" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_generate_images_dalle_enabled_without_key_fallback(mock_state, monkeypatch):
+    monkeypatch.setenv("DALLE_ENABLED", "true")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    result = await generate_images_node(mock_state)
+
+    assert result["status"] == "running"
+    article = result["generated_article"]
+    # no api key -> fallback to extracted images assignment
+    assert article["cover_image"] == "http://test.com/img1.jpg"
+    assert article["illustrations"] == ["http://test.com/img2.jpg", "http://test.com/img3.jpg"]

@@ -9,32 +9,63 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-# 支持的图片类型
-VALID_IMG_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+# 正文插图允许的类型（微信 uploadimg 兼容性优先）
+ARTICLE_ALLOWED_IMG_TYPES = {"image/jpeg", "image/png", "image/gif"}
+# 封面素材允许的类型（永久素材接口更严格，禁用 webp/svg）
+COVER_ALLOWED_IMG_TYPES = {"image/jpeg", "image/png", "image/gif"}
 
 
-async def _download_image(client: httpx.AsyncClient, img_url: str) -> tuple[bytes, str, str]:
+def _detect_image_mime(content: bytes, content_type_header: str, img_url: str) -> str:
+    """根据响应头、URL 后缀和文件内容推断真实图片类型。"""
+    content_type = content_type_header.lower().split(";")[0].strip()
+    if content_type:
+        return content_type
+
+    guessed, _ = mimetypes.guess_type(urlparse(img_url).path)
+    if guessed:
+        return guessed
+
+    head = content[:64]
+    if head.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if head.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if head.startswith(b"RIFF") and b"WEBP" in content[:16]:
+        return "image/webp"
+
+    # camo/github/shields 等来源常见 svg，微信素材接口不支持
+    text_head = content[:256].lstrip().lower()
+    if text_head.startswith(b"<?xml") or text_head.startswith(b"<svg") or b"<svg" in text_head:
+        return "image/svg+xml"
+
+    return ""
+
+
+async def _download_image(
+    client: httpx.AsyncClient,
+    img_url: str,
+    allowed_types: set[str],
+) -> tuple[bytes, str, str]:
     """下载远端图片，返回二进制内容、文件名和 MimeType。"""
     try:
         resp = await client.get(img_url, follow_redirects=True, timeout=15.0)
         resp.raise_for_status()
         
         content = resp.content
-        content_type = resp.headers.get("Content-Type", "").lower().split(";")[0]
-        
-        if content_type not in VALID_IMG_TYPES:
-            # 尝试通过扩展名推底
-            parsed = urlparse(img_url)
-            ext = parsed.path.lower().split(".")[-1]
-            if f"image/{ext}" in VALID_IMG_TYPES:
-                content_type = f"image/{ext}"
-            elif ext == "jpg":
-                content_type = "image/jpeg"
-            else:
-                content_type = "image/jpeg" # 兜底强制
-                
+        content_type = _detect_image_mime(content, resp.headers.get("Content-Type", ""), img_url)
+
+        if content_type == "image/svg+xml":
+            logger.warning("skip_unsupported_svg_image", url=img_url)
+            return b"", "", ""
+
+        if content_type not in allowed_types:
+            logger.warning("skip_unsupported_image_type", url=img_url, content_type=content_type or "unknown")
+            return b"", "", ""
+
         # 生成一个模拟的文件名
-        ext = content_type.split("/")[-1]
+        ext = "jpg" if content_type == "image/jpeg" else content_type.split("/")[-1]
         filename = f"upload_img.{ext}"
         
         return content, filename, content_type
@@ -53,7 +84,7 @@ async def upload_cover_material(client: httpx.AsyncClient, img_url: str, access_
     if not img_url:
         return ""
         
-    img_data, filename, content_type = await _download_image(client, img_url)
+    img_data, filename, content_type = await _download_image(client, img_url, COVER_ALLOWED_IMG_TYPES)
     if not img_data:
         return ""
         
@@ -85,7 +116,7 @@ async def upload_article_image(client: httpx.AsyncClient, img_url: str, access_t
     if not img_url:
         return ""
         
-    img_data, filename, content_type = await _download_image(client, img_url)
+    img_data, filename, content_type = await _download_image(client, img_url, ARTICLE_ALLOWED_IMG_TYPES)
     if not img_data:
         return img_url # 如果下载失败就不强求了，兜底用外网连接
         

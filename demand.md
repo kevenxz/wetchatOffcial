@@ -1,7 +1,7 @@
 # 基于 LangGraph 的微信公众号文章自动发布系统需求文档
 
-版本：v1.1
-更新日期：2026-03-10
+版本：v1.2
+更新日期：2026-03-21
 
 ---
 
@@ -308,9 +308,36 @@ ui_feedback
 | 方法 | 路径 | 描述 |
 |------|------|------|
 | POST | `/api/tasks` | 创建新任务（传入关键词） |
+| POST | `/api/tasks/{task_id}/retry` | 从失败/终止节点继续执行任务 |
 | GET | `/api/tasks/{task_id}` | 查询任务状态 |
 | GET | `/api/tasks` | 获取历史任务列表 |
 | DELETE | `/api/tasks/{task_id}` | 删除任务记录 |
+| GET | `/api/config/style` | 获取当前全局样式配置 |
+| PUT | `/api/config/style` | 更新当前全局样式配置 |
+| GET | `/api/config/themes` | 获取内置主题列表 |
+| GET | `/api/config/themes/custom` | 获取自定义主题列表 |
+| POST | `/api/config/themes/custom` | 新建自定义主题 |
+| PUT | `/api/config/themes/custom/{theme_name}` | 更新自定义主题（含重命名） |
+| DELETE | `/api/config/themes/custom/{theme_name}` | 删除自定义主题 |
+| POST | `/api/config/themes/custom/import` | 批量导入自定义主题 |
+| GET | `/api/accounts` | 获取账号配置列表 |
+| POST | `/api/accounts` | 新增账号配置 |
+| GET | `/api/accounts/{account_id}` | 查询单账号详情 |
+| PUT | `/api/accounts/{account_id}` | 更新账号配置 |
+| DELETE | `/api/accounts/{account_id}` | 删除账号配置 |
+| POST | `/api/accounts/{account_id}/test` | 测试账号连接（当前支持微信） |
+| GET | `/api/articles` | 获取已生成文章列表（从任务中筛选） |
+| GET | `/api/articles/{task_id}` | 获取单篇文章详情 |
+| PUT | `/api/articles/{task_id}/theme` | 设置文章默认推送主题 |
+| POST | `/api/articles/{task_id}/push` | 单篇文章推送到多个账号 |
+| POST | `/api/articles/batch-push` | 多文章批量推送到多个账号 |
+| GET | `/api/schedules` | 获取定时任务列表 |
+| POST | `/api/schedules` | 创建定时任务 |
+| PUT | `/api/schedules/{schedule_id}` | 更新定时任务 |
+| DELETE | `/api/schedules/{schedule_id}` | 删除定时任务 |
+| POST | `/api/schedules/{schedule_id}/start` | 启动定时任务 |
+| POST | `/api/schedules/{schedule_id}/stop` | 停止定时任务 |
+| POST | `/api/schedules/{schedule_id}/run-now` | 立即执行一次定时任务 |
 
 ### 8.2 WebSocket
 
@@ -338,12 +365,14 @@ WECHAT_APP_ID=xxx
 WECHAT_APP_SECRET=xxx
 
 # 搜索引擎
+SERPAPI_API_KEY=xxx
 GOOGLE_SEARCH_API_KEY=xxx
 GOOGLE_SEARCH_ENGINE_ID=xxx
 BING_SEARCH_API_KEY=xxx
 
 # LLM
 OPENAI_API_KEY=xxx
+OPENAI_API_BASE=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4o
 
 # 可选：图片生成
@@ -361,15 +390,23 @@ API_PORT=8000
 ```
 wechatProject/
 ├── api/                        # FastAPI 后端
-│   ├── main.py                 # FastAPI 应用入口
+│   ├── main.py                 # FastAPI 应用入口，挂载所有路由 + 调度器生命周期
+│   ├── models.py               # Pydantic 数据模型（任务/账号/文章推送/定时任务）
+│   ├── store.py                # JSON 持久化存储（tasks/accounts/schedules/style/themes）
+│   ├── scheduler.py            # 进程内定时调度引擎（定时触发工作流 + 多账号推送）
+│   ├── ws_manager.py           # WebSocket 连接管理与广播
+│   ├── logging_config.py       # 日志配置
 │   ├── routers/
 │   │   ├── tasks.py            # 任务 CRUD 接口
-│   │   └── ws.py               # WebSocket 接口
-│   └── models.py               # Pydantic 数据模型
+│   │   ├── ws.py               # WebSocket 接口
+│   │   ├── config.py           # 样式与主题管理接口
+│   │   ├── accounts.py         # 多平台账号管理接口
+│   │   ├── articles.py         # 文章管理与推送接口
+│   │   └── schedules.py        # 定时任务管理接口
 ├── workflow/                   # LangGraph 工作流
 │   ├── graph.py                # StateGraph 定义与节点注册
 │   ├── state.py                # WorkflowState 定义
-│   └── skills/
+│   ├── skills/
 │       ├── search_web.py       # Skill 1
 │       ├── fetch_extract.py    # Skill 2
 │       ├── generate_article.py # Skill 3
@@ -377,12 +414,15 @@ wechatProject/
 │       ├── push_to_draft.py    # Skill 5
 │       ├── ui_feedback.py      # Skill 6
 │       └── error_handler.py    # 错误处理节点
+│   └── utils/
+│       ├── wechat_draft_service.py  # 微信草稿推送服务（token缓存/重试/素材上传）
+│       ├── wechat_api.py            # 微信素材与正文图片上传
+│       └── markdown_to_wechat.py    # Markdown -> 微信可用 HTML（注入主题样式）
 ├── frontend/                   # React 前端
 │   ├── src/
-│   │   ├── pages/              # 页面组件
-│   │   ├── components/         # 通用组件
-│   │   ├── store/              # Zustand 状态
-│   │   ├── api/                # API 请求封装
+│   │   ├── pages/              # 页面：创建任务/任务详情/历史/文章管理/定时任务/系统设置/账号配置
+│   │   ├── store/              # Zustand 状态（任务创建态）
+│   │   ├── api/                # API 请求封装（覆盖 tasks/config/accounts/articles/schedules）
 │   │   └── App.tsx
 │   ├── package.json
 │   └── vite.config.ts
@@ -390,7 +430,15 @@ wechatProject/
 │   ├── test_search_web.py
 │   ├── test_fetch_extract.py
 │   ├── test_generate_article.py
-│   └── test_push_to_draft.py
+│   ├── test_generate_images.py
+│   ├── test_push_to_draft.py
+│   └── test_ui_feedback.py
+├── data/                       # 运行时持久化数据（JSON）
+│   ├── tasks.json
+│   ├── accounts.json
+│   ├── schedules.json
+│   ├── style_config.json
+│   └── custom_themes.json
 ├── logs/                       # 日志目录（不提交 git）
 ├── main.py                     # 命令行入口
 ├── requirements.txt            # Python 依赖（锁定版本）
@@ -401,12 +449,32 @@ wechatProject/
 
 ---
 
+### 9.1 模块功能映射（当前实现）
+
+| 模块 | 对应功能 |
+|------|----------|
+| `api/routers/tasks.py` | 创建任务、查询任务、删除任务、断点重试；任务状态持久化；进度广播 |
+| `api/routers/ws.py` + `api/ws_manager.py` | 任务维度 WebSocket 订阅与消息广播 |
+| `workflow/graph.py` | 工作流编排：initialize → search_web → fetch_extract → generate_article → generate_images → push_to_draft/ui_feedback |
+| `workflow/skills/search_web.py` | 关键词搜索（SerpApi/Bing）、链接去重、失败重试 |
+| `workflow/skills/fetch_extract.py` | 并发抓取网页、正文提取（trafilatura + bs4）、图片筛选 |
+| `workflow/skills/generate_article.py` | LLM 结构化输出文章（主标题/备选标题/正文） |
+| `workflow/skills/generate_images.py` | 根据正文 `[插图N]` 标记分配封面图与插图 |
+| `workflow/skills/push_to_draft.py` + `workflow/utils/wechat_*.py` | 微信 token 获取、素材上传、Markdown 转 HTML、草稿箱推送 |
+| `api/routers/config.py` + `api/store.py` | 主题与样式配置：内置主题、自定义主题增删改查、导入导出、全局样式保存 |
+| `api/routers/accounts.py` | 多账号配置管理（当前可测试微信连接） |
+| `api/routers/articles.py` | 文章列表、文章主题绑定、单篇/批量推送、推送记录 |
+| `api/routers/schedules.py` + `api/scheduler.py` | 定时任务 CRUD、启停、立即执行、热点关键词随机触发 |
+| `frontend/src/pages/*.tsx` | 可视化任务创建、流程跟踪、历史列表、主题编辑、账号管理、文章推送、定时任务管理 |
+
+---
+
 ## 10. 部署与运维
 
 - **Python 版本**：3.11+
 - **依赖安装**：`pip install -r requirements.txt`
 - **前端构建**：`cd frontend && npm install && npm run build`
-- **启动后端**：`uvicorn api.main:app --host 0.0.0.0 --port 8000`
+- **启动后端**：`uvicorn api.main:app --host 0.0.0.0 --port 8001`
 - **命令行模式**：`python main.py --keywords "人工智能 最新进展"`
 - **日志**：`structlog` 输出 JSON 格式，存储于 `logs/` 目录
 
@@ -419,3 +487,17 @@ wechatProject/
 - 自动发布：直接发布（需公众号权限）
 - 多账号管理：支持多个微信公众号切换
 - 数据统计：文章阅读量、粉丝增长等数据看板
+
+---
+
+## 12. demand 文档持续维护规则（新增）
+
+为保证“项目结构与功能”始终准确，后续每次新增/调整功能时，必须同步更新 `demand.md`，规则如下：
+
+1. 新增接口：同步更新 `8.1 REST API` 表格（方法、路径、用途、影响范围）。
+2. 新增目录/文件：同步更新 `9. 项目目录结构`（包含新增文件职责）。
+3. 新增业务能力：同步更新 `9.1 模块功能映射`（模块 → 功能一一对应）。
+4. 变更工作流节点：同步更新 `5.2/5.4/6` 中工作流结构、节点说明与异常策略。
+5. 每次更新文档后，递增版本号并更新日期（文档头部 `版本/更新日期`）。
+
+建议在提测前增加一个检查项：`代码变更是否已同步 demand.md`，避免文档滞后。
