@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from
 import { Layout, Menu } from 'antd'
 import type { MenuProps } from 'antd'
 import {
+  ApiOutlined,
   CalendarOutlined,
   FileTextOutlined,
   HistoryOutlined,
@@ -15,6 +16,7 @@ import TaskCreate from '@/pages/TaskCreate'
 import TaskDetail from '@/pages/TaskDetail'
 import History from '@/pages/History'
 import StyleConfigPage from '@/pages/StyleConfig'
+import ModelConfigPage from '@/pages/ModelConfig'
 import AccountConfigPage from '@/pages/AccountConfig'
 import ArticleManage from '@/pages/ArticleManage'
 import ScheduleManage from '@/pages/ScheduleManage'
@@ -29,6 +31,7 @@ const menuItems: MenuItem[] = [
   { key: '/articles', icon: <FileTextOutlined />, label: '文章管理' },
   { key: '/schedules', icon: <CalendarOutlined />, label: '定时任务' },
   { key: '/settings', icon: <SettingOutlined />, label: '系统设置' },
+  { key: '/models', icon: <ApiOutlined />, label: 'Model Config' },
   { key: '/accounts', icon: <UserOutlined />, label: '账号配置' },
 ]
 
@@ -79,6 +82,7 @@ function AppLayout() {
             <Route path="/articles" element={<ArticleManage />} />
             <Route path="/schedules" element={<ScheduleManage />} />
             <Route path="/settings" element={<StyleConfigPage />} />
+            <Route path="/models" element={<ModelConfigPage />} />
             <Route path="/accounts" element={<AccountConfigPage />} />
           </Routes>
         </Content>

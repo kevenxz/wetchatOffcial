@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import {
   Button,
@@ -19,6 +19,9 @@ import {
 } from 'antd'
 import type { TableProps } from 'antd'
 import {
+  ARTICLE_STRATEGY_LABELS,
+  DEFAULT_GENERATION_CONFIG,
+  GENERATION_ROLE_PRESETS,
   createSchedule,
   deleteSchedule,
   getCustomThemes,
@@ -30,6 +33,7 @@ import {
   stopSchedule,
   updateSchedule,
   type AccountConfig,
+  type ArticleStrategy,
   type ScheduleConfig,
   type ScheduleMode,
 } from '@/api'
@@ -45,6 +49,9 @@ interface FormValues {
   theme_name: string
   account_ids: string[]
   hot_topics: string[]
+  audience_roles: string[]
+  article_strategy: ArticleStrategy
+  style_hint?: string
   enabled: boolean
 }
 
@@ -106,6 +113,9 @@ export default function ScheduleManage() {
       theme_name: CURRENT_THEME_KEY,
       account_ids: [],
       hot_topics: [],
+      audience_roles: DEFAULT_GENERATION_CONFIG.audience_roles,
+      article_strategy: DEFAULT_GENERATION_CONFIG.article_strategy,
+      style_hint: DEFAULT_GENERATION_CONFIG.style_hint,
       enabled: true,
     })
     setModalOpen(true)
@@ -122,6 +132,9 @@ export default function ScheduleManage() {
       theme_name: record.theme_name || CURRENT_THEME_KEY,
       account_ids: record.account_ids,
       hot_topics: record.hot_topics,
+      audience_roles: record.generation_config?.audience_roles || DEFAULT_GENERATION_CONFIG.audience_roles,
+      article_strategy: record.generation_config?.article_strategy || DEFAULT_GENERATION_CONFIG.article_strategy,
+      style_hint: record.generation_config?.style_hint || DEFAULT_GENERATION_CONFIG.style_hint,
       enabled: record.enabled,
     })
     setModalOpen(true)
@@ -138,6 +151,13 @@ export default function ScheduleManage() {
       theme_name: values.theme_name || CURRENT_THEME_KEY,
       account_ids: values.account_ids || [],
       hot_topics: values.hot_topics || [],
+      generation_config: {
+        audience_roles: values.audience_roles?.length
+          ? values.audience_roles
+          : DEFAULT_GENERATION_CONFIG.audience_roles,
+        article_strategy: values.article_strategy || DEFAULT_GENERATION_CONFIG.article_strategy,
+        style_hint: values.style_hint?.trim() || DEFAULT_GENERATION_CONFIG.style_hint,
+      },
       enabled: values.enabled ?? true,
     }
 
@@ -204,6 +224,23 @@ export default function ScheduleManage() {
           {record.mode === 'once' && record.run_at && (
             <Text type="secondary">{dayjs(record.run_at).format('YYYY-MM-DD HH:mm:ss')}</Text>
           )}
+        </Space>
+      ),
+    },
+    {
+      title: '角色 / 策略',
+      key: 'generation_config',
+      width: 260,
+      render: (_, record) => (
+        <Space size={[4, 8]} wrap>
+          {(record.generation_config?.audience_roles || []).map((role) => (
+            <Tag color="blue" key={role}>
+              {role}
+            </Tag>
+          ))}
+          <Tag color="purple">
+            {ARTICLE_STRATEGY_LABELS[record.generation_config?.article_strategy || 'auto']}
+          </Tag>
         </Space>
       ),
     },
@@ -365,6 +402,46 @@ export default function ScheduleManage() {
             />
           </Form.Item>
 
+          <Form.Item
+            label="目标角色"
+            name="audience_roles"
+            rules={[{ required: true, message: '请至少选择一个目标角色' }]}
+            extra="支持多角色视角，排在最前面的角色会被视为主视角。"
+          >
+            <Select
+              mode="tags"
+              options={GENERATION_ROLE_PRESETS.map((role) => ({ label: role, value: role }))}
+              tokenSeparators={[',', '，', ';', '；']}
+              placeholder="例如：投资者、开发者"
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="文章策略"
+            name="article_strategy"
+            rules={[{ required: true, message: '请选择文章策略' }]}
+          >
+            <Select
+              options={Object.entries(ARTICLE_STRATEGY_LABELS).map(([value, label]) => ({
+                label,
+                value,
+              }))}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="风格补充（可选）"
+            name="style_hint"
+            extra="不填时系统会自动推断风格，填写后会作为定时任务的长期风格偏好。"
+          >
+            <Input.TextArea
+              rows={3}
+              maxLength={500}
+              showCount
+              placeholder="例如：偏理性分析，适合公众号阅读，参考财经或科技深度号的克制表达"
+              style={{ resize: 'none' }}
+            />
+          </Form.Item>
           <Form.Item label="创建后立即启动" name="enabled" valuePropName="checked">
             <Radio.Group
               options={[
@@ -378,3 +455,4 @@ export default function ScheduleManage() {
     </div>
   )
 }
+

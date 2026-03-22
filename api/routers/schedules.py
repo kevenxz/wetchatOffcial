@@ -68,6 +68,7 @@ async def create_schedule(body: CreateScheduleRequest) -> ScheduleConfig:
         theme_name=body.theme_name,
         account_ids=body.account_ids,
         hot_topics=[topic.strip() for topic in body.hot_topics if topic.strip()],
+        generation_config=body.generation_config,
         enabled=body.enabled,
         status=ScheduleStatus.running if body.enabled else ScheduleStatus.stopped,
         next_run_at=(body.run_at if body.mode == ScheduleMode.once else now + timedelta(minutes=body.interval_minutes or 1))

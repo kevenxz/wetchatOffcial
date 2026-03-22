@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Card, Table, Tag, Button, Popconfirm, message, Space, Tooltip } from 'antd'
 import { EyeOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import { listTasks, deleteTask, TaskResponse } from '@/api'
+import { ARTICLE_STRATEGY_LABELS, listTasks, deleteTask, TaskResponse } from '@/api'
 import dayjs from 'dayjs'
 
 export default function History() {
@@ -55,6 +55,23 @@ export default function History() {
       dataIndex: 'keywords',
       key: 'keywords',
       ellipsis: true,
+    },
+    {
+      title: '角色 / 策略',
+      key: 'generation_config',
+      width: 240,
+      render: (_: unknown, record: TaskResponse) => (
+        <Space size={[4, 8]} wrap>
+          {record.generation_config?.audience_roles?.map((role) => (
+            <Tag color="blue" key={role}>
+              {role}
+            </Tag>
+          ))}
+          <Tag color="purple">
+            {ARTICLE_STRATEGY_LABELS[record.generation_config?.article_strategy || 'auto']}
+          </Tag>
+        </Space>
+      ),
     },
     {
       title: '状态',

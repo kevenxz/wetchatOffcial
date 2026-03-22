@@ -1,13 +1,13 @@
 # 基于 LangGraph 的微信公众号文章自动发布系统需求文档
 
-版本：v1.2
-更新日期：2026-03-21
+版本：v1.3
+更新日期：2026-03-22
 
 ---
 
 ## 1. 项目概述
 
-本项目构建一个基于 **LangGraph** 的智能体工作流，实现微信公众号文章的自动化生成与发布。用户只需输入关键词，系统即可自动搜索相关网页内容、整合生成符合微信公众号风格的图文文章，并推送至公众号草稿箱，供人工审核后发布。
+本项目构建一个基于 **LangGraph** 的智能体工作流，实现微信公众号文章的自动化生成与发布。用户默认只需输入主题文本，系统会先自动推断文章风格与结构蓝图，再优先搜索官网、官方文档和高可信媒体内容，整合生成符合微信公众号风格的图文文章，并推送至公众号草稿箱，供人工审核后发布。
 
 系统同时提供一套 **Web UI 界面**，让内容运营人员可以通过可视化页面触发任务、监控进度、预览草稿并进行人工干预。
 
@@ -30,10 +30,12 @@
 
 | 功能模块 | 详细描述 |
 |----------|----------|
-| 关键词输入 | 支持单个或多个关键词组合，作为内容生成起点 |
-| 网页链接搜集 | 根据关键词调用搜索引擎 API，获取相关网页链接（默认取前 10 条） |
+| 主题输入 | 支持输入主题文本，并可附加角色、文章策略、可选 `style_hint` 作为生成起点 |
+| 风格与蓝图规划 | 在搜索前先推断 `user_intent`、`style_profile`、`article_blueprint`，确定文章结构、语气和搜索重点 |
+| 网页链接搜集 | 根据蓝图规划的搜索词调用搜索引擎 API，优先获取官网、官方文档和高可信媒体链接，并使用 DuckDuckGo 作为免费兜底 |
 | 内容提取与清洗 | 抓取链接页面，去除广告、导航等噪声，保留正文、标题、图片等关键信息 |
-| 文章生成 | 调用 LLM，将多源内容综合成一篇微信公众号风格文章，包含：主标题（+2个备选）、引言、正文（分点论述+案例）、结尾、封面图建议、正文插图标注 |
+| 来源排序 | 对搜索结果进行可信度、相关度和来源多样性排序，筛掉低质量或重复来源 |
+| 文章生成 | 调用 LLM，将多源内容按蓝图综合成一篇微信公众号风格文章，包含：主标题（+2个备选）、固定章节结构、局限与风险、行动建议、正文插图标注 |
 | 图片处理 | 支持三种方案（详见 Skill 4），将图片上传至微信素材库并替换正文中的 `[插图]` 标记 |
 | 草稿推送 | 通过微信公众号 API 将图文推送至草稿箱，返回 `media_id` |
 | 结果反馈 | 向用户展示任务状态、草稿 ID 及预览链接 |
@@ -84,7 +86,7 @@
 | 工作流引擎 | LangGraph 0.2+ |
 | LLM 框架 | LangChain 0.3+ |
 | 大语言模型 | OpenAI GPT-4o（默认），支持切换通义千问、文心一言等 |
-| 搜索引擎 | Google Custom Search API（主），Bing Web Search API（备） |
+| 搜索引擎 | SerpApi Google（主），Bing Web Search API（备），DuckDuckGo HTML（免费兜底） |
 | 网页解析 | `trafilatura`（主），`BeautifulSoup4`（备） |
 | 图片生成 | DALL-E 3（可选），或从原网页提取 |
 | 微信 API | 微信公众号开放平台 API（草稿、素材、Token） |
@@ -108,12 +110,17 @@ FastAPI 后端 (api/)
      ▼
 LangGraph 工作流 (workflow/)
      │
-     ├── Skill 1: search_web          # 搜索引擎 API
-     ├── Skill 2: fetch_and_extract   # 网页抓取 + 内容清洗
-     ├── Skill 3: generate_article    # LLM 文章生成
-     ├── Skill 4: generate_images     # 图片处理
-     ├── Skill 5: push_to_draft       # 微信草稿推送
-     └── Skill 6: ui_feedback         # 结果通知 & 前端状态更新
+     ├── Skill 1: interpret_user_intent   # 解析主题、角色、文章目标
+     ├── Skill 2: infer_style_profile     # 自动生成风格画像
+     ├── Skill 3: build_article_blueprint # 生成结构化文章蓝图
+     ├── Skill 4: plan_search_queries     # 基于蓝图规划搜索词
+     ├── Skill 5: search_web              # 多搜索源检索
+     ├── Skill 6: rank_sources            # 可信源排序
+     ├── Skill 7: fetch_and_extract       # 网页抓取 + 内容清洗
+     ├── Skill 8: generate_article        # LLM 文章生成
+     ├── Skill 9: generate_images         # 图片处理
+     ├── Skill 10: push_to_draft          # 微信草稿推送
+     └── Skill 11: ui_feedback            # 结果通知 & 前端状态更新
 ```
 
 ### 5.3 LangGraph 状态定义
@@ -125,8 +132,14 @@ from typing_extensions import TypedDict
 class WorkflowState(TypedDict):
     task_id: str                          # 任务唯一 ID
     keywords: str                         # 用户输入的关键词
-    search_results: List[str]             # 搜集到的 URL 列表
-    extracted_contents: List[Dict]        # 每个 URL 提取的内容：{url, title, text, images}
+    generation_config: Dict               # 文章生成配置：{audience_roles, article_strategy, style_hint}
+    user_intent: Dict                     # 用户意图解析结果：{topic, primary_role, article_goal, resolved_strategy}
+    style_profile: Dict                   # 风格画像：{style_archetype, tone, title_style, style_prompt}
+    article_blueprint: Dict               # 文章蓝图：{section_outline, search_focuses, title_strategy}
+    search_queries: List[Dict]            # 搜索规划结果：[{query, intent, priority}]
+    search_results: List[Dict]            # 结构化搜索结果：{url, title, snippet, domain, source_type, final_score}
+    extracted_contents: List[Dict]        # 每个 URL 提取的内容：{url, title, text, images, source_meta}
+    article_plan: Dict                    # 兼容旧接口的规划结果，由 blueprint 派生
     generated_article: Dict               # 生成的文章：{title, alt_titles, content, cover_image, illustrations}
     draft_info: Optional[Dict]            # 草稿推送结果：{media_id, url, err_msg}
     retry_count: int                      # 当前重试次数
@@ -140,7 +153,22 @@ class WorkflowState(TypedDict):
 [Start]
   │
   ▼
+interpret_user_intent ──失败重试──► error_handler
+  │
+  ▼
+infer_style_profile ──失败重试──► error_handler
+  │
+  ▼
+build_article_blueprint ──失败重试──► error_handler
+  │
+  ▼
+plan_search_queries ──失败重试──► error_handler
+  │
+  ▼
 search_web ──失败重试──► error_handler
+  │
+  ▼
+rank_sources ──失败重试──► error_handler
   │
   ▼
 fetch_and_extract ──失败重试──► error_handler
@@ -165,55 +193,143 @@ ui_feedback
 
 ## 6. 详细 Skill 说明
 
-### Skill 1: search_web
+### Skill 1: interpret_user_intent
 
-- **功能**：根据关键词搜索互联网，获取相关网页链接
-- **输入**：`keywords`
-- **输出**：更新 `search_results`（URL 列表，最多 10 条）
-- **实现**：
-  - 主：Google Custom Search JSON API
-  - 备：Bing Web Search API
-  - 解析结果，过滤重复与无效链接
-- **异常处理**：重试 3 次；若无结果则设置 `error` 并终止
+- **功能**：根据主题文本和生成配置，解析主角色、文章目标和实际写作策略
+- **输入**：`keywords`、`generation_config`
+- **输出**：更新 `user_intent`
+- **职责**：
+  - 规范化 `generation_config`
+  - 当 `article_strategy=auto` 时自动推断实际策略
+  - 生成主角色、目标角色、文章目标和核心关注问题
 
 ---
 
-### Skill 2: fetch_and_extract
+### Skill 2: infer_style_profile
 
-- **功能**：并发抓取每个 URL，提取正文、标题、图片
+- **功能**：自动生成文章风格画像
+- **输入**：`user_intent`、`generation_config`
+- **输出**：更新 `style_profile`
+- **实现**：
+  - 优先调用 LLM 生成结构化风格画像
+  - 若模型不可用或结构化输出失败，则回退到内置风格原型
+  - 支持保留用户补充的 `style_hint`
+- **风格原型**：
+  - `finance_rational`
+  - `tech_deep_explainer`
+  - `product_review`
+  - `trend_commentary`
+
+---
+
+### Skill 3: build_article_blueprint
+
+- **功能**：在搜索前生成结构化文章蓝图
+- **输入**：`user_intent`、`style_profile`
+- **输出**：更新 `article_blueprint`，并派生兼容旧接口的 `article_plan`
+- **职责**：
+  - 生成固定章节结构
+  - 生成每一节的写作目标和证据需求
+  - 生成标题策略、开篇目标、结尾方式和搜索重点
+  - 保证包含“局限与风险”和“行动建议”
+
+---
+
+### Skill 4: plan_search_queries
+
+- **功能**：根据文章蓝图规划搜索词
+- **输入**：`user_intent`、`article_blueprint`
+- **输出**：更新 `search_queries`
+- **职责**：
+  - 拆分官方事实查询、行业新闻查询、风险验证查询、市场背景查询
+  - 将搜索词与搜索意图绑定，供后续排序节点使用
+
+---
+
+### Skill 5: search_web
+
+- **功能**：根据结构化搜索词检索互联网内容
+- **输入**：`search_queries`
+- **输出**：更新 `search_results`
+- **实现**：
+  - 主：SerpApi Google
+  - 备：Bing Web Search API
+  - 免费兜底：DuckDuckGo HTML
+  - 输出结构化结果，而不是纯 URL
+- **结果字段**：
+  - `url`
+  - `title`
+  - `snippet`
+  - `domain`
+  - `provider`
+  - `query_intent`
+  - `source_type`
+  - `authority_score`
+  - `relevance_score`
+  - `final_score`
+- **异常处理**：单搜索源失败允许降级；全部无结果则设置 `error`
+
+---
+
+### Skill 6: rank_sources
+
+- **功能**：对搜索结果做可信度与相关度排序
 - **输入**：`search_results`
-- **输出**：更新 `extracted_contents`（每项含 `url`、`title`、`text`、`images`）
+- **输出**：更新排序后的 `search_results`
+- **职责**：
+  - 优先官网、官方文档、GitHub、论文、权威媒体和研究机构
+  - 按搜索意图增加不同来源类型的权重
+  - 控制同域名重复数量，保留来源多样性
+
+---
+
+### Skill 7: fetch_and_extract
+
+- **功能**：并发抓取高分来源，提取正文、标题、图片
+- **输入**：`search_results`
+- **输出**：更新 `extracted_contents`（每项含 `url`、`title`、`text`、`images`、`source_meta`）
 - **实现**：
   - 使用 `httpx` 异步并发抓取
   - 主解析：`trafilatura`；备选：`BeautifulSoup4`
   - 筛选图片：宽高 ≥ 300px、格式为 jpg/png/webp
+  - 保留搜索阶段的来源元信息，供正文节点使用
 - **异常处理**：单 URL 失败跳过；全部失败则报错
 
 ---
 
-### Skill 3: generate_article
+### Skill 8: generate_article
 
 - **功能**：调用 LLM，将多源内容综合成微信公众号风格文章
-- **输入**：`extracted_contents`
+- **输入**：`extracted_contents`、`generation_config`、`user_intent`、`style_profile`、`article_blueprint`、`article_plan`
 - **输出**：更新 `generated_article.title`、`alt_titles`、`content`
-- **Prompt 模板**：
+- **实现变化**：
+  - 正文节点不再负责策略决策，只按蓝图和证据写作
+  - 支持结构化输出和 Markdown 回退解析双通道
+  - 必须严格保留蓝图中的二级标题结构
+  - 允许用户 `style_hint` 影响最终写作风格
+- **Prompt 约束摘要**：
 
 ```
-你是一位资深新媒体编辑。请根据以下多个网页内容，综合成一篇微信公众号风格的文章。
+你是中文科技公众号总编，根据“用户意图 + 风格画像 + 文章蓝图 + 证据素材”完成文章。
 要求：
-- 给出 1 个主标题和 2 个备选标题，标题需吸引眼球（≤20字）
-- 正文包含：引言、3-5个分点论述（含小标题）、1-2个案例、结尾升华
-- 语言生动活泼，符合公众号读者喜好，字数 1500-2500 字
-- 在适合配图的段落后插入 [插图N] 标记（N 为序号）
-内容来源：
-{extracted_texts}
+- 严格依据公开资料写作，不编造事实、数据或案例
+- 专业术语首次出现时采用“术语 + 中文解释 + 一句话类比”
+- 必须严格保留蓝图中的所有二级标题
+- 如果公开资料存在分歧，要明确说明
+- 如果证据不足，要明确写出“公开资料尚不足以证明”
+- 在合适段落中依次插入 [插图1]、[插图2]、[插图3]
 ```
 
-- **异常处理**：调用失败重试；内容过短（< 500 字）则重新生成
+- **质量校验**：
+  - 主标题 / 备选标题数量与长度
+  - 章节标题完整性
+  - `[插图1..3]` 顺序完整性
+  - 正文长度与“局限 / 行动建议”章节存在性
+- **异常处理**：调用失败重试；若结构不完整则带修正反馈重新生成
 
 ---
 
-### Skill 4: generate_images
+### Skill 9: generate_images
 
 - **功能**：为文章生成封面图与插图
 - **输入**：`generated_article`、`extracted_contents`
@@ -226,7 +342,7 @@ ui_feedback
 
 ---
 
-### Skill 5: push_to_draft
+### Skill 10: push_to_draft
 
 - **功能**：将图文内容推送至微信公众号草稿箱
 - **输入**：`generated_article`（含标题、正文、封面图、插图）
@@ -240,7 +356,7 @@ ui_feedback
 
 ---
 
-### Skill 6: ui_feedback
+### Skill 11: ui_feedback
 
 - **功能**：通过 WebSocket 向前端推送任务最终状态和结果
 - **输入**：`draft_info`、`error`、`status`
@@ -286,9 +402,10 @@ ui_feedback
 
 ```
 /                  → 重定向至 /task
-/task              → 任务创建页（关键词输入 + 提交按钮）
+/task              → 任务创建页（主题输入 + 角色/策略/可选 style_hint）
 /task/:id          → 任务详情页（进度条 + 各节点状态 + 草稿预览）
 /history           → 历史任务列表
+/models            → 文本模型 / 图像模型配置页
 /settings          → 配置管理（API Key 等，管理员可见）
 ```
 
@@ -307,13 +424,15 @@ ui_feedback
 
 | 方法 | 路径 | 描述 |
 |------|------|------|
-| POST | `/api/tasks` | 创建新任务（传入关键词） |
+| POST | `/api/tasks` | 创建新任务（传入 `keywords + generation_config`，其中 `generation_config` 支持 `style_hint`） |
 | POST | `/api/tasks/{task_id}/retry` | 从失败/终止节点继续执行任务 |
 | GET | `/api/tasks/{task_id}` | 查询任务状态 |
 | GET | `/api/tasks` | 获取历史任务列表 |
 | DELETE | `/api/tasks/{task_id}` | 删除任务记录 |
 | GET | `/api/config/style` | 获取当前全局样式配置 |
 | PUT | `/api/config/style` | 更新当前全局样式配置 |
+| GET | `/api/config/model` | 获取文本模型 / 图像模型配置 |
+| PUT | `/api/config/model` | 更新文本模型 / 图像模型配置 |
 | GET | `/api/config/themes` | 获取内置主题列表 |
 | GET | `/api/config/themes/custom` | 获取自定义主题列表 |
 | POST | `/api/config/themes/custom` | 新建自定义主题 |
@@ -332,8 +451,8 @@ ui_feedback
 | POST | `/api/articles/{task_id}/push` | 单篇文章推送到多个账号 |
 | POST | `/api/articles/batch-push` | 多文章批量推送到多个账号 |
 | GET | `/api/schedules` | 获取定时任务列表 |
-| POST | `/api/schedules` | 创建定时任务 |
-| PUT | `/api/schedules/{schedule_id}` | 更新定时任务 |
+| POST | `/api/schedules` | 创建定时任务（含 `generation_config`，支持 `style_hint`） |
+| PUT | `/api/schedules/{schedule_id}` | 更新定时任务（含 `generation_config`，支持 `style_hint`） |
 | DELETE | `/api/schedules/{schedule_id}` | 删除定时任务 |
 | POST | `/api/schedules/{schedule_id}/start` | 启动定时任务 |
 | POST | `/api/schedules/{schedule_id}/stop` | 停止定时任务 |
@@ -369,6 +488,7 @@ SERPAPI_API_KEY=xxx
 GOOGLE_SEARCH_API_KEY=xxx
 GOOGLE_SEARCH_ENGINE_ID=xxx
 BING_SEARCH_API_KEY=xxx
+# DuckDuckGo HTML 为免费兜底，无需额外 API Key
 
 # LLM
 OPENAI_API_KEY=xxx
@@ -399,20 +519,27 @@ wechatProject/
 │   ├── routers/
 │   │   ├── tasks.py            # 任务 CRUD 接口
 │   │   ├── ws.py               # WebSocket 接口
-│   │   ├── config.py           # 样式与主题管理接口
+│   │   ├── config.py           # 样式、主题与模型配置管理接口
 │   │   ├── accounts.py         # 多平台账号管理接口
 │   │   ├── articles.py         # 文章管理与推送接口
 │   │   └── schedules.py        # 定时任务管理接口
 ├── workflow/                   # LangGraph 工作流
+│   ├── article_generation.py   # 文章生成配置、风格原型与兼容 article_plan 辅助函数
 │   ├── graph.py                # StateGraph 定义与节点注册
 │   ├── state.py                # WorkflowState 定义
 │   ├── skills/
-│       ├── search_web.py       # Skill 1
-│       ├── fetch_extract.py    # Skill 2
-│       ├── generate_article.py # Skill 3
-│       ├── generate_images.py  # Skill 4
-│       ├── push_to_draft.py    # Skill 5
-│       ├── ui_feedback.py      # Skill 6
+│       ├── interpret_user_intent.py # Skill 1
+│       ├── infer_style_profile.py   # Skill 2
+│       ├── build_article_blueprint.py # Skill 3
+│       ├── plan_search_queries.py   # Skill 4
+│       ├── search_web.py            # Skill 5
+│       ├── rank_sources.py          # Skill 6
+│       ├── fetch_extract.py         # Skill 7
+│       ├── plan_article_strategy.py # 旧策略节点，暂保留兼容
+│       ├── generate_article.py      # Skill 8
+│       ├── generate_images.py       # Skill 9
+│       ├── push_to_draft.py         # Skill 10
+│       ├── ui_feedback.py           # Skill 11
 │       └── error_handler.py    # 错误处理节点
 │   └── utils/
 │       ├── wechat_draft_service.py  # 微信草稿推送服务（token缓存/重试/素材上传）
@@ -420,15 +547,17 @@ wechatProject/
 │       └── markdown_to_wechat.py    # Markdown -> 微信可用 HTML（注入主题样式）
 ├── frontend/                   # React 前端
 │   ├── src/
-│   │   ├── pages/              # 页面：创建任务/任务详情/历史/文章管理/定时任务/系统设置/账号配置
+│   │   ├── pages/              # 页面：创建任务/任务详情/历史/文章管理/定时任务/模型配置/系统设置/账号配置
 │   │   ├── store/              # Zustand 状态（任务创建态）
 │   │   ├── api/                # API 请求封装（覆盖 tasks/config/accounts/articles/schedules）
 │   │   └── App.tsx
 │   ├── package.json
 │   └── vite.config.ts
 ├── tests/                      # 测试
+│   ├── test_article_blueprint_flow.py
 │   ├── test_search_web.py
 │   ├── test_fetch_extract.py
+│   ├── test_plan_article_strategy.py
 │   ├── test_generate_article.py
 │   ├── test_generate_images.py
 │   ├── test_push_to_draft.py
@@ -438,6 +567,7 @@ wechatProject/
 │   ├── accounts.json
 │   ├── schedules.json
 │   ├── style_config.json
+│   ├── model_config.json
 │   └── custom_themes.json
 ├── logs/                       # 日志目录（不提交 git）
 ├── main.py                     # 命令行入口
@@ -455,17 +585,24 @@ wechatProject/
 |------|----------|
 | `api/routers/tasks.py` | 创建任务、查询任务、删除任务、断点重试；任务状态持久化；进度广播 |
 | `api/routers/ws.py` + `api/ws_manager.py` | 任务维度 WebSocket 订阅与消息广播 |
-| `workflow/graph.py` | 工作流编排：initialize → search_web → fetch_extract → generate_article → generate_images → push_to_draft/ui_feedback |
-| `workflow/skills/search_web.py` | 关键词搜索（SerpApi/Bing）、链接去重、失败重试 |
-| `workflow/skills/fetch_extract.py` | 并发抓取网页、正文提取（trafilatura + bs4）、图片筛选 |
-| `workflow/skills/generate_article.py` | LLM 结构化输出文章（主标题/备选标题/正文） |
+| `workflow/graph.py` | 工作流编排：initialize → interpret_user_intent → infer_style_profile → build_article_blueprint → plan_search_queries → search_web → rank_sources → fetch_extract → generate_article → generate_images → push_to_draft/ui_feedback |
+| `workflow/article_generation.py` | 统一 `generation_config` 默认值、策略枚举、风格原型与兼容 `article_plan` 辅助函数 |
+| `workflow/skills/interpret_user_intent.py` | 解析主题、主角色、文章目标与实际策略 |
+| `workflow/skills/infer_style_profile.py` | 自动生成风格画像，支持 `style_hint` 融合 |
+| `workflow/skills/build_article_blueprint.py` | 生成结构化文章蓝图，并派生 `article_plan` |
+| `workflow/skills/plan_search_queries.py` | 根据蓝图生成结构化搜索词与搜索意图 |
+| `workflow/skills/search_web.py` | 多搜索源检索（SerpApi/Bing/DuckDuckGo），输出结构化来源结果 |
+| `workflow/skills/rank_sources.py` | 对来源做可信度、相关度和多样性排序 |
+| `workflow/skills/fetch_extract.py` | 并发抓取高分来源、正文提取（trafilatura + bs4）、图片筛选 |
+| `workflow/skills/plan_article_strategy.py` | 旧版策略节点，保留兼容测试与历史逻辑 |
+| `workflow/skills/generate_article.py` | 按 `user_intent + style_profile + article_blueprint + extracted_contents` 生成正文，并校验章节/插图标记 |
 | `workflow/skills/generate_images.py` | 根据正文 `[插图N]` 标记分配封面图与插图 |
 | `workflow/skills/push_to_draft.py` + `workflow/utils/wechat_*.py` | 微信 token 获取、素材上传、Markdown 转 HTML、草稿箱推送 |
-| `api/routers/config.py` + `api/store.py` | 主题与样式配置：内置主题、自定义主题增删改查、导入导出、全局样式保存 |
+| `api/routers/config.py` + `api/store.py` | 主题、样式与模型配置：内置主题、自定义主题增删改查、导入导出、全局样式保存、文本模型/图像模型配置 |
 | `api/routers/accounts.py` | 多账号配置管理（当前可测试微信连接） |
 | `api/routers/articles.py` | 文章列表、文章主题绑定、单篇/批量推送、推送记录 |
-| `api/routers/schedules.py` + `api/scheduler.py` | 定时任务 CRUD、启停、立即执行、热点关键词随机触发 |
-| `frontend/src/pages/*.tsx` | 可视化任务创建、流程跟踪、历史列表、主题编辑、账号管理、文章推送、定时任务管理 |
+| `api/routers/schedules.py` + `api/scheduler.py` | 定时任务 CRUD、启停、立即执行、热点关键词随机触发，并复用文章生成配置 |
+| `frontend/src/pages/*.tsx` | 可视化任务创建、流程跟踪、历史列表、主题编辑、账号管理、文章推送、定时任务管理；支持角色、策略与可选 `style_hint` 配置 |
 
 ---
 

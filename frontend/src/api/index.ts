@@ -1,16 +1,51 @@
 import axios from 'axios'
 
+export type ArticleStrategy = 'auto' | 'tech_breakdown' | 'application_review' | 'trend_outlook'
+
+export interface GenerationConfig {
+  audience_roles: string[]
+  article_strategy: ArticleStrategy
+  style_hint: string
+}
+
+export const DEFAULT_GENERATION_CONFIG: GenerationConfig = {
+  audience_roles: ['泛科技读者'],
+  article_strategy: 'auto',
+  style_hint: '',
+}
+
+export const GENERATION_ROLE_PRESETS = [
+  '泛科技读者',
+  '开发者',
+  '产品经理',
+  '投资者',
+  '企业管理者',
+]
+
+export const ARTICLE_STRATEGY_LABELS: Record<ArticleStrategy, string> = {
+  auto: '自动判断',
+  tech_breakdown: '技术揭秘式',
+  application_review: '应用评测式',
+  trend_outlook: '趋势展望式',
+}
+
 export interface CreateTaskRequest {
   keywords: string
+  generation_config: GenerationConfig
 }
 
 export interface TaskResponse {
   task_id: string
   keywords: string
+  generation_config: GenerationConfig
   status: 'pending' | 'running' | 'done' | 'failed'
   created_at: string
   updated_at: string | null
   error: string | null
+  user_intent?: Record<string, any> | null
+  style_profile?: Record<string, any> | null
+  article_blueprint?: Record<string, any> | null
+  article_plan?: Record<string, any> | null
   generated_article?: Record<string, any> | null
   draft_info?: Record<string, any> | null
   article_theme?: string | null
@@ -42,8 +77,8 @@ http.interceptors.response.use(
   },
 )
 
-export const createTask = (keywords: string): Promise<TaskResponse> =>
-  http.post('/tasks', { keywords } satisfies CreateTaskRequest)
+export const createTask = (data: CreateTaskRequest): Promise<TaskResponse> =>
+  http.post('/tasks', data)
 
 export const getTask = (taskId: string): Promise<TaskResponse> =>
   http.get(`/tasks/${taskId}`)
@@ -72,6 +107,30 @@ export const getStyleConfig = (): Promise<StyleConfig> =>
 
 export const updateStyleConfig = (config: StyleConfig): Promise<StyleConfig> =>
   http.put('/config/style', config)
+
+export interface TextModelConfig {
+  api_key: string
+  base_url?: string | null
+  model: string
+}
+
+export interface ImageModelConfig {
+  enabled: boolean
+  api_key: string
+  base_url?: string | null
+  model: string
+}
+
+export interface ModelConfig {
+  text: TextModelConfig
+  image: ImageModelConfig
+}
+
+export const getModelConfig = (): Promise<ModelConfig> =>
+  http.get('/config/model')
+
+export const updateModelConfig = (config: ModelConfig): Promise<ModelConfig> =>
+  http.put('/config/model', config)
 
 export type PresetThemes = Record<string, StyleConfig>
 
@@ -212,6 +271,7 @@ export interface ScheduleConfig {
   theme_name: string
   account_ids: string[]
   hot_topics: string[]
+  generation_config: GenerationConfig
   status: ScheduleStatus
   enabled: boolean
   last_run_at?: string | null
@@ -229,6 +289,7 @@ export interface CreateScheduleRequest {
   theme_name: string
   account_ids: string[]
   hot_topics: string[]
+  generation_config: GenerationConfig
   enabled: boolean
 }
 
@@ -240,6 +301,7 @@ export interface UpdateScheduleRequest {
   theme_name?: string
   account_ids?: string[]
   hot_topics?: string[]
+  generation_config?: GenerationConfig
   enabled?: boolean
 }
 

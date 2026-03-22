@@ -29,6 +29,7 @@ from api.store import (
     task_store,
 )
 from api.ws_manager import manager
+from workflow.article_generation import normalize_generation_config
 from workflow.graph import run_workflow
 from workflow.utils.wechat_draft_service import push_article_to_wechat_draft
 
@@ -172,6 +173,7 @@ class SchedulerEngine:
         task = TaskResponse(
             task_id=str(uuid.uuid4()),
             keywords=keywords,
+            generation_config=schedule.generation_config,
             status=TaskStatus.pending,
             created_at=now,
             article_theme=schedule.theme_name,
@@ -192,6 +194,7 @@ class SchedulerEngine:
             await run_workflow(
                 task_id=task.task_id,
                 keywords=task.keywords,
+                generation_config=normalize_generation_config(task.generation_config.model_dump()),
                 progress_callback=self._progress_callback,
                 skip_auto_push=True,
             )
@@ -241,6 +244,13 @@ class SchedulerEngine:
             if new_status in ("done", "failed") and data.get("result"):
                 result = data["result"]
                 if isinstance(result, dict):
+                    next_generation_config = result.get("generation_config")
+                    if isinstance(next_generation_config, dict):
+                        task.generation_config = task.generation_config.model_copy(update=next_generation_config)
+                    task.user_intent = result.get("user_intent")
+                    task.style_profile = result.get("style_profile")
+                    task.article_blueprint = result.get("article_blueprint")
+                    task.article_plan = result.get("article_plan")
                     task.generated_article = result.get("generated_article")
                     task.draft_info = result.get("draft_info")
             save_tasks()

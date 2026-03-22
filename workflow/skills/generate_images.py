@@ -3,20 +3,20 @@
 """
 from __future__ import annotations
 
-import os
+import asyncio
 import re
 import time
 from typing import Any
 
 import structlog
 
+from api.store import get_model_config
+from workflow.model_logging import build_model_context, log_model_request, log_model_response
 from workflow.state import WorkflowState
 
 logger = structlog.get_logger(__name__)
-
-
-def _is_enabled(value: str | None) -> bool:
-    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+IMAGE_GENERATION_MAX_RETRIES = 3
+IMAGE_GENERATION_RETRY_BASE_SECONDS = 5
 
 
 def _collect_images(extracted_contents: list[dict]) -> list[str]:
@@ -67,6 +67,85 @@ async def _generate_dalle_image(client: Any, prompt: str, model: str) -> str:
         return ""
     # WeChat push expects a fetchable image URL; only use URL output.
     return getattr(data[0], "url", "") or ""
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    status_code = getattr(exc, "status_code", None)
+    if status_code == 429:
+        return True
+
+    response = getattr(exc, "response", None)
+    if getattr(response, "status_code", None) == 429:
+        return True
+
+    message = str(exc).lower()
+    return "rate limit" in message or "429" in message
+
+
+def _get_retry_delay_seconds(exc: Exception, retry_index: int) -> int:
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None)
+    if headers:
+        retry_after = headers.get("retry-after") or headers.get("Retry-After")
+        if retry_after:
+            try:
+                return max(1, int(float(retry_after)))
+            except ValueError:
+                pass
+
+    return IMAGE_GENERATION_RETRY_BASE_SECONDS * (2 ** retry_index)
+
+
+async def _generate_dalle_image_with_retry(
+    client: Any,
+    prompt: str,
+    model: str,
+    base_url: str | None,
+    api_key: str,
+    task_id: str,
+    image_kind: str,
+) -> str:
+    retry_index = 0
+    model_context = build_model_context(
+        model=model,
+        base_url=base_url,
+        api_key=api_key,
+        image_kind=image_kind,
+        size="1024x1024",
+    )
+    while True:
+        try:
+            log_model_request(
+                logger,
+                task_id=task_id,
+                skill="generate_images",
+                context={**model_context, "attempt": retry_index + 1},
+                request={"prompt": prompt},
+            )
+            image_url = await _generate_dalle_image(client, prompt, model)
+            log_model_response(
+                logger,
+                task_id=task_id,
+                skill="generate_images",
+                context={**model_context, "attempt": retry_index + 1},
+                response={"image_url": image_url},
+            )
+            return image_url
+        except Exception as exc:
+            if not _is_rate_limit_error(exc) or retry_index >= IMAGE_GENERATION_MAX_RETRIES:
+                raise
+
+            wait_seconds = _get_retry_delay_seconds(exc, retry_index)
+            logger.warning(
+                "image_generation_rate_limited_retrying",
+                task_id=task_id,
+                image_kind=image_kind,
+                retry_count=retry_index + 1,
+                wait_seconds=wait_seconds,
+                error=str(exc),
+            )
+            await asyncio.sleep(wait_seconds)
+            retry_index += 1
 
 
 async def generate_images_node(state: WorkflowState) -> dict:
@@ -120,53 +199,60 @@ async def generate_images_node(state: WorkflowState) -> dict:
             break
 
     # 可选：开启 DALL-E 生图，优先覆盖上述结果
-    dalle_enabled = _is_enabled(os.getenv("DALLE_ENABLED"))
-    if dalle_enabled:
-        api_key = os.getenv("OPENAI_API_KEY")
+    image_model_config = get_model_config().image
+    if image_model_config.enabled:
+        api_key = image_model_config.api_key
         if not api_key:
-            logger.warning("dalle_enabled_but_no_api_key", task_id=task_id)
+            logger.warning("image_generation_enabled_but_no_api_key", task_id=task_id)
         else:
-            model = os.getenv("DALLE_MODEL", "dall-e-3")
-            base_url = os.getenv("OPENAI_API_BASE") or None
+            model = image_model_config.model
+            base_url = image_model_config.base_url
             try:
                 from openai import AsyncOpenAI
 
                 client = AsyncOpenAI(api_key=api_key, base_url=base_url)
-                dalle_cover = await _generate_dalle_image(
+                generated_cover = await _generate_dalle_image_with_retry(
                     client,
                     _cover_prompt(generated_article.get("title", ""), content_text),
                     model,
+                    base_url,
+                    api_key,
+                    task_id,
+                    "cover",
                 )
-                dalle_illustrations: list[str] = []
+                generated_illustrations: list[str] = []
                 for idx in range(1, required_illustrations_count + 1):
-                    img_url = await _generate_dalle_image(
+                    img_url = await _generate_dalle_image_with_retry(
                         client,
                         _illustration_prompt(generated_article.get("title", ""), content_text, idx),
                         model,
+                        base_url,
+                        api_key,
+                        task_id,
+                        f"illustration_{idx}",
                     )
                     if img_url:
-                        dalle_illustrations.append(img_url)
+                        generated_illustrations.append(img_url)
 
-                if dalle_cover:
-                    cover_image = dalle_cover
-                if dalle_illustrations:
-                    illustrations = dalle_illustrations
+                if generated_cover:
+                    cover_image = generated_cover
+                if generated_illustrations:
+                    illustrations = generated_illustrations
 
                 logger.info(
-                    "dalle_images_generated",
+                    "image_generation_done",
                     task_id=task_id,
-                    cover_image_set=bool(dalle_cover),
-                    illustrations_count=len(dalle_illustrations),
+                    cover_image_set=bool(generated_cover),
+                    illustrations_count=len(generated_illustrations),
                     model=model,
                 )
             except Exception as exc:
                 logger.warning(
-                    "dalle_generate_failed_fallback_to_extracted",
+                    "image_generation_failed_fallback_to_extracted",
                     task_id=task_id,
                     error=str(exc),
                 )
 
-    # 更新 generated_article
     new_article = dict(generated_article)
     new_article["cover_image"] = cover_image
     new_article["illustrations"] = illustrations
