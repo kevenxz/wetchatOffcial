@@ -234,8 +234,13 @@ def build_article_plan(
         "requested_strategy": requested_strategy,
         "resolved_strategy": resolved_strategy,
         "resolved_strategy_label": resolve_strategy_label(resolved_strategy),
+        "article_type": str(article_blueprint.get("article_type", resolved_strategy)),
+        "structure_style": str(article_blueprint.get("structure_style", "")),
         "title_strategy": article_blueprint.get("title_strategy") or style_profile.get("title_style", ""),
         "section_outline": section_outline,
+        "markdown_requirements": list(article_blueprint.get("markdown_requirements", [])),
+        "requires_data_visualization": bool(article_blueprint.get("requires_data_visualization", False)),
+        "visualization_plan": list(article_blueprint.get("visualization_plan", [])),
         "role_focuses": [
             {"role": role, "focus_points": role_focus_points(role)}
             for role in audience_roles

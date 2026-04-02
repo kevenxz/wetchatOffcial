@@ -54,6 +54,54 @@ def _valid_content_with_flexible_headings() -> str:
     )
 
 
+def _valid_content_with_chart_blocks() -> str:
+    paragraph = "这是用于测试的正文内容，强调信息密度、结构完整和 Markdown 可读性。"
+    repeated = paragraph * 16
+    chart_block_1 = "\n".join(
+        [
+            "### 图表1：近5年价格走势",
+            "[插图1]",
+            "- 数据来源：EIA、FRED",
+            "- 图表说明：用于展示长期价格趋势与关键波动。",
+        ]
+    )
+    chart_block_2 = "\n".join(
+        [
+            "### 图表2：供需与产量对比",
+            "[插图2]",
+            "- 数据来源：OPEC、IEA",
+            "- 图表说明：用于比较主要供给端与需求端变化。",
+        ]
+    )
+    chart_block_3 = "\n".join(
+        [
+            "### 图表3：库存与预测偏差",
+            "[插图3]",
+            "- 数据来源：IEA、World Bank",
+            "- 图表说明：用于呈现库存趋势和预测误差。",
+        ]
+    )
+    return "\n\n".join(
+        [
+            "## 开篇：为什么现在值得关注",
+            repeated,
+            "## 关键信息与背景",
+            repeated,
+            chart_block_1,
+            "## 技术拆解：核心原理与能力边界",
+            repeated,
+            chart_block_2,
+            "## 投资者视角：最该关注什么",
+            repeated,
+            chart_block_3,
+            "## 风险与边界",
+            repeated,
+            "## 结论与下一步",
+            repeated,
+        ]
+    )
+
+
 def _model_config(api_key: str = "text-key", model: str = "text-model", base_url: str | None = "https://text.example.com/v1") -> ModelConfig:
     return ModelConfig(
         text=TextModelConfig(api_key=api_key, model=model, base_url=base_url),
@@ -283,6 +331,63 @@ async def test_generate_article_accepts_flexible_risk_and_action_headings(mock_s
     assert result["status"] == "running"
     assert "## 风险与不确定性" in result["generated_article"]["content"]
     assert "## 下一步怎么跟踪" in result["generated_article"]["content"]
+
+
+@pytest.mark.asyncio
+async def test_generate_article_rejects_finance_output_without_chart_blocks(mock_state: WorkflowState) -> None:
+    visualization_plan = [
+        {
+            "title": "近5年价格走势",
+            "chart_type": "line",
+            "insight_goal": "观察趋势",
+            "data_source_hint": "EIA",
+            "placement_heading": "## 鍏抽敭淇℃伅涓庤儗鏅?",
+        },
+        {
+            "title": "供需对比",
+            "chart_type": "bar",
+            "insight_goal": "比较供需",
+            "data_source_hint": "OPEC",
+            "placement_heading": "## 鎶€鏈媶瑙ｏ細鏍稿績鍘熺悊涓庤兘鍔涜竟鐣?",
+        },
+        {
+            "title": "库存变化",
+            "chart_type": "area",
+            "insight_goal": "观察库存",
+            "data_source_hint": "IEA",
+            "placement_heading": "## 鎶曡祫鑰呰瑙掞細鏈€璇ュ叧娉ㄤ粈涔?",
+        },
+    ]
+    mock_state["article_blueprint"]["requires_data_visualization"] = True
+    mock_state["article_blueprint"]["visualization_plan"] = visualization_plan
+    mock_state["article_plan"]["requires_data_visualization"] = True
+    mock_state["article_plan"]["visualization_plan"] = visualization_plan
+
+    with patch("workflow.skills.generate_article.get_model_config", return_value=_model_config()):
+        with patch("workflow.skills.generate_article.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.skills.generate_article.ChatOpenAI") as mock_chat_openai:
+                structured_prompt = MagicMock()
+                fallback_prompt = MagicMock()
+                structured_chain = AsyncMock()
+                fallback_chain = AsyncMock()
+                llm = MagicMock()
+                llm.with_structured_output.return_value = MagicMock(name="structured-llm")
+
+                mock_prompt_class.from_messages.side_effect = [structured_prompt, fallback_prompt]
+                structured_prompt.__or__.return_value = structured_chain
+                fallback_prompt.__or__.return_value = fallback_chain
+                mock_chat_openai.return_value = llm
+
+                structured_chain.ainvoke.return_value = ArticleOutput(
+                    title="原油市场深度分析",
+                    alt_titles=["原油价格接下来怎么看", "供需与库存如何影响油价"],
+                    content=_valid_content(),
+                )
+
+                result = await generate_article_node(mock_state)
+
+    assert result["status"] == "failed"
+    assert "图表" in result["error"]
 
 
 def test_fallback_prompt_escapes_literal_placeholders() -> None:

@@ -80,7 +80,28 @@ async def test_build_article_blueprint_node_builds_compatible_article_plan(base_
 
     assert result["article_blueprint"]["section_outline"]
     assert result["article_plan"]["resolved_strategy"] == "trend_outlook"
-    assert "## 局限与风险" in result["article_plan"]["section_outline"]
+    assert result["article_plan"]["article_type"] == "trend_analysis"
+    assert "## 风险与边界" in result["article_plan"]["section_outline"]
+
+
+@pytest.mark.asyncio
+async def test_build_article_blueprint_node_adds_chart_plan_for_finance_topic(base_state: WorkflowState) -> None:
+    state = dict(base_state)
+    state["keywords"] = "原油市场深度分析"
+    state["generation_config"] = {
+        "audience_roles": ["投资者"],
+        "article_strategy": "auto",
+        "style_hint": "",
+    }
+    state.update(await interpret_user_intent_node(state))
+    with patch("workflow.skills.infer_style_profile.get_model_config", return_value=_empty_model_config()):
+        state.update(await infer_style_profile_node(state))
+    with patch("workflow.skills.build_article_blueprint.get_model_config", return_value=_empty_model_config()):
+        result = await build_article_blueprint_node(state)
+
+    assert result["article_blueprint"]["requires_data_visualization"] is True
+    assert len(result["article_blueprint"]["visualization_plan"]) >= 3
+    assert result["article_plan"]["requires_data_visualization"] is True
 
 
 @pytest.mark.asyncio

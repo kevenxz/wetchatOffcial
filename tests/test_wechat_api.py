@@ -1,11 +1,12 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import httpx
 import pytest
 
-from workflow.utils.wechat_api import ARTICLE_ALLOWED_IMG_TYPES, _download_image
+from workflow.utils.wechat_api import ARTICLE_ALLOWED_IMG_TYPES, _download_image, upload_article_image
 
 
 class _SuccessClient:
@@ -91,3 +92,18 @@ async def test_download_image_does_not_retry_when_insecure_fallback_disabled() -
     assert content == b""
     assert filename == ""
     assert content_type == ""
+
+
+@pytest.mark.asyncio
+async def test_upload_article_image_supports_local_file(tmp_path: Path) -> None:
+    image_path = tmp_path / "generated.png"
+    image_path.write_bytes(b"\x89PNG\r\n\x1a\nabc")
+
+    class _UploadClient:
+        async def post(self, url: str, files=None, timeout: float | None = None) -> httpx.Response:
+            request = httpx.Request("POST", url)
+            return httpx.Response(200, json={"url": "https://mmbiz.qpic.cn/uploaded.png"}, request=request)
+
+    uploaded_url = await upload_article_image(_UploadClient(), str(image_path), "token")
+
+    assert uploaded_url == "https://mmbiz.qpic.cn/uploaded.png"

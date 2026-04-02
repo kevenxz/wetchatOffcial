@@ -15,6 +15,7 @@ from workflow.model_logging import build_model_context, log_model_request, log_m
 from workflow.state import WorkflowState
 
 logger = structlog.get_logger(__name__)
+
 ARTICLE_MAX_SOURCES = 6
 ARTICLE_SOURCE_TEXT_LIMIT = 4000
 ARTICLE_TOTAL_EVIDENCE_LIMIT = 24000
@@ -29,12 +30,11 @@ class ArticleOutput(BaseModel):
 
     title: str = Field(description="主标题，15-50字")
     alt_titles: list[str] = Field(description="2个备选标题，15-50字")
-    content: str = Field(description="Markdown 正文，必须包含所有 blueprint 里的二级标题和 [插图N] 标记")
+    content: str = Field(description="Markdown 正文，必须保留蓝图章节与插图标记")
 
 
 def _normalize_excerpt(text: str) -> str:
-    text = re.sub(r"\s+", " ", text or "").strip()
-    return text
+    return re.sub(r"\s+", " ", text or "").strip()
 
 
 def _truncate_excerpt(text: str, limit: int) -> str:
@@ -86,9 +86,7 @@ def _format_extracted_texts(
         block_len = len(block)
         if total_chars + block_len > total_limit and blocks:
             break
-        blocks.append(
-            block
-        )
+        blocks.append(block)
         total_chars += block_len
         used_sources += 1
     return "\n\n".join(blocks), {
@@ -109,7 +107,7 @@ def _format_user_intent(user_intent: dict) -> str:
             f"请求策略：{user_intent.get('requested_strategy', '')}",
             f"解析策略：{user_intent.get('resolved_strategy', '')}",
             f"文章目标：{user_intent.get('article_goal', '')}",
-            f"用户补充风格：{user_intent.get('style_hint', '') or '无'}",
+            f"补充风格：{user_intent.get('style_hint', '') or '无'}",
         ]
     )
 
@@ -117,37 +115,65 @@ def _format_user_intent(user_intent: dict) -> str:
 def _format_style_profile(style_profile: dict) -> str:
     return "\n".join(
         [
-            f"风格原型：{style_profile.get('style_archetype', '')}",
-            f"风格来源：{style_profile.get('style_source', '')}",
-            f"语气：{style_profile.get('tone', '')}",
-            f"标题风格：{style_profile.get('title_style', '')}",
-            f"开头风格：{style_profile.get('opening_style', '')}",
-            f"段落节奏：{style_profile.get('paragraph_style', '')}",
-            f"证据风格：{style_profile.get('evidence_style', '')}",
-            f"术语解释规则：{style_profile.get('term_explanation_rule', '')}",
-            f"参考方向：{style_profile.get('reference_direction', '')}",
-            f"重点关注：{'；'.join(style_profile.get('focus_points', []))}",
-            f"禁用写法：{'；'.join(style_profile.get('forbidden_patterns', []))}",
-            f"摘要指令：{style_profile.get('style_prompt', '')}",
+            f"style_archetype: {style_profile.get('style_archetype', '')}",
+            f"style_source: {style_profile.get('style_source', '')}",
+            f"tone: {style_profile.get('tone', '')}",
+            f"title_style: {style_profile.get('title_style', '')}",
+            f"opening_style: {style_profile.get('opening_style', '')}",
+            f"paragraph_style: {style_profile.get('paragraph_style', '')}",
+            f"evidence_style: {style_profile.get('evidence_style', '')}",
+            f"term_explanation_rule: {style_profile.get('term_explanation_rule', '')}",
+            f"reference_direction: {style_profile.get('reference_direction', '')}",
+            f"focus_points: {', '.join(style_profile.get('focus_points', []))}",
+            f"forbidden_patterns: {', '.join(style_profile.get('forbidden_patterns', []))}",
+            f"style_prompt: {style_profile.get('style_prompt', '')}",
         ]
     )
 
 
 def _format_article_blueprint(article_blueprint: dict) -> str:
-    section_lines = []
+    section_lines: list[str] = []
     for item in article_blueprint.get("section_outline", []):
         section_lines.append(
-            f"{item.get('heading', '')}\n- 本节目标：{item.get('goal', '')}\n- 需要证据：{'；'.join(item.get('evidence_needed', []))}"
+            "\n".join(
+                [
+                    str(item.get("heading", "")),
+                    f"- goal: {item.get('goal', '')}",
+                    f"- evidence_needed: {', '.join(item.get('evidence_needed', []))}",
+                ]
+            )
         )
+
+    visualization_lines: list[str] = []
+    for index, item in enumerate(article_blueprint.get("visualization_plan", []), start=1):
+        visualization_lines.append(
+            "\n".join(
+                [
+                    f"{index}. {item.get('title', '')}",
+                    f"   - chart_type: {item.get('chart_type', '')}",
+                    f"   - insight_goal: {item.get('insight_goal', '')}",
+                    f"   - data_source_hint: {item.get('data_source_hint', '')}",
+                    f"   - placement_heading: {item.get('placement_heading', '')}",
+                ]
+            )
+        )
+
     return "\n".join(
         [
-            f"标题策略：{article_blueprint.get('title_strategy', '')}",
-            f"开篇目标：{article_blueprint.get('opening_goal', '')}",
-            f"读者带走的价值：{article_blueprint.get('reader_takeaway', '')}",
-            f"搜索重点：{'；'.join(article_blueprint.get('search_focuses', []))}",
-            f"结尾风格：{article_blueprint.get('ending_style', '')}",
-            f"规划插图数：{article_blueprint.get('planned_illustrations', 3)}",
-            "章节蓝图：",
+            f"article_type: {article_blueprint.get('article_type', '')}",
+            f"structure_style: {article_blueprint.get('structure_style', '')}",
+            f"title_strategy: {article_blueprint.get('title_strategy', '')}",
+            f"opening_goal: {article_blueprint.get('opening_goal', '')}",
+            f"reader_takeaway: {article_blueprint.get('reader_takeaway', '')}",
+            f"search_focuses: {', '.join(article_blueprint.get('search_focuses', []))}",
+            f"search_query_hints: {', '.join(article_blueprint.get('search_query_hints', []))}",
+            f"ending_style: {article_blueprint.get('ending_style', '')}",
+            f"markdown_requirements: {' | '.join(article_blueprint.get('markdown_requirements', []))}",
+            f"requires_data_visualization: {bool(article_blueprint.get('requires_data_visualization', False))}",
+            f"planned_illustrations: {article_blueprint.get('planned_illustrations', 3)}",
+            "visualization_plan:",
+            "\n".join(visualization_lines) if visualization_lines else "none",
+            "section_outline:",
             "\n".join(section_lines),
         ]
     )
@@ -170,7 +196,7 @@ def _extract_h2_headings(content: str) -> list[str]:
 
 def _normalize_heading_text(heading: str) -> str:
     heading = re.sub(r"^#+\s*", "", heading or "").strip()
-    heading = re.sub(r"[\s：:、，。；;（）()\-_]+", "", heading)
+    heading = re.sub(r"[\s,:：，。；;（）()\-_]+", "", heading)
     return heading
 
 
@@ -183,7 +209,6 @@ def _section_requirement_satisfied(required_section: str, headings: list[str]) -
     normalized_required = _normalize_heading_text(required_section)
     if not normalized_required:
         return True
-
     if _contains_keywords(normalized_required, RISK_SECTION_KEYWORDS):
         return any(_contains_keywords(heading, RISK_SECTION_KEYWORDS) for heading in headings)
     if _contains_keywords(normalized_required, ACTION_SECTION_KEYWORDS):
@@ -193,6 +218,31 @@ def _section_requirement_satisfied(required_section: str, headings: list[str]) -
 
 def _extract_illustration_indices(content: str) -> list[int]:
     return [int(value) for value in re.findall(r"\[插图(\d+)\]", content or "")]
+
+
+def _requires_data_visualization(article_blueprint: dict, article_plan: dict) -> bool:
+    return bool(
+        article_blueprint.get("requires_data_visualization")
+        or article_plan.get("requires_data_visualization")
+    )
+
+
+def _required_chart_count(article_blueprint: dict, article_plan: dict) -> int:
+    visualization_plan = article_blueprint.get("visualization_plan") or article_plan.get("visualization_plan") or []
+    if visualization_plan:
+        return min(max(len(visualization_plan), 3), 5)
+    planned_illustrations = int(article_blueprint.get("planned_illustrations") or article_plan.get("planned_illustrations", 3))
+    return min(max(planned_illustrations, 3), 5)
+
+
+def _extract_chart_indices(content: str) -> list[int]:
+    matches = re.findall(r"^###\s*(?:图表|Chart)\s*(\d+)\s*[:：]", content or "", flags=re.MULTILINE)
+    return [int(value) for value in matches]
+
+
+def _count_markdown_chart_meta_lines(content: str, label: str) -> int:
+    pattern = rf"^\s*-\s*{label}[:：].+$"
+    return len(re.findall(pattern, content or "", flags=re.MULTILINE))
 
 
 def _strip_code_fences(text: str) -> str:
@@ -219,10 +269,11 @@ def _extract_message_text(message: Any) -> str:
 
 
 def _remove_title_blocks(text: str) -> str:
-    text = re.sub(r"^#\s*主标题[:：].+$", "", text, count=1, flags=re.MULTILINE)
-    text = re.sub(r"^主标题[:：].+$", "", text, count=1, flags=re.MULTILINE)
+    text = re.sub(r"^#\s*主标题[:：]\s*.+$", "", text, count=1, flags=re.MULTILINE)
+    text = re.sub(r"^主标题[:：]\s*.+$", "", text, count=1, flags=re.MULTILINE)
     text = re.sub(r"^##\s*备选标题\s*$([\s\S]*?)(?=^##\s+\S|\Z)", "", text, count=1, flags=re.MULTILINE)
-    text = re.sub(r"^备选标题\d*[:：].+$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^备选标题\d*[:：]\s*.+$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^##\s*正文\s*$", "", text, count=1, flags=re.MULTILINE)
     return text.strip()
 
 
@@ -292,7 +343,7 @@ def _shrink_evidence_limits(total_limit: int, per_source_limit: int) -> tuple[in
 def _build_fallback_system_prompt(system_prompt: str) -> str:
     return (
         f"{system_prompt}\n\n"
-        "如果你的服务端不能稳定返回结构化 JSON，请严格按下面模板输出，不要添加模板之外的说明：\n\n"
+        "如果无法稳定返回结构化 JSON，请严格按照下面的模板输出，不要添加模板之外的解释：\n\n"
         "# 主标题：{{主标题}}\n"
         "## 备选标题\n"
         "- {{备选标题1}}\n"
@@ -329,6 +380,17 @@ def _validate_article_output(result: ArticleOutput, article_blueprint: dict, art
     expected_indices = list(range(1, planned_illustrations + 1))
     if illustration_indices[:planned_illustrations] != expected_indices:
         return "插图标记必须按 [插图1][插图2][插图3] 顺序出现"
+
+    if _requires_data_visualization(article_blueprint, article_plan):
+        required_chart_count = _required_chart_count(article_blueprint, article_plan)
+        chart_indices = _extract_chart_indices(content)
+        expected_chart_indices = list(range(1, required_chart_count + 1))
+        if chart_indices[:required_chart_count] != expected_chart_indices:
+            return "金融/市场类文章必须按顺序包含 ### 图表1 到 ### 图表N 的 Markdown 图表块"
+        if _count_markdown_chart_meta_lines(content, "数据来源") < required_chart_count:
+            return "金融/市场类文章的每个图表都必须附带数据来源"
+        if _count_markdown_chart_meta_lines(content, "图表说明") < required_chart_count:
+            return "金融/市场类文章的每个图表都必须附带图表说明"
 
     if not any(_contains_keywords(heading, RISK_SECTION_KEYWORDS) for heading in existing_headings):
         return "缺少风险/局限类章节"
@@ -393,16 +455,16 @@ async def generate_article_node(state: WorkflowState) -> dict:
         }
 
     system_prompt = (
-        "你是中文科技公众号总编。"
-        "你会根据用户意图、风格画像、文章蓝图和证据素材，写出一篇适合公众号发布的文章。"
-        "你必须严格基于提供的公开资料写作，不能编造事实、数据、引语或案例。"
-        "正文必须完整保留蓝图中的所有二级标题，不要改写标题文本。"
-        "开头要快速回答“为什么现在值得关注”，中段做分析，后段明确写出局限与风险以及行动建议。"
-        "专业术语首次出现时，采用“术语 + 中文解释 + 一句话类比”的写法。"
-        "段落保持短，适合手机阅读；关键数据或结论可以使用 **加粗**。"
-        "如果官网、官方文档和媒体信息存在差异，应明确写出“公开资料存在分歧”。"
-        "如果某个判断证据不足，要明确写出“公开资料尚不足以证明”。"
-        "请在合适段落后按顺序插入 [插图1][插图2][插图3]，不要跳号，不要重复。"
+        "你是中文公众号主编。"
+        "请基于用户意图、风格画像、文章蓝图和公开证据写一篇可直接发布的 Markdown 文章。"
+        "正文必须完整保留蓝图中的所有 H2 标题，不要改写章节标题。"
+        "文章必须是 Markdown，不要输出 HTML。"
+        "段落要短，适合手机阅读，关键数据或结论可以使用 **加粗**。"
+        "如果公开资料之间存在冲突，要明确写出“公开资料存在分歧”；如果证据不足，要明确写出“公开资料尚不足以证明”。"
+        "请按顺序使用 `[插图1]...[插图N]` 占位，不要跳号，不要重复。"
+        "如果蓝图要求数据可视化，请严格使用如下 Markdown 图表块格式："
+        "`### 图表N：标题`，下一行放 `[插图N]`，然后分别写 `- 数据来源：...` 和 `- 图表说明：...`。"
+        "财经、金融、宏观、能源、商品和市场类文章必须做到图文结合，图表块要和正文分析紧密对应。"
     )
     human_prompt = (
         "用户主题：\n{keywords}\n\n"
@@ -547,7 +609,7 @@ async def generate_article_node(state: WorkflowState) -> dict:
             error_msg = validation_error
             retry_feedback = (
                 "上一轮输出不合格，请完整重写，重点修复这些问题："
-                f"{validation_error}。不要删除任何蓝图中的章节，也不要漏掉插图标记。"
+                f"{validation_error}。不要删除蓝图中的章节，不要遗漏插图或图表标记。"
             )
         except Exception as exc:  # noqa: BLE001
             error_msg = str(exc)
@@ -556,11 +618,8 @@ async def generate_article_node(state: WorkflowState) -> dict:
                     evidence_total_limit,
                     evidence_per_source_limit,
                 )
-                if (
-                    next_total_limit == evidence_total_limit
-                    and next_per_source_limit == evidence_per_source_limit
-                ):
-                    retry_feedback = "输入上下文仍然过长，无法继续压缩，请减少搜索结果或增加更强上下文模型。"
+                if next_total_limit == evidence_total_limit and next_per_source_limit == evidence_per_source_limit:
+                    retry_feedback = "输入上下文仍然过长，无法继续压缩，请减少搜索结果或更换上下文更大的模型。"
                 else:
                     logger.warning(
                         "generate_article_context_too_long_shrinking",
@@ -579,7 +638,7 @@ async def generate_article_node(state: WorkflowState) -> dict:
                         "优先保留最关键的事实、背景、风险和行动建议。"
                     )
             else:
-                retry_feedback = "上一轮调用失败，请完整重写并确保结构、标题数量和插图标记都满足要求。"
+                retry_feedback = "上一轮调用失败，请完整重写，并确保结构、Markdown、图表块和插图标记都满足要求。"
             logger.warning(
                 "generate_article_failed_attempt",
                 task_id=task_id,

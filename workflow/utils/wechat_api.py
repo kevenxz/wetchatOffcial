@@ -4,6 +4,7 @@ from __future__ import annotations
 import mimetypes
 import os
 import ssl
+from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
@@ -16,13 +17,13 @@ COVER_ALLOWED_IMG_TYPES = {"image/jpeg", "image/png", "image/gif"}
 INSECURE_SSL_FALLBACK_ENV = "WECHAT_IMAGE_DOWNLOAD_INSECURE_SSL_FALLBACK"
 
 
-def _detect_image_mime(content: bytes, content_type_header: str, img_url: str) -> str:
-    """Infer the real image mime type from header, URL suffix, and file signature."""
+def _detect_image_mime(content: bytes, content_type_header: str, image_ref: str) -> str:
+    """Infer the image MIME type from headers, file suffix, and file signature."""
     content_type = content_type_header.lower().split(";")[0].strip()
     if content_type:
         return content_type
 
-    guessed, _ = mimetypes.guess_type(urlparse(img_url).path)
+    guessed, _ = mimetypes.guess_type(urlparse(image_ref).path)
     if guessed:
         return guessed
 
@@ -67,102 +68,155 @@ def _is_ssl_verification_error(exc: Exception) -> bool:
     return False
 
 
-def _normalize_image_response(
-    resp: httpx.Response,
-    img_url: str,
+def _is_remote_image_ref(image_ref: str) -> bool:
+    parsed = urlparse(image_ref)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _normalize_image_content(
+    content: bytes,
+    *,
+    image_ref: str,
+    content_type_header: str,
     allowed_types: set[str],
+    filename_hint: str | None = None,
 ) -> tuple[bytes, str, str]:
-    content = resp.content
-    content_type = _detect_image_mime(content, resp.headers.get("Content-Type", ""), img_url)
+    content_type = _detect_image_mime(content, content_type_header, image_ref)
 
     if content_type == "image/svg+xml":
-        logger.warning("skip_unsupported_svg_image", url=img_url)
+        logger.warning("skip_unsupported_svg_image", image_ref=image_ref)
         return b"", "", ""
 
     if content_type not in allowed_types:
-        logger.warning("skip_unsupported_image_type", url=img_url, content_type=content_type or "unknown")
+        logger.warning(
+            "skip_unsupported_image_type",
+            image_ref=image_ref,
+            content_type=content_type or "unknown",
+        )
         return b"", "", ""
 
     ext = "jpg" if content_type == "image/jpeg" else content_type.split("/")[-1]
-    filename = f"upload_img.{ext}"
+    filename = filename_hint or f"upload_img.{ext}"
     return content, filename, content_type
 
 
 async def _download_image(
     client: httpx.AsyncClient,
-    img_url: str,
+    image_ref: str,
     allowed_types: set[str],
 ) -> tuple[bytes, str, str]:
-    """Download a remote image and return content, filename, and mime type."""
+    """Download a remote image and return content, filename, and MIME type."""
     try:
-        resp = await client.get(img_url, follow_redirects=True, timeout=15.0)
-        resp.raise_for_status()
-        return _normalize_image_response(resp, img_url, allowed_types)
-    except Exception as exc:
+        response = await client.get(image_ref, follow_redirects=True, timeout=15.0)
+        response.raise_for_status()
+        return _normalize_image_content(
+            response.content,
+            image_ref=image_ref,
+            content_type_header=response.headers.get("Content-Type", ""),
+            allowed_types=allowed_types,
+        )
+    except Exception as exc:  # noqa: BLE001
         if _is_ssl_verification_error(exc) and _should_retry_without_ssl_verify():
-            logger.warning("download_image_ssl_verify_failed_retry_insecure", url=img_url, error=str(exc))
+            logger.warning("download_image_ssl_verify_failed_retry_insecure", url=image_ref, error=str(exc))
             try:
                 async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, verify=False) as insecure_client:
-                    resp = await insecure_client.get(img_url, follow_redirects=True, timeout=15.0)
-                    resp.raise_for_status()
-                    return _normalize_image_response(resp, img_url, allowed_types)
-            except Exception as insecure_exc:
+                    response = await insecure_client.get(image_ref, follow_redirects=True, timeout=15.0)
+                    response.raise_for_status()
+                    return _normalize_image_content(
+                        response.content,
+                        image_ref=image_ref,
+                        content_type_header=response.headers.get("Content-Type", ""),
+                        allowed_types=allowed_types,
+                    )
+            except Exception as insecure_exc:  # noqa: BLE001
                 logger.warning(
                     "download_image_failed_after_insecure_retry",
-                    url=img_url,
+                    url=image_ref,
                     error=str(insecure_exc),
                 )
                 return b"", "", ""
 
-        logger.warning("download_image_failed", url=img_url, error=str(exc))
+        logger.warning("download_image_failed", url=image_ref, error=str(exc))
         return b"", "", ""
 
 
-async def upload_cover_material(client: httpx.AsyncClient, img_url: str, access_token: str) -> str:
+def _load_local_image(image_ref: str, allowed_types: set[str]) -> tuple[bytes, str, str]:
+    """Load a locally generated image and return content, filename, and MIME type."""
+    try:
+        path = Path(image_ref).expanduser()
+        if not path.is_absolute():
+            path = (Path.cwd() / path).resolve()
+        if not path.is_file():
+            logger.warning("load_local_image_failed", image_ref=str(path), error="file not found")
+            return b"", "", ""
+
+        return _normalize_image_content(
+            path.read_bytes(),
+            image_ref=str(path),
+            content_type_header="",
+            allowed_types=allowed_types,
+            filename_hint=path.name,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("load_local_image_failed", image_ref=image_ref, error=str(exc))
+        return b"", "", ""
+
+
+async def _read_image_source(
+    client: httpx.AsyncClient,
+    image_ref: str,
+    allowed_types: set[str],
+) -> tuple[bytes, str, str]:
+    if _is_remote_image_ref(image_ref):
+        return await _download_image(client, image_ref, allowed_types)
+    return _load_local_image(image_ref, allowed_types)
+
+
+async def upload_cover_material(client: httpx.AsyncClient, image_ref: str, access_token: str) -> str:
     """Upload cover image and return the permanent media_id required by drafts."""
-    if not img_url:
+    if not image_ref:
         return ""
 
-    img_data, filename, content_type = await _download_image(client, img_url, COVER_ALLOWED_IMG_TYPES)
-    if not img_data:
+    image_bytes, filename, content_type = await _read_image_source(client, image_ref, COVER_ALLOWED_IMG_TYPES)
+    if not image_bytes:
         return ""
 
     url = f"https://api.weixin.qq.com/cgi-bin/material/add_material?access_token={access_token}&type=image"
-    files = {"media": (filename, img_data, content_type)}
+    files = {"media": (filename, image_bytes, content_type)}
 
     try:
-        resp = await client.post(url, files=files, timeout=20.0)
-        data = resp.json()
+        response = await client.post(url, files=files, timeout=20.0)
+        data = response.json()
         if "media_id" in data:
             return data["media_id"]
 
-        logger.error("upload_material_failed", result=data, url=img_url)
+        logger.error("upload_material_failed", result=data, image_ref=image_ref)
         return ""
-    except Exception as exc:
-        logger.error("upload_material_exception", url=img_url, error=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        logger.error("upload_material_exception", image_ref=image_ref, error=str(exc))
         return ""
 
 
-async def upload_article_image(client: httpx.AsyncClient, img_url: str, access_token: str) -> str:
+async def upload_article_image(client: httpx.AsyncClient, image_ref: str, access_token: str) -> str:
     """Upload an in-article image and return the WeChat-hosted image URL."""
-    if not img_url:
+    if not image_ref:
         return ""
 
-    img_data, filename, content_type = await _download_image(client, img_url, ARTICLE_ALLOWED_IMG_TYPES)
-    if not img_data:
-        return img_url
+    image_bytes, filename, content_type = await _read_image_source(client, image_ref, ARTICLE_ALLOWED_IMG_TYPES)
+    if not image_bytes:
+        return image_ref if _is_remote_image_ref(image_ref) else ""
 
     url = f"https://api.weixin.qq.com/cgi-bin/media/uploadimg?access_token={access_token}"
-    files = {"media": (filename, img_data, content_type)}
+    files = {"media": (filename, image_bytes, content_type)}
 
     try:
-        resp = await client.post(url, files=files, timeout=20.0)
-        data = resp.json()
+        response = await client.post(url, files=files, timeout=20.0)
+        data = response.json()
         if "url" in data:
             return data["url"]
 
-        logger.warning("uploadimg_failed", result=data, url=img_url)
-        return img_url
-    except Exception as exc:
-        logger.warning("uploadimg_exception", url=img_url, error=str(exc))
-        return img_url
+        logger.warning("uploadimg_failed", result=data, image_ref=image_ref)
+        return image_ref if _is_remote_image_ref(image_ref) else ""
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("uploadimg_exception", image_ref=image_ref, error=str(exc))
+        return image_ref if _is_remote_image_ref(image_ref) else ""

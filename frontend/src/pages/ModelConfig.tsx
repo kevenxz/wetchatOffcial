@@ -203,7 +203,7 @@ export default function ModelConfigPage() {
               <Form.Item
                 label="Base URL"
                 name={['image', 'base_url']}
-                tooltip="兼容 OpenAI Images 接口的网关地址"
+                tooltip="兼容 OpenAI Images 或 Chat Completions 图像模型的网关地址"
               >
                 <Input placeholder="例如：https://images.example.com/v1" disabled={!imageEnabled} />
               </Form.Item>
@@ -213,7 +213,7 @@ export default function ModelConfigPage() {
                 name={['image', 'model']}
                 rules={imageEnabled ? [{ required: true, message: '请输入图像模型名称' }] : []}
               >
-                <Input placeholder="例如：dall-e-3 / flux / seedream" disabled={!imageEnabled} />
+                <Input placeholder="例如：dall-e-3 / flux / seedream / gemini-3.1-flash-image-preview" disabled={!imageEnabled} />
               </Form.Item>
             </Card>
           </Col>
