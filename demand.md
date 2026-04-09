@@ -1,7 +1,7 @@
 # 基于 LangGraph 的微信公众号文章自动发布系统需求文档
 
-版本：v1.3
-更新日期：2026-03-22
+版本：v1.4
+更新日期：2026-04-07
 
 ---
 
@@ -585,12 +585,13 @@ wechatProject/
 |------|----------|
 | `api/routers/tasks.py` | 创建任务、查询任务、删除任务、断点重试；任务状态持久化；进度广播 |
 | `api/routers/ws.py` + `api/ws_manager.py` | 任务维度 WebSocket 订阅与消息广播 |
-| `workflow/graph.py` | 工作流编排：initialize → interpret_user_intent → infer_style_profile → build_article_blueprint → plan_search_queries → search_web → rank_sources → fetch_extract → generate_article → generate_images → push_to_draft/ui_feedback |
+| `workflow/graph.py` | 工作流编排：initialize → capture_hot_topics → interpret_user_intent → infer_style_profile → build_article_blueprint → plan_search_queries → search_web → rank_sources → fetch_extract → generate_article → generate_images → push_to_draft/ui_feedback |
 | `workflow/article_generation.py` | 统一 `generation_config` 默认值、策略枚举、风格原型与兼容 `article_plan` 辅助函数 |
 | `workflow/skills/interpret_user_intent.py` | 解析主题、主角色、文章目标与实际策略 |
 | `workflow/skills/infer_style_profile.py` | 自动生成风格画像，支持 `style_hint` 融合 |
 | `workflow/skills/build_article_blueprint.py` | 生成结构化文章蓝图，并派生 `article_plan` |
 | `workflow/skills/plan_search_queries.py` | 根据蓝图生成结构化搜索词与搜索意图 |
+| `workflow/skills/capture_hot_topics.py` | 在文章链路前置执行热点抓取、评分、筛选与关键词回填，失败自动回退 |
 | `workflow/skills/search_web.py` | 多搜索源检索（SerpApi/Bing/DuckDuckGo），输出结构化来源结果 |
 | `workflow/skills/rank_sources.py` | 对来源做可信度、相关度和多样性排序 |
 | `workflow/skills/fetch_extract.py` | 并发抓取高分来源、正文提取（trafilatura + bs4）、图片筛选 |
@@ -598,10 +599,12 @@ wechatProject/
 | `workflow/skills/generate_article.py` | 按 `user_intent + style_profile + article_blueprint + extracted_contents` 生成正文，并校验章节/插图标记 |
 | `workflow/skills/generate_images.py` | 根据正文 `[插图N]` 标记分配封面图与插图 |
 | `workflow/skills/push_to_draft.py` + `workflow/utils/wechat_*.py` | 微信 token 获取、素材上传、Markdown 转 HTML、草稿箱推送 |
+| `workflow/utils/tophub_client.py` | TopHub 分类页/榜单页抓取与解析，抽取 rank/title/url/extra/hot_value |
+| `workflow/utils/hotspot_ranker.py` | 热点条目评分、过滤、去重与最佳热点选择 |
 | `api/routers/config.py` + `api/store.py` | 主题、样式与模型配置：内置主题、自定义主题增删改查、导入导出、全局样式保存、文本模型/图像模型配置 |
 | `api/routers/accounts.py` | 多账号配置管理（当前可测试微信连接） |
 | `api/routers/articles.py` | 文章列表、文章主题绑定、单篇/批量推送、推送记录 |
-| `api/routers/schedules.py` + `api/scheduler.py` | 定时任务 CRUD、启停、立即执行、热点关键词随机触发，并复用文章生成配置 |
+| `api/routers/schedules.py` + `api/scheduler.py` | 定时任务 CRUD、启停、立即执行；支持结构化热点捕获配置并在调度执行时前置抓取与回填关键词 |
 | `frontend/src/pages/*.tsx` | 可视化任务创建、流程跟踪、历史列表、主题编辑、账号管理、文章推送、定时任务管理；支持角色、策略与可选 `style_hint` 配置 |
 
 ---
@@ -638,3 +641,33 @@ wechatProject/
 5. 每次更新文档后，递增版本号并更新日期（文档头部 `版本/更新日期`）。
 
 建议在提测前增加一个检查项：`代码变更是否已同步 demand.md`，避免文档滞后。
+
+---
+
+## 13. 2026-04-02 TopHub 前置热点捕获需求（已实现）
+
+### 13.1 实现范围
+
+- 已在定时任务中引入 `hotspot_capture` 结构化配置（分类、平台、过滤条件、回退主题）。
+- 已新增 TopHub 抓取能力：支持分类页平台发现与平台榜单条目解析。
+- 已新增热点评分器：按排名、热度、平台权重、关键词偏好综合计算 `selection_score` 并映射星级。
+- 已将热点捕获前置到 LangGraph：`initialize -> capture_hot_topics -> interpret_user_intent -> ...`。
+- 已实现失败回退链路：优先 `fallback_topics`，再回退到任务原始主题（通常为 `schedule.name`）。
+- 已将命中结果写入任务详情：`original_keywords`、`hotspot_candidates`、`selected_hotspot`。
+
+### 13.2 关键接口与数据变更
+
+- `ScheduleConfig` / `CreateScheduleRequest` / `UpdateScheduleRequest` 支持 `hotspot_capture`。
+- `TaskResponse` 新增热点相关字段：
+  - `original_keywords`
+  - `hotspot_capture_config`
+  - `hotspot_candidates`
+  - `selected_hotspot`
+- 前端 `ScheduleManage` 页面已升级为“热点捕获配置”，保持现有 Ant Design 视觉与交互风格。
+
+### 13.3 新增测试
+
+- `tests/test_tophub_client.py`
+- `tests/test_hotspot_ranker.py`
+- `tests/test_scheduler_hotspot_capture.py`
+- `tests/test_workflow_hotspot_capture.py`

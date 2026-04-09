@@ -28,6 +28,8 @@ async def interpret_user_intent_node(state: WorkflowState) -> dict:
     task_id = state["task_id"]
     generation_config = normalize_generation_config(state.get("generation_config"))
     keywords = (state.get("keywords") or "").strip()
+    original_keywords = (state.get("original_keywords") or keywords).strip()
+    selected_hotspot = state.get("selected_hotspot")
 
     start_time = time.monotonic()
     logger.info(
@@ -50,6 +52,7 @@ async def interpret_user_intent_node(state: WorkflowState) -> dict:
 
     user_intent = {
         "topic": keywords,
+        "original_topic": original_keywords,
         "target_roles": audience_roles,
         "primary_role": primary_role,
         "requested_strategy": requested_strategy,
@@ -57,6 +60,7 @@ async def interpret_user_intent_node(state: WorkflowState) -> dict:
         "article_goal": _build_article_goal(resolved_strategy, primary_role),
         "core_questions": role_focus_points(primary_role),
         "style_hint": generation_config.get("style_hint", ""),
+        "hotspot_context": selected_hotspot if isinstance(selected_hotspot, dict) else None,
     }
 
     duration_ms = round((time.monotonic() - start_time) * 1000)

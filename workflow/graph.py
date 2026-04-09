@@ -11,6 +11,7 @@ from langgraph.graph import END, StateGraph
 
 from workflow.article_generation import normalize_generation_config
 from workflow.skills.build_article_blueprint import build_article_blueprint_node
+from workflow.skills.capture_hot_topics import capture_hot_topics_node
 from workflow.skills.error_handler import error_handler
 from workflow.skills.fetch_extract import fetch_extract_node
 from workflow.skills.generate_article import generate_article_node
@@ -69,6 +70,7 @@ def build_graph() -> StateGraph:
     graph = StateGraph(WorkflowState)
 
     graph.add_node("initialize", initialize_node)
+    graph.add_node("capture_hot_topics", capture_hot_topics_node)
     graph.add_node("interpret_user_intent", interpret_user_intent_node)
     graph.add_node("infer_style_profile", infer_style_profile_node)
     graph.add_node("build_article_blueprint", build_article_blueprint_node)
@@ -83,7 +85,8 @@ def build_graph() -> StateGraph:
     graph.add_node("error_handler", error_handler)
 
     graph.set_entry_point("initialize")
-    graph.add_edge("initialize", "interpret_user_intent")
+    graph.add_edge("initialize", "capture_hot_topics")
+    graph.add_conditional_edges("capture_hot_topics", _route_status, {"error": "error_handler", "next": "interpret_user_intent"})
     graph.add_conditional_edges("interpret_user_intent", _route_status, {"error": "error_handler", "next": "infer_style_profile"})
     graph.add_conditional_edges("infer_style_profile", _route_status, {"error": "error_handler", "next": "build_article_blueprint"})
     graph.add_conditional_edges("build_article_blueprint", _route_status, {"error": "error_handler", "next": "plan_search_queries"})
@@ -111,6 +114,7 @@ async def run_workflow(
     task_id: str,
     keywords: str,
     generation_config: dict | None = None,
+    hotspot_capture_config: dict | None = None,
     progress_callback: ProgressCallback | None = None,
     resume_state: dict | None = None,
     skip_auto_push: bool = False,
@@ -126,12 +130,19 @@ async def run_workflow(
         initial_state["generation_config"] = normalize_generation_config(
             generation_config if generation_config is not None else initial_state.get("generation_config")
         )
+        if hotspot_capture_config is not None:
+            initial_state["hotspot_capture_config"] = dict(hotspot_capture_config)
         initial_state.setdefault("user_intent", {})
         initial_state.setdefault("style_profile", {})
         initial_state.setdefault("article_blueprint", {})
         initial_state.setdefault("search_queries", [])
         initial_state.setdefault("search_results", [])
         initial_state.setdefault("extracted_contents", [])
+        initial_state.setdefault("hotspot_capture_config", {})
+        initial_state.setdefault("hotspot_candidates", [])
+        initial_state.setdefault("selected_hotspot", None)
+        initial_state.setdefault("hotspot_capture_error", None)
+        initial_state.setdefault("original_keywords", initial_state.get("keywords", keywords))
         initial_state.setdefault("article_plan", {})
         initial_state.setdefault("generated_article", {})
         if "skip_auto_push" not in initial_state:
@@ -148,13 +159,18 @@ async def run_workflow(
         initial_state = {
             "task_id": task_id,
             "keywords": keywords,
+            "original_keywords": keywords,
             "generation_config": normalized_generation_config,
+            "hotspot_capture_config": dict(hotspot_capture_config or {}),
             "user_intent": {},
             "style_profile": {},
             "article_blueprint": {},
             "search_queries": [],
             "search_results": [],
             "extracted_contents": [],
+            "hotspot_candidates": [],
+            "selected_hotspot": None,
+            "hotspot_capture_error": None,
             "article_plan": {},
             "generated_article": {},
             "draft_info": None,
@@ -172,6 +188,7 @@ async def run_workflow(
             status="running",
             keywords=keywords,
             generation_config=normalized_generation_config,
+            hotspot_capture_enabled=bool((hotspot_capture_config or {}).get("enabled")),
             skip_auto_push=skip_auto_push,
         )
 
@@ -232,6 +249,12 @@ async def run_workflow(
                     "message": final_message,
                     "result": {
                         "generation_config": final_state.get("generation_config") if final_state else None,
+                        "keywords": final_state.get("keywords") if final_state else None,
+                        "original_keywords": final_state.get("original_keywords") if final_state else None,
+                        "hotspot_capture_config": final_state.get("hotspot_capture_config") if final_state else None,
+                        "hotspot_candidates": final_state.get("hotspot_candidates") if final_state else None,
+                        "selected_hotspot": final_state.get("selected_hotspot") if final_state else None,
+                        "hotspot_capture_error": final_state.get("hotspot_capture_error") if final_state else None,
                         "user_intent": final_state.get("user_intent") if final_state else None,
                         "style_profile": final_state.get("style_profile") if final_state else None,
                         "article_blueprint": final_state.get("article_blueprint") if final_state else None,

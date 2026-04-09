@@ -67,7 +67,8 @@ async def create_schedule(body: CreateScheduleRequest) -> ScheduleConfig:
         interval_minutes=body.interval_minutes,
         theme_name=body.theme_name,
         account_ids=body.account_ids,
-        hot_topics=[topic.strip() for topic in body.hot_topics if topic.strip()],
+        hot_topics=body.hot_topics,
+        hotspot_capture=body.hotspot_capture,
         generation_config=body.generation_config,
         enabled=body.enabled,
         status=ScheduleStatus.running if body.enabled else ScheduleStatus.stopped,
@@ -88,28 +89,25 @@ async def update_schedule(schedule_id: str, body: UpdateScheduleRequest) -> Sche
     if schedule is None:
         raise HTTPException(status_code=404, detail=f"schedule {schedule_id!r} not found")
 
-    patch = body.model_dump(exclude_unset=True)
-    mode = patch.get("mode", schedule.mode)
-    run_at = patch.get("run_at", schedule.run_at)
-    interval_minutes = patch.get("interval_minutes", schedule.interval_minutes)
+    patch = body.model_dump(exclude_unset=True, mode="python")
+    merged = {**schedule.model_dump(mode="python"), **patch}
+
+    mode = merged.get("mode", schedule.mode)
+    run_at = merged.get("run_at", schedule.run_at)
+    interval_minutes = merged.get("interval_minutes", schedule.interval_minutes)
     _validate_schedule(mode, run_at, interval_minutes)
 
-    for key, value in patch.items():
-        # Normalize hot topics to avoid empty tags and whitespace-only values.
-        if key == "hot_topics" and isinstance(value, list):
-            setattr(schedule, key, [item.strip() for item in value if item and item.strip()])
-            continue
-        setattr(schedule, key, value)
-
-    schedule.updated_at = _utc_now()
-    if schedule.status == ScheduleStatus.running and schedule.enabled:
-        schedule.next_run_at = (
-            schedule.run_at
-            if schedule.mode == ScheduleMode.once
-            else _utc_now() + timedelta(minutes=schedule.interval_minutes or 1)
+    updated_schedule = ScheduleConfig(**merged)
+    updated_schedule.updated_at = _utc_now()
+    if updated_schedule.status == ScheduleStatus.running and updated_schedule.enabled:
+        updated_schedule.next_run_at = (
+            updated_schedule.run_at
+            if updated_schedule.mode == ScheduleMode.once
+            else _utc_now() + timedelta(minutes=updated_schedule.interval_minutes or 1)
         )
+    schedule_store[schedule_id] = updated_schedule
     save_schedules()
-    return schedule
+    return updated_schedule
 
 
 @router.delete("/{schedule_id}", status_code=204, response_model=None)

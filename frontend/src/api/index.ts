@@ -37,11 +37,15 @@ export interface CreateTaskRequest {
 export interface TaskResponse {
   task_id: string
   keywords: string
+  original_keywords?: string | null
   generation_config: GenerationConfig
   status: 'pending' | 'running' | 'done' | 'failed'
   created_at: string
   updated_at: string | null
   error: string | null
+  hotspot_capture_config?: HotspotCaptureConfig | null
+  hotspot_candidates?: TopHubHotItem[]
+  selected_hotspot?: TopHubHotItem | null
   user_intent?: Record<string, any> | null
   style_profile?: Record<string, any> | null
   article_blueprint?: Record<string, any> | null
@@ -262,6 +266,47 @@ export const updateArticleTheme = (
 export type ScheduleMode = 'once' | 'interval'
 export type ScheduleStatus = 'running' | 'stopped'
 
+export type HotspotSource = 'tophub'
+
+export interface HotspotFilters {
+  top_n_per_platform: number
+  min_selection_score: number
+  exclude_keywords: string[]
+  prefer_keywords: string[]
+}
+
+export interface HotspotPlatformConfig {
+  name: string
+  path: string
+  weight: number
+  enabled: boolean
+}
+
+export interface HotspotCaptureConfig {
+  enabled: boolean
+  source: HotspotSource
+  categories: string[]
+  platforms: HotspotPlatformConfig[]
+  filters: HotspotFilters
+  fallback_topics: string[]
+}
+
+export interface TopHubHotItem {
+  source: HotspotSource
+  category: string
+  platform_name: string
+  platform_path: string
+  platform_weight?: number
+  title: string
+  url: string
+  rank: number
+  extra_text?: string
+  hot_value?: number | null
+  selection_score?: number
+  selection_star?: number
+  captured_at?: string
+}
+
 export interface ScheduleConfig {
   schedule_id: string
   name: string
@@ -271,6 +316,7 @@ export interface ScheduleConfig {
   theme_name: string
   account_ids: string[]
   hot_topics: string[]
+  hotspot_capture: HotspotCaptureConfig
   generation_config: GenerationConfig
   status: ScheduleStatus
   enabled: boolean
@@ -289,6 +335,7 @@ export interface CreateScheduleRequest {
   theme_name: string
   account_ids: string[]
   hot_topics: string[]
+  hotspot_capture: HotspotCaptureConfig
   generation_config: GenerationConfig
   enabled: boolean
 }
@@ -301,6 +348,7 @@ export interface UpdateScheduleRequest {
   theme_name?: string
   account_ids?: string[]
   hot_topics?: string[]
+  hotspot_capture?: HotspotCaptureConfig
   generation_config?: GenerationConfig
   enabled?: boolean
 }

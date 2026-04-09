@@ -34,13 +34,14 @@ const { Title, Text } = Typography
 
 const SKILL_STEPS = [
   { key: 'initialize', title: '任务初始化', description: '验证参数并准备执行环境' },
+  { key: 'capture_hot_topics', title: '热点捕获', description: '抓取 TopHub 并筛选高分热点标题' },
   { key: 'interpret_user_intent', title: '解析意图', description: '识别主题、读者和文章目标' },
   { key: 'infer_style_profile', title: '推断风格', description: '自动生成公众号风格画像' },
   { key: 'build_article_blueprint', title: '生成蓝图', description: '先产出结构化文章蓝图' },
   { key: 'plan_search_queries', title: '规划搜索', description: '根据蓝图规划搜索词和信息需求' },
   { key: 'search_web', title: '搜索网页', description: '优先搜索官网和高可信来源' },
   { key: 'rank_sources', title: '排序来源', description: '按可信度和相关度筛选结果' },
-  { key: 'fetch_extract', title: '提取内容', description: '抓取网页并清洗正文' },
+  { key: 'fetch_and_extract', title: '提取内容', description: '抓取网页并清洗正文' },
   { key: 'generate_article', title: '生成文章', description: '调用 LLM 按蓝图输出公众号文章' },
   { key: 'generate_images', title: '处理图片', description: '生成或提取封面与插图' },
   { key: 'push_to_draft', title: '推送草稿', description: '推送至微信公众号草稿箱' },
@@ -233,6 +234,14 @@ export default function TaskDetail() {
               </Descriptions.Item>
               <Descriptions.Item label="关键词">
                 <Text strong>{task.keywords}</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="原始主题">
+                {task.original_keywords || '-'}
+              </Descriptions.Item>
+              <Descriptions.Item label="热点命中">
+                {task.selected_hotspot?.title
+                  ? `${task.selected_hotspot.title}（${task.selected_hotspot.platform_name || '未知平台'}）`
+                  : '未命中 / 未启用'}
               </Descriptions.Item>
               <Descriptions.Item label="创建时间">
                 {new Date(task.created_at).toLocaleString('zh-CN')}

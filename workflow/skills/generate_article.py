@@ -99,15 +99,26 @@ def _format_extracted_texts(
 
 
 def _format_user_intent(user_intent: dict) -> str:
+    hotspot_context = user_intent.get("hotspot_context") if isinstance(user_intent, dict) else None
+    hotspot_lines: list[str] = []
+    if isinstance(hotspot_context, dict):
+        hotspot_lines = [
+            f"热点标题：{hotspot_context.get('title', '')}",
+            f"来源平台：{hotspot_context.get('platform_name', '')}",
+            f"榜单排名：{hotspot_context.get('rank', '')}",
+            f"热点评分：{hotspot_context.get('selection_score', '')}",
+        ]
     return "\n".join(
         [
             f"主题：{user_intent.get('topic', '')}",
+            f"原始输入主题：{user_intent.get('original_topic', '')}",
             f"主角色：{user_intent.get('primary_role', '')}",
             f"目标角色：{' / '.join(user_intent.get('target_roles', []))}",
             f"请求策略：{user_intent.get('requested_strategy', '')}",
             f"解析策略：{user_intent.get('resolved_strategy', '')}",
             f"文章目标：{user_intent.get('article_goal', '')}",
             f"补充风格：{user_intent.get('style_hint', '') or '无'}",
+            *(hotspot_lines or ["热点上下文：未命中热点或未启用热点捕获"]),
         ]
     )
 

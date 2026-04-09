@@ -11,7 +11,9 @@ class WorkflowState(TypedDict):
 
     task_id: str
     keywords: str
+    original_keywords: str
     generation_config: dict
+    hotspot_capture_config: dict
 
     user_intent: dict
     style_profile: dict
@@ -19,6 +21,9 @@ class WorkflowState(TypedDict):
     search_queries: list[dict]
     search_results: list[dict]
     extracted_contents: list[dict]
+    hotspot_candidates: list[dict]
+    selected_hotspot: Optional[dict]
+    hotspot_capture_error: Optional[str]
 
     article_plan: dict
     generated_article: dict
