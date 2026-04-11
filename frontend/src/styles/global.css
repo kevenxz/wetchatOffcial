@@ -36,6 +36,14 @@ body {
   min-height: 100vh;
 }
 
+body,
+button,
+input,
+textarea,
+select {
+  text-rendering: optimizeLegibility;
+}
+
 h1,
 h2,
 h3,
@@ -109,6 +117,13 @@ textarea {
 .ant-layout {
   background: transparent !important;
   min-height: 100vh;
+}
+
+.ant-card,
+.ant-form,
+.ant-input,
+.ant-select-selector {
+  max-width: 100%;
 }
 
 .ant-layout-sider {
