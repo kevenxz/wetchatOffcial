@@ -73,7 +73,7 @@ function AppLayout() {
       </Sider>
 
       <Layout style={{ overflow: 'hidden' }}>
-        <Content style={{ height: '100%', overflow: 'auto', backgroundColor: '#f5f5f5' }}>
+        <Content style={{ height: '100%', overflow: 'auto', backgroundColor: 'var(--bg-container)' }}>
           <Routes>
             <Route path="/" element={<Navigate to="/task" replace />} />
             <Route path="/task" element={<TaskCreate />} />
