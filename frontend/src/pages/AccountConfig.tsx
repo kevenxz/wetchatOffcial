@@ -1,13 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  DeleteOutlined,
+  EditOutlined,
+  LinkOutlined,
+  PlusOutlined,
+  SafetyCertificateOutlined,
+  WechatOutlined,
+} from '@ant-design/icons'
 import {
   Button,
   Card,
-  Col,
   Form,
   Input,
   Modal,
   Popconfirm,
-  Row,
   Select,
   Space,
   Switch,
@@ -17,7 +23,6 @@ import {
   message,
 } from 'antd'
 import type { TableColumnsType } from 'antd'
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import {
   type AccountConfig,
   type CreateAccountRequest,
@@ -29,8 +34,9 @@ import {
   testAccountConnection,
   updateAccount,
 } from '@/api'
+import { HeroPanel, MetricCard, SectionBlock, SignalCard } from '@/components/workbench'
 
-const { Title, Text } = Typography
+const { Text } = Typography
 
 const PLATFORM_LABELS: Record<PlatformType, string> = {
   wechat_mp: '微信公众号',
@@ -51,6 +57,9 @@ export default function AccountConfigPage() {
   const [testingIds, setTestingIds] = useState<Set<string>>(new Set())
   const [form] = Form.useForm()
 
+  const enabledCount = useMemo(() => accounts.filter((account) => account.enabled).length, [accounts])
+  const platformCount = useMemo(() => new Set(accounts.map((account) => account.platform)).size, [accounts])
+
   const fetchAccounts = async () => {
     setLoading(true)
     try {
@@ -64,7 +73,7 @@ export default function AccountConfigPage() {
   }
 
   useEffect(() => {
-    fetchAccounts()
+    void fetchAccounts()
   }, [])
 
   const handleAdd = () => {
@@ -102,9 +111,7 @@ export default function AccountConfigPage() {
           patch.app_secret = values.app_secret
         }
         const updated = await updateAccount(editingAccount.account_id, patch)
-        setAccounts((prev) =>
-          prev.map((a) => (a.account_id === updated.account_id ? updated : a)),
-        )
+        setAccounts((prev) => prev.map((account) => (account.account_id === updated.account_id ? updated : account)))
         message.success('账号已更新')
       } else {
         const data: CreateAccountRequest = {
@@ -129,27 +136,29 @@ export default function AccountConfigPage() {
   }
 
   const handleDelete = async (accountId: string) => {
-    const prev = accounts
-    setAccounts((list) => list.filter((a) => a.account_id !== accountId))
+    const previousAccounts = accounts
+    setAccounts((list) => list.filter((account) => account.account_id !== accountId))
     try {
       await deleteAccount(accountId)
       message.success('账号已删除')
     } catch (err) {
-      setAccounts(prev)
+      setAccounts(previousAccounts)
       message.error(err instanceof Error ? err.message : '删除失败')
     }
   }
 
   const handleToggleEnabled = async (record: AccountConfig, checked: boolean) => {
     setAccounts((prev) =>
-      prev.map((a) => (a.account_id === record.account_id ? { ...a, enabled: checked } : a)),
+      prev.map((account) =>
+        account.account_id === record.account_id ? { ...account, enabled: checked } : account,
+      ),
     )
     try {
       await updateAccount(record.account_id, { enabled: checked })
     } catch (err) {
       setAccounts((prev) =>
-        prev.map((a) =>
-          a.account_id === record.account_id ? { ...a, enabled: !checked } : a,
+        prev.map((account) =>
+          account.account_id === record.account_id ? { ...account, enabled: !checked } : account,
         ),
       )
       message.error('状态更新失败')
@@ -159,11 +168,11 @@ export default function AccountConfigPage() {
   const handleTest = async (accountId: string) => {
     setTestingIds((prev) => new Set([...prev, accountId]))
     try {
-      const res = await testAccountConnection(accountId)
-      if (res.success) {
-        message.success(res.message)
+      const result = await testAccountConnection(accountId)
+      if (result.success) {
+        message.success(result.message)
       } else {
-        message.error(res.message)
+        message.error(result.message)
       }
     } catch (err) {
       message.error(err instanceof Error ? err.message : '测试连接失败')
@@ -181,13 +190,13 @@ export default function AccountConfigPage() {
       title: '账号名称',
       dataIndex: 'name',
       key: 'name',
-      width: 160,
+      width: 180,
     },
     {
       title: '平台',
       dataIndex: 'platform',
       key: 'platform',
-      width: 130,
+      width: 140,
       render: (platform: PlatformType) => (
         <Tag color={PLATFORM_COLORS[platform]}>{PLATFORM_LABELS[platform]}</Tag>
       ),
@@ -204,40 +213,28 @@ export default function AccountConfigPage() {
       render: () => <Text type="secondary">••••••••</Text>,
     },
     {
-      title: '状态',
+      title: '启用',
       key: 'enabled',
-      width: 80,
+      width: 90,
       render: (_, record) => (
-        <Switch
-          checked={record.enabled}
-          onChange={(checked) => handleToggleEnabled(record, checked)}
-          size="small"
-        />
+        <Switch checked={record.enabled} onChange={(checked) => handleToggleEnabled(record, checked)} size="small" />
       ),
     },
     {
       title: '操作',
       key: 'actions',
-      width: 220,
+      width: 240,
       render: (_, record) => (
-        <Space size="small">
-          <Button
-            size="small"
-            loading={testingIds.has(record.account_id)}
-            onClick={() => handleTest(record.account_id)}
-          >
+        <Space size="small" wrap>
+          <Button size="small" loading={testingIds.has(record.account_id)} onClick={() => handleTest(record.account_id)}>
             测试连接
           </Button>
-          <Button
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
+          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             编辑
           </Button>
           <Popconfirm
-            title="确认删除该账号？"
-            description="删除后不可恢复"
+            title="确认删除这个账号？"
+            description="删除后不可恢复。"
             onConfirm={() => handleDelete(record.account_id)}
             okText="删除"
             cancelText="取消"
@@ -253,31 +250,63 @@ export default function AccountConfigPage() {
   ]
 
   return (
-    <div style={{ maxWidth: 1100, margin: '24px auto', padding: '0 24px' }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 20 }}>
-        <Col>
-          <Title level={2} style={{ margin: 0 }}>
-            账号配置
-          </Title>
-          <Text type="secondary">管理微信公众号等平台的 API 账号凭证</Text>
-        </Col>
-        <Col>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            新增账号
-          </Button>
-        </Col>
-      </Row>
+    <div className="backstage-page">
+      <HeroPanel
+        eyebrow="System Backstage"
+        title="账号接入台"
+        description="统一管理微信公众号与其他投放账号的凭证、可用状态和联通性。"
+      >
+        <div className="backstage-metric-grid">
+          <MetricCard label="Accounts" value={String(accounts.length).padStart(2, '0')} hint="后台已登记的账号数量" />
+          <MetricCard label="Enabled" value={String(enabledCount).padStart(2, '0')} hint="当前允许被调度和推送的账号" />
+          <MetricCard label="Platforms" value={String(platformCount).padStart(2, '0')} hint="已接入的平台类型数量" />
+        </div>
+      </HeroPanel>
 
-      <Card>
-        <Table
-          rowKey="account_id"
-          columns={columns}
-          dataSource={accounts}
-          loading={loading}
-          pagination={false}
-          locale={{ emptyText: '暂无账号，点击右上角新增' }}
-        />
-      </Card>
+      <div className="backstage-grid backstage-grid--double">
+        <SectionBlock
+          title="账号清单"
+          aside={
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              新增账号
+            </Button>
+          }
+        >
+          <Card className="backstage-surface-card">
+            <Table
+              rowKey="account_id"
+              columns={columns}
+              dataSource={accounts}
+              loading={loading}
+              pagination={false}
+              locale={{ emptyText: '暂无账号，先从右上角新增一条接入配置。' }}
+            />
+          </Card>
+        </SectionBlock>
+
+        <SectionBlock
+          title="后台提示"
+          aside={<Text type="secondary">保留原有增删改、启停和连接测试行为。</Text>}
+        >
+          <div className="backstage-note-list">
+            <SignalCard
+              icon={<WechatOutlined />}
+              title="公众号优先"
+              description="微信号仍然是当前工作流的主要发布目标，账号启停会直接影响推送可见性。"
+            />
+            <SignalCard
+              icon={<LinkOutlined />}
+              title="连接测试"
+              description="新增或更新密钥后建议立即测试连接，避免调度执行时才暴露凭证问题。"
+            />
+            <SignalCard
+              icon={<SafetyCertificateOutlined />}
+              title="凭证治理"
+              description="编辑时保留 AppSecret 为空的能力，避免后台误覆盖已有生产密钥。"
+            />
+          </div>
+        </SectionBlock>
+      </div>
 
       <Modal
         title={editingAccount ? '编辑账号' : '新增账号'}
@@ -295,8 +324,9 @@ export default function AccountConfigPage() {
             label="账号名称"
             rules={[{ required: true, message: '请输入账号名称' }]}
           >
-            <Input placeholder="如：主账号、测试号" maxLength={100} />
+            <Input placeholder="例如：主账号、测试号" maxLength={100} />
           </Form.Item>
+
           <Form.Item
             name="platform"
             label="平台类型"
@@ -310,6 +340,7 @@ export default function AccountConfigPage() {
               ]}
             />
           </Form.Item>
+
           <Form.Item
             name="app_id"
             label="AppID"
@@ -317,6 +348,7 @@ export default function AccountConfigPage() {
           >
             <Input placeholder="输入 AppID" maxLength={200} />
           </Form.Item>
+
           <Form.Item
             name="app_secret"
             label="AppSecret"
@@ -333,6 +365,7 @@ export default function AccountConfigPage() {
               maxLength={200}
             />
           </Form.Item>
+
           <Form.Item name="enabled" label="启用状态" valuePropName="checked">
             <Switch />
           </Form.Item>

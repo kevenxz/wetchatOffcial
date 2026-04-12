@@ -1,0 +1,23 @@
+.card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 20px;
+  background: rgba(15, 23, 42, 0.56);
+}
+
+.label {
+  font-size: 0.8rem;
+  color: var(--text-tertiary);
+}
+
+.value {
+  font-size: 1.5rem;
+  font-weight: 600;
+}
+
+.hint {
+  color: var(--text-secondary);
+}

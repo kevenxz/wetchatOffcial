@@ -1,50 +1,29 @@
 ﻿import { useEffect, useRef, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
-import {
-  Card,
-  Steps,
-  Typography,
-  Tag,
-  Space,
-  Button,
-  Progress,
-  Descriptions,
-  Result,
-  Spin,
-  Divider,
-  message,
-} from 'antd'
-import {
-  ArrowLeftOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  LoadingOutlined,
-  ClockCircleOutlined,
-  ReloadOutlined,
-} from '@ant-design/icons'
+import { useNavigate, useParams } from 'react-router-dom'
+import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Button, Empty, Result, Spin, Tag, message } from 'antd'
 import {
   ARTICLE_STRATEGY_LABELS,
   getTask,
   retryTask,
   type TaskResponse,
 } from '@/api'
+import { HeroPanel, SectionBlock, StatusRail, type StatusRailStep } from '@/components/workbench'
 import styles from './TaskDetail.module.css'
 
-const { Title, Text } = Typography
-
-const SKILL_STEPS = [
-  { key: 'initialize', title: '任务初始化', description: '验证参数并准备执行环境' },
-  { key: 'capture_hot_topics', title: '热点捕获', description: '抓取 TopHub 并筛选高分热点标题' },
-  { key: 'interpret_user_intent', title: '解析意图', description: '识别主题、读者和文章目标' },
-  { key: 'infer_style_profile', title: '推断风格', description: '自动生成公众号风格画像' },
-  { key: 'build_article_blueprint', title: '生成蓝图', description: '先产出结构化文章蓝图' },
-  { key: 'plan_search_queries', title: '规划搜索', description: '根据蓝图规划搜索词和信息需求' },
-  { key: 'search_web', title: '搜索网页', description: '优先搜索官网和高可信来源' },
-  { key: 'rank_sources', title: '排序来源', description: '按可信度和相关度筛选结果' },
-  { key: 'fetch_and_extract', title: '提取内容', description: '抓取网页并清洗正文' },
-  { key: 'generate_article', title: '生成文章', description: '调用 LLM 按蓝图输出公众号文章' },
-  { key: 'generate_images', title: '处理图片', description: '生成或提取封面与插图' },
-  { key: 'push_to_draft', title: '推送草稿', description: '推送至微信公众号草稿箱' },
+const SKILL_STEPS: StatusRailStep[] = [
+  { key: 'initialize', title: '任务初始化', description: '验证参数并准备执行环境。' },
+  { key: 'capture_hot_topics', title: '热点捕获', description: '抓取并筛选高分热点候选。' },
+  { key: 'interpret_user_intent', title: '解析意图', description: '识别主题、读者和文章目标。' },
+  { key: 'infer_style_profile', title: '推断风格', description: '自动生成公众号风格画像。' },
+  { key: 'build_article_blueprint', title: '生成蓝图', description: '先产出结构化文章蓝图。' },
+  { key: 'plan_search_queries', title: '规划搜索', description: '根据蓝图规划搜索词和信息需求。' },
+  { key: 'search_web', title: '搜索网页', description: '优先搜索官网和高可信来源。' },
+  { key: 'rank_sources', title: '排序来源', description: '按可信度和相关度筛选结果。' },
+  { key: 'fetch_and_extract', title: '提取内容', description: '抓取网页并清洗正文。' },
+  { key: 'generate_article', title: '生成文章', description: '调用模型按蓝图输出公众号文章。' },
+  { key: 'generate_images', title: '处理图片', description: '生成或提取封面与插图。' },
+  { key: 'push_to_draft', title: '推送草稿', description: '推送至微信公众号草稿箱。' },
 ]
 
 interface WsPayload {
@@ -56,46 +35,23 @@ interface WsPayload {
   result: unknown
 }
 
-const STATUS_COLOR: Record<string, string> = {
-  pending: 'default',
-  running: 'processing',
-  done: 'success',
-  failed: 'error',
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  pending: '等待中',
+const STATUS_COPY: Record<string, string> = {
+  pending: '等待执行',
   running: '执行中',
-  done: '已完成',
-  failed: '失败',
+  done: '结果已交付',
+  failed: '需要处理',
 }
 
-function getStepStatus(
-  skillKey: string,
-  currentSkill: string,
-  taskStatus: string,
-): 'wait' | 'process' | 'finish' | 'error' {
-  const currentIdx = SKILL_STEPS.findIndex((s) => s.key === currentSkill)
-  const stepIdx = SKILL_STEPS.findIndex((s) => s.key === skillKey)
-
-  if (taskStatus === 'failed' && skillKey === currentSkill) return 'error'
-  if (taskStatus === 'done') return 'finish'
-  if (stepIdx < currentIdx) return 'finish'
-  if (stepIdx === currentIdx) return 'process'
-  return 'wait'
+function formatDate(value: string | null | undefined) {
+  if (!value) return '-'
+  return new Date(value).toLocaleString('zh-CN')
 }
 
-function getStepIcon(status: 'wait' | 'process' | 'finish' | 'error') {
-  switch (status) {
-    case 'finish':
-      return <CheckCircleOutlined />
-    case 'process':
-      return <LoadingOutlined />
-    case 'error':
-      return <CloseCircleOutlined />
-    default:
-      return <ClockCircleOutlined />
-  }
+function renderValue(value: unknown) {
+  if (value === null || value === undefined || value === '') return '-'
+  if (Array.isArray(value)) return value.length ? value.join(' / ') : '-'
+  if (typeof value === 'object') return JSON.stringify(value, null, 2)
+  return String(value)
 }
 
 export default function TaskDetail() {
@@ -128,8 +84,15 @@ export default function TaskDetail() {
       .then((result) => {
         setTask(result)
         setWsStatus(result.status)
-        if (result.status === 'done') setStatusMessage('任务执行完成')
-        if (result.status === 'failed') setStatusMessage(result.error || '任务执行失败')
+
+        if (result.status === 'done') {
+          setProgress(100)
+          setStatusMessage('任务执行完成')
+        } else if (result.status === 'failed') {
+          setStatusMessage(result.error || '任务执行失败')
+        } else {
+          setStatusMessage('任务已载入，等待实时状态...')
+        }
       })
       .catch(() => undefined)
   }, [taskId])
@@ -170,7 +133,7 @@ export default function TaskDetail() {
           return nextTask
         })
       } catch {
-        // ignore malformed messages
+        // Ignore malformed messages from the socket.
       }
     }
 
@@ -189,160 +152,170 @@ export default function TaskDetail() {
   if (!taskId) return null
 
   const isLoading = !task
-  const progressStatus =
-    wsStatus === 'failed'
-      ? ('exception' as const)
-      : wsStatus === 'done'
-        ? ('success' as const)
-        : ('active' as const)
+  const generatedArticle = task?.generated_article as
+    | { title?: string; alt_titles?: string[]; content?: string }
+    | undefined
+  const metaItems = task
+    ? [
+        { label: '任务 ID', value: task.task_id },
+        { label: '关键词', value: task.keywords },
+        { label: '原始主题', value: task.original_keywords || '-' },
+        {
+          label: '热点命中',
+          value: task.selected_hotspot?.title
+            ? `${task.selected_hotspot.title} / ${task.selected_hotspot.platform_name || '未知平台'}`
+            : '未命中 / 未启用',
+        },
+        { label: '创建时间', value: formatDate(task.created_at) },
+        {
+          label: '请求策略',
+          value: ARTICLE_STRATEGY_LABELS[task.generation_config?.article_strategy || 'auto'],
+        },
+        {
+          label: '实际策略',
+          value: task.article_plan?.resolved_strategy_label || task.article_plan?.resolved_strategy || '待规划',
+        },
+      ]
+    : []
 
   return (
-    <div className={styles.container}>
-      <Button
-        type="text"
-        icon={<ArrowLeftOutlined />}
-        onClick={() => navigate('/task')}
-        className={styles.backBtn}
+    <div className={styles.page}>
+      <HeroPanel
+        eyebrow="Task Workspace"
+        title={task?.keywords || '任务详情'}
+        description="聚焦当前任务的执行轨迹、结构化结果和草稿交付状态。"
       >
-        返回
-      </Button>
+        <div className={styles.heroActions}>
+          <Tag color={wsStatus === 'done' ? 'success' : wsStatus === 'failed' ? 'error' : 'processing'}>
+            {STATUS_COPY[wsStatus] ?? wsStatus}
+          </Tag>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/task')}>
+            返回创作台
+          </Button>
+          {wsStatus === 'failed' ? (
+            <Button type="primary" icon={<ReloadOutlined />} onClick={handleRetry}>
+              从断点重试
+            </Button>
+          ) : null}
+        </div>
+      </HeroPanel>
 
       {isLoading ? (
         <div className={styles.loadingWrap}>
-          <Spin size="large" tip="加载任务信息..." />
+          <Spin size="large" />
+          <p>加载任务信息...</p>
         </div>
       ) : (
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <Card variant="borderless">
-            <Descriptions
-              title={
-                <Space>
-                  <Title level={4} className={styles.taskTitle}>
-                    任务详情
-                  </Title>
-                  <Tag color={STATUS_COLOR[wsStatus] ?? 'default'}>
-                    {STATUS_LABEL[wsStatus] ?? wsStatus}
-                  </Tag>
-                </Space>
-              }
-              column={{ xs: 1, sm: 2 }}
-            >
-              <Descriptions.Item label="任务 ID">
-                <Text copyable className={styles.taskIdText}>
-                  {task.task_id}
-                </Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="关键词">
-                <Text strong>{task.keywords}</Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="原始主题">
-                {task.original_keywords || '-'}
-              </Descriptions.Item>
-              <Descriptions.Item label="热点命中">
-                {task.selected_hotspot?.title
-                  ? `${task.selected_hotspot.title}（${task.selected_hotspot.platform_name || '未知平台'}）`
-                  : '未命中 / 未启用'}
-              </Descriptions.Item>
-              <Descriptions.Item label="创建时间">
-                {new Date(task.created_at).toLocaleString('zh-CN')}
-              </Descriptions.Item>
-              <Descriptions.Item label="目标角色">
-                <Space size={[4, 8]} wrap>
-                  {task.generation_config?.audience_roles?.map((role) => (
-                    <Tag color="blue" key={role}>
-                      {role}
-                    </Tag>
-                  ))}
-                </Space>
-              </Descriptions.Item>
-              <Descriptions.Item label="请求策略">
-                {ARTICLE_STRATEGY_LABELS[task.generation_config?.article_strategy || 'auto']}
-              </Descriptions.Item>
-              <Descriptions.Item label="实际策略">
-                {task.article_plan?.resolved_strategy_label || task.article_plan?.resolved_strategy || '待规划'}
-              </Descriptions.Item>
-              <Descriptions.Item label="当前状态">
-                {statusMessage}
-              </Descriptions.Item>
-            </Descriptions>
-          </Card>
-
-          <Card variant="borderless">
-            <div className={styles.sectionTitle}>执行进度</div>
-            <Progress
-              percent={progress}
-              status={progressStatus}
-              strokeColor={{ '0%': '#1677ff', '100%': '#52c41a' }}
-              className={styles.progressBar}
-            />
-
-            <Steps
-              direction="vertical"
-              size="small"
-              items={SKILL_STEPS.map((step) => {
-                const status = getStepStatus(step.key, currentSkill, wsStatus)
-                return {
-                  title: step.title,
-                  description: step.description,
-                  status,
-                  icon: getStepIcon(status),
-                }
-              })}
-            />
-          </Card>
-
-          {wsStatus === 'done' && (
-            <Card variant="borderless" style={{ marginTop: 24 }}>
-              <Result
-                status="success"
-                title="文章生成完毕并已推送到草稿箱"
-                subTitle={
-                  task.draft_info?.url ? (
-                    <a href={task.draft_info.url} target="_blank" rel="noreferrer">
-                      点击查看微信草稿预览链接
-                    </a>
-                  ) : null
-                }
+        <div className={styles.workspaceLayout}>
+          <SectionBlock
+            title="执行空间"
+            aside={<span className={styles.sectionStatus}>{statusMessage}</span>}
+          >
+            <div className={styles.executionLayout}>
+              <StatusRail
+                taskStatus={wsStatus}
+                currentSkill={currentSkill}
+                progress={progress}
+                statusMessage={statusMessage}
+                steps={SKILL_STEPS}
               />
-              {task.generated_article && (
-                <div style={{ marginTop: 32, backgroundColor: '#fafafa', padding: 24, borderRadius: 8 }}>
-                  <Typography>
-                    <Title level={3} style={{ textAlign: 'center' }}>
-                      {task.generated_article.title}
-                    </Title>
-                    <div style={{ textAlign: 'center', marginBottom: 24, color: '#888' }}>
-                      备选标题：{task.generated_article.alt_titles?.join(' / ')}
-                    </div>
-                    <Divider />
-                    <div style={{ whiteSpace: 'pre-wrap', fontSize: 16, lineHeight: 2 }}>
-                      {task.generated_article.content}
-                    </div>
-                  </Typography>
+
+              <SectionBlock title="结果预览">
+                {wsStatus === 'done' ? (
+                  <div className={styles.successStack}>
+                    <Result
+                      status="success"
+                      title="文章生成完毕并已推送到草稿箱"
+                      subTitle={
+                        task?.draft_info?.url ? (
+                          <a href={String(task.draft_info.url)} target="_blank" rel="noreferrer">
+                            查看微信草稿预览链接
+                          </a>
+                        ) : (
+                          '草稿链接可在任务完成后查看。'
+                        )
+                      }
+                    />
+
+                    {generatedArticle?.title || generatedArticle?.content ? (
+                      <article className={styles.articleCard}>
+                        <header className={styles.articleHeader}>
+                          <p className={styles.kicker}>Generated Article</p>
+                          <h3>{generatedArticle?.title || '未返回标题'}</h3>
+                          {generatedArticle?.alt_titles?.length ? (
+                            <p className={styles.altTitles}>
+                              备选标题：{generatedArticle.alt_titles.join(' / ')}
+                            </p>
+                          ) : null}
+                        </header>
+                        <div className={styles.articleContent}>
+                          {generatedArticle?.content || '暂无正文内容。'}
+                        </div>
+                      </article>
+                    ) : (
+                      <Empty description="任务完成，但尚未返回正文内容。" />
+                    )}
+                  </div>
+                ) : wsStatus === 'failed' ? (
+                  <Result
+                    status="error"
+                    title="任务执行失败"
+                    subTitle={statusMessage || task?.error || '未知错误'}
+                    extra={[
+                      <Button key="new" type="primary" onClick={() => navigate('/task')}>
+                        创建新任务
+                      </Button>,
+                      <Button key="retry" icon={<ReloadOutlined />} onClick={handleRetry}>
+                        从断点重新执行
+                      </Button>,
+                    ]}
+                  />
+                ) : (
+                  <div className={styles.pendingState}>
+                    <p className={styles.pendingLead}>任务仍在执行，结果区会持续接收实时更新。</p>
+                    <p className={styles.pendingBody}>
+                      当蓝图、文章正文或草稿链接返回后，这里会优先展示最新可交付结果。
+                    </p>
+                  </div>
+                )}
+              </SectionBlock>
+            </div>
+          </SectionBlock>
+
+          <div className={styles.detailLayout}>
+            <SectionBlock title="任务信息">
+              <dl className={styles.metaGrid}>
+                {metaItems.map((item) => (
+                  <div key={item.label} className={styles.metaItem}>
+                    <dt>{item.label}</dt>
+                    <dd>{item.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </SectionBlock>
+
+            <SectionBlock title="结构信号">
+              <div className={styles.signalStack}>
+                <div className={styles.signalCard}>
+                  <span>读者角色</span>
+                  <strong>{renderValue(task?.generation_config?.audience_roles)}</strong>
                 </div>
-              )}
-            </Card>
-          )}
-
-          {wsStatus === 'failed' && (
-            <Card variant="borderless">
-              <Result
-                status="error"
-                title="任务执行失败"
-                subTitle={statusMessage || task.error || '未知错误'}
-                extra={
-                  <Space>
-                    <Button type="primary" onClick={() => navigate('/task')}>
-                      创建一个新任务
-                    </Button>
-                    <Button icon={<ReloadOutlined />} onClick={handleRetry}>
-                      从断点重新执行
-                    </Button>
-                  </Space>
-                }
-              />
-            </Card>
-          )}
-        </Space>
+                <div className={styles.signalCard}>
+                  <span>意图摘要</span>
+                  <pre>{renderValue(task?.user_intent)}</pre>
+                </div>
+                <div className={styles.signalCard}>
+                  <span>风格画像</span>
+                  <pre>{renderValue(task?.style_profile)}</pre>
+                </div>
+                <div className={styles.signalCard}>
+                  <span>文章蓝图</span>
+                  <pre>{renderValue(task?.article_blueprint)}</pre>
+                </div>
+              </div>
+            </SectionBlock>
+          </div>
+        </div>
       )}
     </div>
   )

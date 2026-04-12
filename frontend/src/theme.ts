@@ -2,74 +2,63 @@ import type { ThemeConfig } from 'antd'
 
 const theme: ThemeConfig = {
   token: {
-    // 主色
-    colorPrimary: '#1677FF',
-    colorSuccess: '#52c41a',
-    colorWarning: '#faad14',
-    colorError: '#ff4d4f',
-    colorInfo: '#1677FF',
-
-    // 字体
+    colorPrimary: '#7dd3fc',
+    colorSuccess: '#34d399',
+    colorWarning: '#fbbf24',
+    colorError: '#f87171',
+    colorInfo: '#7dd3fc',
+    colorBgLayout: '#0b1020',
+    colorBgContainer: '#121a2b',
+    colorBgElevated: '#182235',
+    colorBorder: '#273449',
+    colorText: '#e5edf9',
+    colorTextSecondary: '#a6b4c9',
+    colorTextTertiary: '#71829e',
+    colorTextQuaternary: '#4b5b75',
+    colorFillSecondary: 'rgba(125, 211, 252, 0.08)',
+    colorFillQuaternary: 'rgba(255, 255, 255, 0.04)',
+    colorPrimaryBg: 'rgba(125, 211, 252, 0.12)',
+    colorPrimaryBgHover: 'rgba(125, 211, 252, 0.18)',
+    colorPrimaryBorder: 'rgba(125, 211, 252, 0.32)',
+    colorPrimaryBorderHover: 'rgba(125, 211, 252, 0.5)',
+    colorBorderSecondary: '#1f2a3d',
+    colorSplit: '#1f2a3d',
+    colorLink: '#7dd3fc',
+    colorLinkHover: '#a5f3fc',
     fontFamily:
-      "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, " +
-      "'Noto Sans', sans-serif",
+      "'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif",
+    fontFamilyCode: "'JetBrains Mono', 'SFMono-Regular', Consolas, monospace",
+    fontWeightStrong: 600,
     fontSize: 14,
     fontSizeSM: 12,
     fontSizeLG: 16,
     fontSizeXL: 20,
-    fontSizeHeading1: 30,
-    fontSizeHeading2: 24,
-    fontSizeHeading3: 20,
+    fontSizeHeading1: 32,
+    fontSizeHeading2: 26,
+    fontSizeHeading3: 22,
     fontSizeHeading4: 18,
     fontSizeHeading5: 16,
-
-    // 行高
-    lineHeight: 1.5714,
-
-    // 圆角
-    borderRadius: 6,
-    borderRadiusSM: 4,
-    borderRadiusLG: 8,
-
-    // 间距
-    padding: 16,
-    paddingSM: 8,
-    paddingLG: 24,
-    paddingXL: 32,
-    margin: 16,
-    marginSM: 8,
-    marginLG: 24,
-    marginXL: 32,
-
-    // 高度
-    controlHeight: 32,
-    controlHeightSM: 24,
-    controlHeightLG: 40,
-
-    // 阴影
+    lineHeight: 1.6,
+    borderRadius: 10,
+    borderRadiusSM: 6,
+    borderRadiusLG: 14,
     boxShadow:
-      '0 6px 16px 0 rgba(0,0,0,.08), 0 3px 6px -4px rgba(0,0,0,.12), 0 9px 28px 8px rgba(0,0,0,.05)',
+      '0 18px 40px -24px rgba(2, 8, 23, 0.85), 0 10px 24px -18px rgba(2, 8, 23, 0.7)',
     boxShadowSecondary:
-      '0 6px 16px 0 rgba(0,0,0,.08), 0 3px 6px -4px rgba(0,0,0,.12), 0 9px 28px 8px rgba(0,0,0,.05)',
-
-    // 过渡
+      '0 12px 28px -20px rgba(2, 8, 23, 0.72), 0 6px 16px -10px rgba(2, 8, 23, 0.56)',
     motionDurationFast: '0.1s',
     motionDurationMid: '0.2s',
     motionDurationSlow: '0.3s',
-
-    // 色板
-    colorBgLayout: '#f5f5f5',
-    colorBgContainer: '#ffffff',
   },
   components: {
     Layout: {
-      siderBg: '#001529',
-      triggerBg: '#002140',
+      siderBg: '#0e1627',
+      triggerBg: '#162033',
     },
     Menu: {
-      darkItemBg: '#001529',
-      darkSubMenuItemBg: '#000c17',
-      darkItemSelectedBg: '#1677ff',
+      darkItemBg: '#0e1627',
+      darkSubMenuItemBg: '#0b1020',
+      darkItemSelectedBg: 'rgba(125, 211, 252, 0.18)',
     },
   },
 }
