@@ -20,13 +20,17 @@ beforeEach(() => {
   window.history.replaceState({}, '', '/task')
 })
 
-test('renders the studio landing page for task creation', () => {
+test('renders grouped form sections with list-style guidance', () => {
   render(<App />)
 
   expect(screen.getByText('启动一次完整创作流程')).toBeInTheDocument()
-  expect(screen.getByText('热点灵感')).toBeInTheDocument()
+  expect(screen.getByText('先点灵感标签补齐关键词，再继续填写表单。')).toBeInTheDocument()
+  expect(screen.getByText('基础输入')).toBeInTheDocument()
+  expect(screen.getByText('受众与策略')).toBeInTheDocument()
+  expect(screen.getByText('风格补充')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: '启动创作流程' })).toBeInTheDocument()
-  expect(screen.getByTestId('task-create-grid')).toHaveClass('task-create-grid')
+  expect(screen.queryByText('创作节奏')).not.toBeInTheDocument()
+  expect(screen.queryByText('启动信号')).not.toBeInTheDocument()
 })
 
 test('clicking a hot-topic chip fills the keywords field', async () => {
