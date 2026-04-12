@@ -1,5 +1,8 @@
+import React from 'react'
+import { render, screen } from '@testing-library/react'
 import { act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import App from '../../App'
 import { getAntdTheme } from '../../theme'
 import {
   STORAGE_KEY,
@@ -174,5 +177,28 @@ describe('themeStore helpers', () => {
     expect(darkTheme.token?.colorBgLayout).toBe('#0b1020')
     expect(lightTheme.components?.Layout?.siderBg).toBe('#ffffff')
     expect(darkTheme.components?.Layout?.siderBg).toBe('#0e1627')
+  })
+
+  it('renders the app after applying the stored theme mode', () => {
+    localStorage.setItem(STORAGE_KEY, 'dark')
+
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: () => ({
+        matches: false,
+        media: '(prefers-color-scheme: dark)',
+        onchange: null,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        dispatchEvent: () => false,
+      }),
+    })
+
+    render(React.createElement(App))
+
+    expect(document.documentElement.dataset.theme).toBe('dark')
+    expect(screen.getByText('Brand Studio', { selector: 'strong' })).toBeInTheDocument()
   })
 })
