@@ -96,7 +96,7 @@ test('renders the automation workbench shell and a loaded rule card for schedule
   listAccountsMock.mockResolvedValue([
     {
       account_id: 'account-1',
-      name: '品牌号-A',
+      name: '品牌号 A',
       platform: 'wechat_mp',
       app_id: 'app-id',
       app_secret: 'secret',

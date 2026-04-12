@@ -1,27 +1,27 @@
 import { useEffect, useState } from 'react'
 import {
-  Alert,
+  ApiOutlined,
+  PictureOutlined,
+  ReloadOutlined,
+  RobotOutlined,
+  SaveOutlined,
+  WarningOutlined,
+} from '@ant-design/icons'
+import {
   Button,
   Card,
-  Col,
   Form,
   Input,
-  Row,
   Space,
   Spin,
   Switch,
   Typography,
   message,
 } from 'antd'
-import { ReloadOutlined, SaveOutlined } from '@ant-design/icons'
+import { getModelConfig, updateModelConfig, type ModelConfig } from '@/api'
+import { HeroPanel, MetricCard, SectionBlock, SignalCard } from '@/components/workbench'
 
-import {
-  getModelConfig,
-  updateModelConfig,
-  type ModelConfig,
-} from '@/api'
-
-const { Title, Paragraph, Text } = Typography
+const { Text } = Typography
 
 const EMPTY_CONFIG: ModelConfig = {
   text: {
@@ -42,6 +42,11 @@ export default function ModelConfigPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const imageEnabled = Form.useWatch(['image', 'enabled'], form) ?? false
+  const textModel = Form.useWatch(['text', 'model'], form) ?? EMPTY_CONFIG.text.model
+  const imageModel = Form.useWatch(['image', 'model'], form) ?? EMPTY_CONFIG.image.model
+  const textApiKey = Form.useWatch(['text', 'api_key'], form) ?? ''
+  const imageApiKey = Form.useWatch(['image', 'api_key'], form) ?? ''
+  const configuredKeyCount = (textApiKey ? 1 : 0) + (imageEnabled && imageApiKey ? 1 : 0)
 
   const loadConfig = async () => {
     setLoading(true)
@@ -51,13 +56,13 @@ export default function ModelConfigPage() {
         text: {
           api_key: config.text.api_key || '',
           base_url: config.text.base_url || '',
-          model: config.text.model || 'gpt-4o',
+          model: config.text.model || EMPTY_CONFIG.text.model,
         },
         image: {
           enabled: Boolean(config.image.enabled),
           api_key: config.image.api_key || '',
           base_url: config.image.base_url || '',
-          model: config.image.model || 'dall-e-3',
+          model: config.image.model || EMPTY_CONFIG.image.model,
         },
       })
     } catch (err: any) {
@@ -69,7 +74,7 @@ export default function ModelConfigPage() {
   }
 
   useEffect(() => {
-    loadConfig()
+    void loadConfig()
   }, [])
 
   const handleSave = async (values: ModelConfig) => {
@@ -79,13 +84,13 @@ export default function ModelConfigPage() {
         text: {
           api_key: values.text.api_key?.trim() || '',
           base_url: values.text.base_url?.trim() || null,
-          model: values.text.model?.trim() || 'gpt-4o',
+          model: values.text.model?.trim() || EMPTY_CONFIG.text.model,
         },
         image: {
           enabled: Boolean(values.image.enabled),
           api_key: values.image.api_key?.trim() || '',
           base_url: values.image.base_url?.trim() || null,
-          model: values.image.model?.trim() || 'dall-e-3',
+          model: values.image.model?.trim() || EMPTY_CONFIG.image.model,
         },
       }
       const updated = await updateModelConfig(payload)
@@ -93,13 +98,13 @@ export default function ModelConfigPage() {
         text: {
           api_key: updated.text.api_key || '',
           base_url: updated.text.base_url || '',
-          model: updated.text.model || 'gpt-4o',
+          model: updated.text.model || EMPTY_CONFIG.text.model,
         },
         image: {
           enabled: Boolean(updated.image.enabled),
           api_key: updated.image.api_key || '',
           base_url: updated.image.base_url || '',
-          model: updated.image.model || 'dall-e-3',
+          model: updated.image.model || EMPTY_CONFIG.image.model,
         },
       })
       message.success('模型配置已保存')
@@ -112,113 +117,157 @@ export default function ModelConfigPage() {
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: '100px 0' }}>
-        <Spin size="large" tip="加载模型配置中..." />
+      <div className="backstage-loading">
+        <Space direction="vertical" size={12} align="center">
+          <Spin size="large" />
+          <Text type="secondary">正在同步模型配置…</Text>
+        </Space>
       </div>
     )
   }
 
   return (
-    <div style={{ maxWidth: 1400, margin: '24px auto', padding: '0 24px' }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 20 }}>
-        <Col>
-          <Title level={2} style={{ margin: 0 }}>模型配置</Title>
-          <Paragraph type="secondary" style={{ margin: '8px 0 0' }}>
-            分别配置文本生成和图像生成的模型、网关地址与 API Key。保存后，文章生成与图片生成节点会直接读取这里的配置。
-          </Paragraph>
-        </Col>
-        <Col>
-          <Space size={12}>
-            <Button icon={<ReloadOutlined />} onClick={loadConfig}>重新加载</Button>
+    <div className="backstage-page">
+      <HeroPanel
+        eyebrow="System Backstage"
+        title="模型接入台"
+        description="统一管理文本与图像模型的密钥、网关和默认型号。"
+      >
+        <div className="backstage-metric-grid">
+          <MetricCard
+            label="Text"
+            value={textModel || EMPTY_CONFIG.text.model}
+            hint={textApiKey ? '文本生成链路已配置密钥' : '等待填入文本模型 API Key'}
+          />
+          <MetricCard
+            label="Image"
+            value={imageEnabled ? imageModel || EMPTY_CONFIG.image.model : 'Disabled'}
+            hint={imageEnabled ? '图像生成链路已启用' : '当前使用回退图像来源'}
+          />
+          <MetricCard
+            label="Keys"
+            value={String(configuredKeyCount)}
+            hint="已填写的模型密钥数量"
+          />
+        </div>
+      </HeroPanel>
+
+      <SectionBlock
+        title="保存操作"
+        aside={
+          <Space wrap>
+            <Button icon={<ReloadOutlined />} onClick={() => void loadConfig()}>
+              重新加载
+            </Button>
             <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={() => form.submit()}>
               保存配置
             </Button>
           </Space>
-        </Col>
-      </Row>
-
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 20 }}
-        message="配置说明"
-        description="文本模型用于策略规划和文章生成。图像模型用于封面图和正文插图生成；关闭图像生成后，系统会继续回退到网页抓取图片。"
-      />
-
-      <Form<ModelConfig>
-        form={form}
-        layout="vertical"
-        initialValues={EMPTY_CONFIG}
-        onFinish={handleSave}
+        }
       >
-        <Row gutter={24}>
-          <Col xs={24} xl={12}>
-            <Card
-              title="文本模型"
-              extra={<Text type="secondary">用于文章规划与正文生成</Text>}
+        <div className="backstage-grid backstage-grid--double">
+          <Form<ModelConfig> form={form} layout="vertical" initialValues={EMPTY_CONFIG} onFinish={handleSave}>
+            <div className="backstage-stack">
+              <Card
+                className="backstage-surface-card"
+                title="文本生成模型"
+                extra={<Text type="secondary">用于策略规划与正文生成</Text>}
+              >
+                <Form.Item
+                  label="API Key"
+                  name={['text', 'api_key']}
+                  rules={[{ required: true, message: '请输入文本模型 API Key' }]}
+                >
+                  <Input.Password placeholder="输入文本模型 API Key" />
+                </Form.Item>
+
+                <Form.Item
+                  label="Base URL"
+                  name={['text', 'base_url']}
+                  tooltip="兼容 OpenAI 接口的网关地址，可留空使用默认地址"
+                >
+                  <Input placeholder="例如：https://api.example.com/v1" />
+                </Form.Item>
+
+                <Form.Item
+                  label="模型名称"
+                  name={['text', 'model']}
+                  rules={[{ required: true, message: '请输入文本模型名称' }]}
+                >
+                  <Input placeholder="例如：gpt-4o / qwen-max / deepseek-chat" />
+                </Form.Item>
+              </Card>
+
+              <Card
+                className="backstage-surface-card"
+                title="图像生成模型"
+                extra={<Text type="secondary">用于封面图与插图生成</Text>}
+              >
+                <Form.Item label="启用图像生成" name={['image', 'enabled']} valuePropName="checked">
+                  <Switch checkedChildren="已启用" unCheckedChildren="已关闭" />
+                </Form.Item>
+
+                <Form.Item
+                  label="API Key"
+                  name={['image', 'api_key']}
+                  rules={imageEnabled ? [{ required: true, message: '启用图像生成时必须填写 API Key' }] : []}
+                >
+                  <Input.Password placeholder="输入图像模型 API Key" disabled={!imageEnabled} />
+                </Form.Item>
+
+                <Form.Item
+                  label="Base URL"
+                  name={['image', 'base_url']}
+                  tooltip="兼容 OpenAI Images 或 Chat Completions 图像模型的网关地址"
+                >
+                  <Input placeholder="例如：https://images.example.com/v1" disabled={!imageEnabled} />
+                </Form.Item>
+
+                <Form.Item
+                  label="模型名称"
+                  name={['image', 'model']}
+                  rules={imageEnabled ? [{ required: true, message: '请输入图像模型名称' }] : []}
+                >
+                  <Input
+                    placeholder="例如：dall-e-3 / flux / seedream / gemini-3.1-flash-image-preview"
+                    disabled={!imageEnabled}
+                  />
+                </Form.Item>
+              </Card>
+            </div>
+          </Form>
+
+          <div className="backstage-stack">
+            <SectionBlock
+              title="接入提醒"
+              aside={<Text type="secondary">只重构后台呈现，不改变接口字段与保存逻辑。</Text>}
             >
-              <Form.Item
-                label="API Key"
-                name={['text', 'api_key']}
-                rules={[{ required: true, message: '请输入文本模型 API Key' }]}
-              >
-                <Input.Password placeholder="输入文本模型 API Key" />
-              </Form.Item>
-
-              <Form.Item
-                label="Base URL"
-                name={['text', 'base_url']}
-                tooltip="兼容 OpenAI 接口的网关地址，可留空使用默认地址"
-              >
-                <Input placeholder="例如：https://api.example.com/v1" />
-              </Form.Item>
-
-              <Form.Item
-                label="模型名称"
-                name={['text', 'model']}
-                rules={[{ required: true, message: '请输入文本模型名称' }]}
-              >
-                <Input placeholder="例如：gpt-4o / qwen-max / deepseek-chat" />
-              </Form.Item>
-            </Card>
-          </Col>
-
-          <Col xs={24} xl={12}>
-            <Card
-              title="图像模型"
-              extra={<Text type="secondary">用于封面图与插图生成</Text>}
-            >
-              <Form.Item label="启用图像生成" name={['image', 'enabled']} valuePropName="checked">
-                <Switch checkedChildren="已启用" unCheckedChildren="已关闭" />
-              </Form.Item>
-
-              <Form.Item
-                label="API Key"
-                name={['image', 'api_key']}
-                rules={imageEnabled ? [{ required: true, message: '启用图像生成时必须填写 API Key' }] : []}
-              >
-                <Input.Password placeholder="输入图像模型 API Key" disabled={!imageEnabled} />
-              </Form.Item>
-
-              <Form.Item
-                label="Base URL"
-                name={['image', 'base_url']}
-                tooltip="兼容 OpenAI Images 或 Chat Completions 图像模型的网关地址"
-              >
-                <Input placeholder="例如：https://images.example.com/v1" disabled={!imageEnabled} />
-              </Form.Item>
-
-              <Form.Item
-                label="模型名称"
-                name={['image', 'model']}
-                rules={imageEnabled ? [{ required: true, message: '请输入图像模型名称' }] : []}
-              >
-                <Input placeholder="例如：dall-e-3 / flux / seedream / gemini-3.1-flash-image-preview" disabled={!imageEnabled} />
-              </Form.Item>
-            </Card>
-          </Col>
-        </Row>
-      </Form>
+              <div className="backstage-note-list">
+                <SignalCard
+                  icon={<RobotOutlined />}
+                  title="文本模型"
+                  description="负责选题拆解、结构规划与文章正文生成，是后台工作流的核心输入。"
+                />
+                <SignalCard
+                  icon={<PictureOutlined />}
+                  title="图像模型"
+                  description="关闭后仍可继续使用页面抓取或其他回退逻辑，不会阻断文章生成。"
+                />
+                <SignalCard
+                  icon={<ApiOutlined />}
+                  title="网关地址"
+                  description="仅在你需要接入兼容 OpenAI 协议的中转层时填写，留空时走默认地址。"
+                />
+                <SignalCard
+                  icon={<WarningOutlined />}
+                  title="密钥治理"
+                  description="建议按环境维护不同密钥，避免测试与生产流量混用。"
+                />
+              </div>
+            </SectionBlock>
+          </div>
+        </div>
+      </SectionBlock>
     </div>
   )
 }

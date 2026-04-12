@@ -134,12 +134,12 @@ export default function TaskCreate() {
             <SignalCard
               icon={<RadarChartOutlined />}
               title="受众视角稳定输出"
-              description="目标角色直接复用系统预设，避免新页面提交出兼容性错误的受众值。"
+              description="目标角色直接复用系统预设，避免新页面提交时出现兼容性偏差。"
             />
             <SignalCard
               icon={<BulbOutlined />}
               title="风格补充按需介入"
-              description="你可以保持系统自动判断，也可以补充期望语气、结构和参考范式。"
+              description="你可以保持系统自动判断，也可以补充语气、结构和参考范式。"
             />
           </SectionBlock>
         </div>
@@ -213,7 +213,7 @@ export default function TaskCreate() {
               <Form.Item
                 name="style_hint"
                 label="风格补充（可选）"
-                extra="不填写时系统自动判断；填写后会作为语气、结构和叙事重点的补充提示。"
+                extra="不填写时系统会自动判断；填写后会作为语气、结构和叙事重点的补充提示。"
               >
                 <Input.TextArea
                   rows={3}

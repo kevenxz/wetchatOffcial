@@ -1,12 +1,15 @@
-﻿import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { render, screen } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
-import type { TaskResponse } from '@/api'
+import type { ModelConfig, TaskResponse } from '@/api'
 import History from '@/pages/History'
+import ModelConfigPage from '@/pages/ModelConfig'
 
-const { listTasksMock, deleteTaskMock } = vi.hoisted(() => ({
+const { listTasksMock, deleteTaskMock, getModelConfigMock, updateModelConfigMock } = vi.hoisted(() => ({
   listTasksMock: vi.fn<() => Promise<TaskResponse[]>>(),
   deleteTaskMock: vi.fn(),
+  getModelConfigMock: vi.fn<() => Promise<ModelConfig>>(),
+  updateModelConfigMock: vi.fn(),
 }))
 
 vi.mock('@/api', async () => {
@@ -15,6 +18,8 @@ vi.mock('@/api', async () => {
     ...actual,
     listTasks: listTasksMock,
     deleteTask: deleteTaskMock,
+    getModelConfig: getModelConfigMock,
+    updateModelConfig: updateModelConfigMock,
   }
 })
 
@@ -22,6 +27,32 @@ beforeEach(() => {
   vi.clearAllMocks()
   listTasksMock.mockResolvedValue([])
   deleteTaskMock.mockResolvedValue(undefined)
+  getModelConfigMock.mockResolvedValue({
+    text: {
+      api_key: '',
+      base_url: '',
+      model: 'gpt-4o',
+    },
+    image: {
+      enabled: false,
+      api_key: '',
+      base_url: '',
+      model: 'dall-e-3',
+    },
+  })
+  updateModelConfigMock.mockResolvedValue({
+    text: {
+      api_key: '',
+      base_url: '',
+      model: 'gpt-4o',
+    },
+    image: {
+      enabled: false,
+      api_key: '',
+      base_url: '',
+      model: 'dall-e-3',
+    },
+  })
 
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
@@ -77,4 +108,13 @@ test('renders the history page with paginated card history', async () => {
   expect(screen.getByText('卡片视图')).toBeInTheDocument()
   expect(screen.getByText('task-0')).toBeInTheDocument()
   expect(screen.queryByText('task-8')).not.toBeInTheDocument()
+})
+
+test('renders the model backstage page with readable shared copy', async () => {
+  render(<ModelConfigPage />)
+
+  expect(await screen.findByText('模型接入台')).toBeInTheDocument()
+  expect(screen.getByText('统一管理文本与图像模型的密钥、网关和默认型号。')).toBeInTheDocument()
+  expect(screen.getByText('文本生成模型')).toBeInTheDocument()
+  expect(screen.queryByText(/鍔犺浇|妯″瀷|閰嶇疆/)).not.toBeInTheDocument()
 })
