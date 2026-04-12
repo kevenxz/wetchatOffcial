@@ -44,6 +44,50 @@ describe('ThemeModeSwitch', () => {
     expect(screen.getByRole('menuitemradio', { name: /深色模式/i })).toBeInTheDocument()
   })
 
+  it('opens on ArrowDown and focuses the first menu item', async () => {
+    const user = userEvent.setup()
+
+    act(() => {
+      useThemeStore.setState({
+        mode: 'light',
+        resolvedTheme: 'light',
+        initialized: true,
+      })
+    })
+
+    renderWithRouter(<WorkbenchShell />, { route: '/task' })
+
+    const trigger = screen.getByRole('button', { name: /主题模式/i })
+    trigger.focus()
+    await user.keyboard('{ArrowDown}')
+
+    const systemItem = screen.getByRole('menuitemradio', { name: /跟随系统/i })
+    expect(systemItem).toHaveFocus()
+    expect(screen.getByRole('menuitemradio', { name: /浅色模式/i })).toHaveAttribute('aria-checked', 'true')
+  })
+
+  it('opens on ArrowUp and focuses the last menu item', async () => {
+    const user = userEvent.setup()
+
+    act(() => {
+      useThemeStore.setState({
+        mode: 'light',
+        resolvedTheme: 'light',
+        initialized: true,
+      })
+    })
+
+    renderWithRouter(<WorkbenchShell />, { route: '/task' })
+
+    const trigger = screen.getByRole('button', { name: /主题模式/i })
+    trigger.focus()
+    await user.keyboard('{ArrowUp}')
+
+    const darkItem = screen.getByRole('menuitemradio', { name: /深色模式/i })
+    expect(darkItem).toHaveFocus()
+    expect(screen.getByRole('menuitemradio', { name: /浅色模式/i })).toHaveAttribute('aria-checked', 'true')
+  })
+
   it('moves focus into the popup and restores it to the trigger when closed with Escape', async () => {
     const user = userEvent.setup()
 
@@ -58,13 +102,14 @@ describe('ThemeModeSwitch', () => {
     renderWithRouter(<WorkbenchShell />, { route: '/task' })
 
     const trigger = screen.getByRole('button', { name: /主题模式/i })
-    await user.click(trigger)
+    trigger.focus()
+    await user.keyboard('{ArrowDown}')
 
-    const lightItem = screen.getByRole('menuitemradio', { name: /浅色模式/i })
-    expect(lightItem).toHaveFocus()
+    const systemItem = screen.getByRole('menuitemradio', { name: /跟随系统/i })
+    expect(systemItem).toHaveFocus()
 
     await user.keyboard('{ArrowDown}')
-    expect(screen.getByRole('menuitemradio', { name: /深色模式/i })).toHaveFocus()
+    expect(screen.getByRole('menuitemradio', { name: /浅色模式/i })).toHaveFocus()
 
     await user.keyboard('{Escape}')
 

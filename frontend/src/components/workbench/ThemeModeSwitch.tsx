@@ -1,6 +1,12 @@
 import { CheckOutlined, DesktopOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons'
 import { Button } from 'antd'
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
 import { useThemeStore, type ThemeMode } from '@/store/themeStore'
 import styles from './ThemeModeSwitch.module.css'
 
@@ -18,17 +24,21 @@ const modeIconMap: Record<ThemeMode, JSX.Element> = {
 
 const themeModes: ThemeMode[] = ['system', 'light', 'dark']
 
+type OpenDirection = 'first' | 'last' | 'selected' | null
+
 export default function ThemeModeSwitch() {
   const mode = useThemeStore((state) => state.mode)
   const setMode = useThemeStore((state) => state.setMode)
   const [open, setOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
+  const [openDirection, setOpenDirection] = useState<OpenDirection>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   const closeMenu = () => {
     setOpen(false)
+    setOpenDirection(null)
     triggerRef.current?.focus()
   }
 
@@ -55,9 +65,19 @@ export default function ThemeModeSwitch() {
       return
     }
 
+    if (openDirection === 'first') {
+      setActiveIndex(0)
+      return
+    }
+
+    if (openDirection === 'last') {
+      setActiveIndex(themeModes.length - 1)
+      return
+    }
+
     const selectedIndex = themeModes.indexOf(mode)
     setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0)
-  }, [mode, open])
+  }, [mode, open, openDirection])
 
   useLayoutEffect(() => {
     if (!open) {
@@ -116,6 +136,7 @@ export default function ThemeModeSwitch() {
   const handleTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
+      setOpenDirection(event.key === 'ArrowDown' ? 'first' : 'last')
       setOpen(true)
     }
   }
@@ -129,7 +150,10 @@ export default function ThemeModeSwitch() {
         aria-label="主题模式"
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          setOpenDirection('selected')
+          setOpen((current) => !current)
+        }}
         onKeyDown={handleTriggerKeyDown}
       >
         <span className={styles.triggerIcon} aria-hidden="true">
