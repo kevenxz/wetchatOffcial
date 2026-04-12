@@ -1,0 +1,41 @@
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: auto;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.62);
+  box-shadow: var(--shadow-sm);
+  color: var(--text-primary);
+}
+
+.trigger:hover,
+.trigger:focus-visible {
+  border-color: var(--border-color-strong);
+  color: var(--text-primary);
+  background: rgba(15, 23, 42, 0.74);
+}
+
+.triggerIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary);
+  font-size: 1rem;
+}
+
+.triggerLabel {
+  color: var(--text-secondary);
+  font-size: var(--font-xs);
+}
+
+.triggerValue {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.menuCheck {
+  color: var(--color-primary);
+}

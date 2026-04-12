@@ -103,6 +103,11 @@
   gap: 24px;
 }
 
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .overview {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 320px;

@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { navigationItems, resolveRouteMeta } from '@/config/navigation'
 import HeroPanel from './HeroPanel'
 import MetricCard from './MetricCard'
+import ThemeModeSwitch from './ThemeModeSwitch'
 import SectionBlock from './SectionBlock'
 import SignalCard from './SignalCard'
 import styles from './WorkbenchShell.module.css'
@@ -44,6 +45,9 @@ export default function WorkbenchShell() {
 
       <main className={styles.main}>
         <div className={styles.frame}>
+          <div className={styles.toolbar}>
+            <ThemeModeSwitch />
+          </div>
           <HeroPanel
             eyebrow={routeMeta.contextEyebrow}
             title={routeMeta.contextTitle}
