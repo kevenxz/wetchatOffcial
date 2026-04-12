@@ -1,46 +1,35 @@
 .panel {
-  position: relative;
-  overflow: hidden;
   display: grid;
-  gap: 18px;
-  padding: 28px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 28px;
-  background:
-    radial-gradient(circle at top right, rgba(56, 189, 248, 0.18), transparent 30%),
-    linear-gradient(145deg, rgba(15, 23, 42, 0.92), rgba(15, 23, 42, 0.72));
-  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+  gap: 10px;
+  padding: 16px 20px;
+  border: 1px solid var(--app-border);
+  border-radius: 18px;
+  background: var(--app-surface);
+  box-shadow: none;
 }
 
 .panel::after {
-  content: '';
-  position: absolute;
-  inset: auto -60px -80px auto;
-  width: 180px;
-  height: 180px;
-  border-radius: 999px;
-  background: rgba(14, 165, 233, 0.12);
-  filter: blur(8px);
+  content: none;
 }
 
 .eyebrow {
-  position: relative;
-  z-index: 1;
+  margin: 0;
   font-size: 0.75rem;
-  letter-spacing: 0.24em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--text-tertiary);
+  color: var(--app-text-tertiary);
 }
 
 .title {
-  position: relative;
-  z-index: 1;
-  font-size: clamp(2rem, 3vw, 3rem);
+  margin: 0;
+  font-size: clamp(1.5rem, 2vw, 1.75rem);
+  line-height: 1.2;
+  color: var(--app-text);
 }
 
 .description {
-  position: relative;
-  z-index: 1;
-  max-width: 60ch;
-  color: var(--text-secondary);
+  margin: 0;
+  max-width: none;
+  font-size: 0.8125rem;
+  color: var(--app-text-secondary);
 }

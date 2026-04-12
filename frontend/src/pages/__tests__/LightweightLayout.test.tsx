@@ -45,6 +45,26 @@ test('renders a fixed 216px sidebar shell with compact main spacing', () => {
   expect(frameStyle.getPropertyValue('gap')).toBe('16px')
 })
 
+test('renders a compact page header instead of a tall hero panel', () => {
+  const { container } = renderWithRouter(<WorkbenchShell />, { route: '/task', theme: 'light' })
+
+  const panel = container.querySelector('[class*="panel"]') as HTMLElement | null
+  const title = panel?.querySelector('h1') as HTMLElement | null
+
+  expect(panel).toBeInTheDocument()
+  expect(title).toBeInTheDocument()
+
+  const panelStyle = getComputedStyle(panel as HTMLElement)
+  const titleStyle = getComputedStyle(title as HTMLElement)
+
+  expect(panelStyle.paddingTop).toBe('16px')
+  expect(panelStyle.paddingRight).toBe('20px')
+  expect(panelStyle.paddingBottom).toBe('16px')
+  expect(panelStyle.paddingLeft).toBe('20px')
+  expect(titleStyle.marginTop).toBe('0px')
+  expect(titleStyle.marginBottom).toBe('0px')
+})
+
 test('collapses the shell to a single column at the breakpoint', () => {
   const sheet = Array.from(document.styleSheets).find((candidate) => {
     try {
