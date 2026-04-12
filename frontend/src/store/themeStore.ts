@@ -49,6 +49,20 @@ export function createSystemThemeListener(
   }
 }
 
+export function bootstrapThemeStore(systemPrefersDark: boolean) {
+  const mode = getStoredThemeMode()
+  const resolvedTheme = resolveThemeMode(mode, systemPrefersDark)
+
+  applyResolvedTheme(resolvedTheme)
+  useThemeStore.setState({
+    mode,
+    resolvedTheme,
+    initialized: true,
+  })
+
+  return resolvedTheme
+}
+
 type ThemeState = {
   mode: ThemeMode
   resolvedTheme: ResolvedTheme

@@ -13,18 +13,15 @@ import TaskCreate from '@/pages/TaskCreate'
 import TaskDetail from '@/pages/TaskDetail'
 
 export default function App() {
-  const initialize = useThemeStore((state) => state.initialize)
   const syncSystemTheme = useThemeStore((state) => state.syncSystemTheme)
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
 
-    initialize(mediaQuery.matches)
-
     return createSystemThemeListener(mediaQuery, (event) => {
       syncSystemTheme(event.matches)
     })
-  }, [initialize, syncSystemTheme])
+  }, [syncSystemTheme])
 
   return (
     <BrowserRouter>

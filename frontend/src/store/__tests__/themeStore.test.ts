@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../../App'
 import { getAntdTheme } from '../../theme'
 import {
+  bootstrapThemeStore,
   STORAGE_KEY,
   applyResolvedTheme,
   createSystemThemeListener,
@@ -179,7 +180,7 @@ describe('themeStore helpers', () => {
     expect(darkTheme.components?.Layout?.siderBg).toBe('#0e1627')
   })
 
-  it('renders the app after applying the stored theme mode', () => {
+  it('boots the stored theme before the app shell renders', () => {
     localStorage.setItem(STORAGE_KEY, 'dark')
 
     Object.defineProperty(window, 'matchMedia', {
@@ -195,6 +196,10 @@ describe('themeStore helpers', () => {
         dispatchEvent: () => false,
       }),
     })
+
+    expect(bootstrapThemeStore(false)).toBe('dark')
+    expect(document.documentElement.dataset.theme).toBe('dark')
+    expect(useThemeStore.getState().resolvedTheme).toBe('dark')
 
     render(React.createElement(App))
 

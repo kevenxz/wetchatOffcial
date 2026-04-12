@@ -4,7 +4,7 @@ import { ConfigProvider } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import App from './App'
 import { getAntdTheme } from './theme'
-import { useThemeStore } from './store/themeStore'
+import { bootstrapThemeStore, useThemeStore } from './store/themeStore'
 import './styles/global.css'
 
 function ThemeBootstrap() {
@@ -16,6 +16,9 @@ function ThemeBootstrap() {
     </ConfigProvider>
   )
 }
+
+const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+bootstrapThemeStore(systemPrefersDark)
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
