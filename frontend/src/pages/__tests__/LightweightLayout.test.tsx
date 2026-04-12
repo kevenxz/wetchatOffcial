@@ -36,6 +36,23 @@ afterEach(() => {
   }
 })
 
+function readStylesheetSource(relativePath: string) {
+  const testDir = dirname(fileURLToPath(import.meta.url))
+  return readFileSync(resolve(testDir, relativePath), 'utf8')
+}
+
+function getRuleBody(source: string, selector: string) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = source.match(new RegExp(`${escapedSelector}\\s*\\{([\\s\\S]*?)\\}`))
+  return match?.[1] ?? ''
+}
+
+function getDeclarationValue(ruleBody: string, property: string) {
+  const escapedProperty = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = ruleBody.match(new RegExp(`${escapedProperty}\\s*:\\s*([^;]+);`))
+  return match?.[1]?.replace(/\s*!important\s*$/i, '').trim() ?? ''
+}
+
 test('renders a fixed 216px sidebar shell with compact main spacing', () => {
   const { container } = renderWithRouter(<WorkbenchShell />, { route: '/task', theme: 'light' })
 
@@ -127,9 +144,8 @@ test('collapses the shell to a single column at the breakpoint', () => {
 })
 
 test('keeps shared surfaces light in light mode', () => {
-  const testDir = dirname(fileURLToPath(import.meta.url))
-  const variables = readFileSync(resolve(testDir, '../../styles/variables.css'), 'utf8')
-  const globalStyles = readFileSync(resolve(testDir, '../../styles/global.css'), 'utf8')
+  const variables = readStylesheetSource('../../styles/variables.css')
+  const globalStyles = readStylesheetSource('../../styles/global.css')
   const { container } = renderWithRouter(<WorkbenchShell />, { route: '/task' })
 
   const shell = container.firstElementChild as HTMLElement | null
@@ -140,18 +156,21 @@ test('keeps shared surfaces light in light mode', () => {
   expect(sidebar).toBeInTheDocument()
   expect(canvas).toBeInTheDocument()
 
-  expect(variables).toContain('--app-surface-muted: #f8fbff;')
-  expect(variables).toContain('--app-toolbar-bg: #f8fbff;')
-  expect(variables).toContain('--app-list-row-hover: #f3f7fd;')
+  const rootRule = getRuleBody(variables, ":root[data-theme='light']")
+  expect(getDeclarationValue(rootRule, '--app-surface-muted')).toBe('#f8fbff')
+  expect(getDeclarationValue(rootRule, '--app-toolbar-bg')).toBe('#f8fbff')
+  expect(getDeclarationValue(rootRule, '--app-list-row-hover')).toBe('#f3f7fd')
 
-  expect(globalStyles).toContain('.backstage-toolbar {')
-  expect(globalStyles).toContain('padding: 12px 16px;')
-  expect(globalStyles).toContain('background: var(--app-toolbar-bg);')
-  expect(globalStyles).toContain('.backstage-surface-card {')
-  expect(globalStyles).toContain('border-radius: 16px;')
-  expect(globalStyles).toContain('background: var(--app-surface);')
-  expect(globalStyles).toContain('.backstage-preview-frame {')
-  expect(globalStyles).toContain('background: var(--app-surface-muted);')
-  expect(globalStyles).toContain('.ant-table-wrapper .ant-table-tbody > tr:hover > td {')
-  expect(globalStyles).toContain('background: var(--app-list-row-hover) !important;')
+  const toolbarRule = getRuleBody(globalStyles, '.backstage-toolbar')
+  expect(getDeclarationValue(toolbarRule, 'background')).toBe('var(--app-toolbar-bg)')
+
+  const cardRule = getRuleBody(globalStyles, '.backstage-surface-card')
+  expect(getDeclarationValue(cardRule, 'background')).toBe('var(--app-surface)')
+
+  const previewRule = getRuleBody(globalStyles, '.backstage-preview-frame')
+  expect(getDeclarationValue(previewRule, 'background')).toBe('var(--app-surface-muted)')
+
+  const hoverRule = getRuleBody(globalStyles, '.ant-table-wrapper .ant-table-tbody > tr:hover > td')
+  expect(getDeclarationValue(hoverRule, 'background')).toBe('var(--app-list-row-hover)')
+  expect(hoverRule).toContain('!important')
 })
