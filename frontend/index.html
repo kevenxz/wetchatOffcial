@@ -4,6 +4,31 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      ;(() => {
+        const storageKey = 'app-theme-mode'
+        const root = document.documentElement
+
+        const getStoredMode = () => {
+          try {
+            const value = window.localStorage.getItem(storageKey)
+            return value === 'system' || value === 'light' || value === 'dark' ? value : 'system'
+          } catch {
+            return 'system'
+          }
+        }
+
+        const prefersDark =
+          typeof window.matchMedia === 'function' &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches
+
+        const mode = getStoredMode()
+        const theme = mode === 'dark' || (mode === 'system' && prefersDark) ? 'dark' : 'light'
+
+        root.dataset.theme = theme
+        root.style.colorScheme = theme
+      })()
+    </script>
     <title>微信公众号文章自动发布系统</title>
   </head>
   <body>

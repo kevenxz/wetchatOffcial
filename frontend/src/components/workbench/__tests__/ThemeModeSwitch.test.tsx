@@ -345,4 +345,36 @@ describe('ThemeModeSwitch', () => {
       '#121a2b',
     )
   })
+
+  it('uses semantic theme variables for the trigger surface in light mode', () => {
+    const getCssRuleForToken = (token: string) => {
+      for (const sheet of Array.from(document.styleSheets)) {
+        let rules: CSSRuleList
+
+        try {
+          rules = sheet.cssRules
+        } catch {
+          continue
+        }
+
+        const matchingRule = Array.from(rules).find(
+          (rule) => 'cssText' in rule && rule.cssText.includes(`_${token}_`),
+        )
+
+        if (matchingRule && 'cssText' in matchingRule) {
+          return matchingRule.cssText
+        }
+      }
+
+      throw new Error(`Unable to find CSS rule for token ${token}`)
+    }
+
+    const triggerRule = getCssRuleForToken('trigger')
+
+    expect(triggerRule).toContain('var(--bg-elevated)')
+    expect(triggerRule).toContain('var(--border-color)')
+    expect(triggerRule).toContain('var(--shadow-sm)')
+    expect(triggerRule).not.toContain('rgba(15, 23, 42, 0.62)')
+    expect(triggerRule).not.toContain('rgba(15, 23, 42, 0.74)')
+  })
 })

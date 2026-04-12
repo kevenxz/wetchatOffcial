@@ -11,7 +11,7 @@
   padding: 10px 14px;
   border: 1px solid var(--border-color);
   border-radius: 999px;
-  background: rgba(15, 23, 42, 0.62);
+  background: var(--bg-elevated);
   box-shadow: var(--shadow-sm);
   color: var(--text-primary);
 }
@@ -20,7 +20,7 @@
 .trigger:focus-visible {
   border-color: var(--border-color-strong);
   color: var(--text-primary);
-  background: rgba(15, 23, 42, 0.74);
+  background: var(--bg-elevated);
 }
 
 .triggerIcon {
