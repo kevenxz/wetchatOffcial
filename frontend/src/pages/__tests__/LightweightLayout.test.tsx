@@ -1,12 +1,37 @@
 import { render, screen } from '@testing-library/react'
-import { beforeEach, afterEach, expect, test } from 'vitest'
+import { beforeEach, afterEach, expect, test, vi } from 'vitest'
 import HeroPanel from '@/components/workbench/HeroPanel'
 import WorkbenchShell from '@/components/workbench/WorkbenchShell'
 import styles from '@/components/workbench/WorkbenchShell.module.css'
+import AccountConfigPage from '@/pages/AccountConfig'
+import ModelConfigPage from '@/pages/ModelConfig'
+import StyleConfigPage from '@/pages/StyleConfig'
 import { renderWithRouter } from '@/test/renderWithRouter'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+const {
+  getStyleConfigMock,
+  getPresetThemesMock,
+  getCustomThemesMock,
+  getModelConfigMock,
+  listAccountsMock,
+} = vi.hoisted(() => ({
+  getStyleConfigMock: vi.fn(),
+  getPresetThemesMock: vi.fn(),
+  getCustomThemesMock: vi.fn(),
+  getModelConfigMock: vi.fn(),
+  listAccountsMock: vi.fn(),
+}))
+
+vi.mock('@/api', () => ({
+  getStyleConfig: getStyleConfigMock,
+  getPresetThemes: getPresetThemesMock,
+  getCustomThemes: getCustomThemesMock,
+  getModelConfig: getModelConfigMock,
+  listAccounts: listAccountsMock,
+}))
 
 let previousTheme: string | undefined
 
@@ -26,6 +51,14 @@ beforeEach(() => {
       dispatchEvent: () => false,
     }),
   })
+  getStyleConfigMock.mockResolvedValue({})
+  getPresetThemesMock.mockResolvedValue({})
+  getCustomThemesMock.mockResolvedValue({})
+  getModelConfigMock.mockResolvedValue({
+    text: { api_key: '', base_url: '', model: 'gpt-4o' },
+    image: { enabled: false, api_key: '', base_url: '', model: 'dall-e-3' },
+  })
+  listAccountsMock.mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -173,4 +206,30 @@ test('keeps shared surfaces light in light mode', () => {
   const hoverRule = getRuleBody(globalStyles, '.ant-table-wrapper .ant-table-tbody > tr:hover > td')
   expect(getDeclarationValue(hoverRule, 'background')).toBe('var(--app-list-row-hover)')
   expect(hoverRule).toContain('!important')
+})
+
+test('renders compact grouped config pages without metric-card emphasis', async () => {
+  const styleConfig = renderWithRouter(<StyleConfigPage />, { route: '/settings' })
+  const modelConfig = renderWithRouter(<ModelConfigPage />, { route: '/models' })
+  const accountConfig = renderWithRouter(<AccountConfigPage />, { route: '/accounts' })
+
+  expect(await screen.findByText('品牌样式管理台')).toBeInTheDocument()
+  expect(await screen.findByText('模型接入配置')).toBeInTheDocument()
+  expect(await screen.findByText('账户接入配置')).toBeInTheDocument()
+
+  expect(styleConfig.container.querySelector('.backstage-page')).toBeInTheDocument()
+  expect(modelConfig.container.querySelector('.backstage-page')).toBeInTheDocument()
+  expect(accountConfig.container.querySelector('.backstage-page')).toBeInTheDocument()
+
+  expect(styleConfig.container.querySelector('.backstage-metric-grid')).not.toBeInTheDocument()
+  expect(modelConfig.container.querySelector('.backstage-metric-grid')).not.toBeInTheDocument()
+  expect(accountConfig.container.querySelector('.backstage-metric-grid')).not.toBeInTheDocument()
+
+  expect(screen.getByRole('list', { name: '样式提示' })).toBeInTheDocument()
+  expect(screen.getByRole('list', { name: '模型配置提示' })).toBeInTheDocument()
+  expect(screen.getByRole('list', { name: '账户配置提示' })).toBeInTheDocument()
+
+  expect(screen.getByRole('button', { name: /主题中心/ })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /保存配置/ })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /新增账户/ })).toBeInTheDocument()
 })
