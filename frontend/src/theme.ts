@@ -113,4 +113,3 @@ export function getAntdTheme(resolvedTheme: ResolvedTheme): ThemeConfig {
   return resolvedTheme === 'light' ? lightTheme : darkTheme
 }
 
-export default darkTheme
