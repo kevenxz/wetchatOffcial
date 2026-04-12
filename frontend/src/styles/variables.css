@@ -16,7 +16,10 @@
     radial-gradient(circle at top right, rgba(167, 139, 250, 0.08), transparent 28%),
     linear-gradient(180deg, #f3f6fb 0%, #eef3fb 100%);
   --app-surface: #ffffff;
+  --app-surface-muted: #f8fbff;
   --app-surface-strong: #eef4fb;
+  --app-toolbar-bg: #f8fbff;
+  --app-list-row-hover: #f3f7fd;
   --app-border: #d8e1ee;
   --app-border-strong: #c7d3e4;
   --app-text: #0f172a;
@@ -125,7 +128,10 @@
     radial-gradient(circle at top right, rgba(167, 139, 250, 0.08), transparent 28%),
     linear-gradient(180deg, #f3f6fb 0%, #eef3fb 100%);
   --app-surface: #ffffff;
+  --app-surface-muted: #f8fbff;
   --app-surface-strong: #eef4fb;
+  --app-toolbar-bg: #f8fbff;
+  --app-list-row-hover: #f3f7fd;
   --app-border: #d8e1ee;
   --app-border-strong: #c7d3e4;
   --app-text: #0f172a;
@@ -159,7 +165,10 @@
     radial-gradient(circle at top right, rgba(167, 139, 250, 0.1), transparent 24%),
     linear-gradient(180deg, #0b1020 0%, #0f172a 100%);
   --app-surface: #121a2b;
+  --app-surface-muted: #182235;
   --app-surface-strong: #182235;
+  --app-toolbar-bg: #121a2b;
+  --app-list-row-hover: #182235;
   --app-border: #273449;
   --app-border-strong: #364760;
   --app-text: #e5edf9;
