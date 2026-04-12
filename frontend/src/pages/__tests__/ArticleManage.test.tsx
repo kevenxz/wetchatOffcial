@@ -1,5 +1,6 @@
-﻿import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, test, vi } from 'vitest'
 import type { AccountConfig, StyleConfig, TaskResponse } from '@/api'
 import ArticleManage from '@/pages/ArticleManage'
@@ -84,7 +85,30 @@ beforeEach(() => {
   })
 })
 
-test('renders the article page without the fake delivery view', async () => {
+test('renders a list-first article workspace with inline preview', async () => {
+  const user = userEvent.setup()
+  listArticlesMock.mockResolvedValue([
+    {
+      task_id: 'article-1',
+      keywords: '增长,发布',
+      generated_article: {
+        title: '首篇文章',
+        content: '# 首篇文章\n\n这是一段预览内容。',
+      },
+      generation_config: {
+        audience_roles: ['编辑'],
+        article_strategy: 'auto',
+        style_hint: '',
+      },
+      status: 'done',
+      created_at: '2026-04-12T00:00:00Z',
+      updated_at: '2026-04-12T00:00:00Z',
+      error: null,
+      article_theme: '__current__',
+      push_records: [],
+    },
+  ])
+
   render(
     <MemoryRouter
       initialEntries={['/articles']}
@@ -96,7 +120,15 @@ test('renders the article page without the fake delivery view', async () => {
     </MemoryRouter>,
   )
 
-  expect(await screen.findByText('文章库')).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: '文章库' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: '批量推送' })).toBeInTheDocument()
-  expect(screen.queryByText('发布编排')).not.toBeInTheDocument()
+  expect(screen.getByText('文章标题')).toBeInTheDocument()
+  expect(screen.getByText('选择一篇文章查看预览', { selector: '.ant-empty-description' })).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: /查\s*看/ }))
+
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '文章预览' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 4, name: '首篇文章' })).toBeInTheDocument()
+  expect(screen.getByText('这是一段预览内容。')).toBeInTheDocument()
 })
