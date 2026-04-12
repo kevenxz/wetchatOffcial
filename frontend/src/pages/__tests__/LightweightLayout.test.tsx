@@ -1,5 +1,6 @@
 import { beforeEach, expect, test } from 'vitest'
 import WorkbenchShell from '@/components/workbench/WorkbenchShell'
+import styles from '@/components/workbench/WorkbenchShell.module.css'
 import { renderWithRouter } from '@/test/renderWithRouter'
 
 beforeEach(() => {
@@ -21,16 +22,52 @@ beforeEach(() => {
 test('renders a fixed 216px sidebar shell with compact main spacing', () => {
   const { container } = renderWithRouter(<WorkbenchShell />, { route: '/task', theme: 'light' })
 
-  const shell = container.querySelector('[class*="shell"]') as HTMLElement | null
-  const sidebar = container.querySelector('[class*="sidebar"]') as HTMLElement | null
-  const main = container.querySelector('[class*="main"]') as HTMLElement | null
-  const frame = container.querySelector('[class*="frame"]') as HTMLElement | null
+  const shell = container.firstElementChild as HTMLElement | null
+  const sidebar = shell?.querySelector('aside') as HTMLElement | null
+  const main = shell?.querySelector('main') as HTMLElement | null
+  const frame = main?.firstElementChild as HTMLElement | null
 
   expect(shell).toBeInTheDocument()
   expect(sidebar).toBeInTheDocument()
   expect(main).toBeInTheDocument()
   expect(frame).toBeInTheDocument()
-  expect(getComputedStyle(shell as HTMLElement).gridTemplateColumns).toContain('216px')
-  expect(getComputedStyle(main as HTMLElement).padding).toBe('20px 24px')
-  expect(getComputedStyle(frame as HTMLElement).gap).toBe('16px')
+
+  const shellStyle = getComputedStyle(shell as HTMLElement)
+  const mainStyle = getComputedStyle(main as HTMLElement)
+  const frameStyle = getComputedStyle(frame as HTMLElement)
+
+  expect(shellStyle.getPropertyValue('grid-template-columns')).toBe('216px minmax(0, 1fr)')
+  expect(shellStyle.getPropertyValue('background-image')).toBe('none')
+  expect(mainStyle.paddingTop).toBe('20px')
+  expect(mainStyle.paddingRight).toBe('24px')
+  expect(mainStyle.paddingBottom).toBe('20px')
+  expect(mainStyle.paddingLeft).toBe('24px')
+  expect(frameStyle.getPropertyValue('gap')).toBe('16px')
+})
+
+test('collapses the shell to a single column at the breakpoint', () => {
+  const sheet = Array.from(document.styleSheets).find((candidate) => {
+    try {
+      return Array.from(candidate.cssRules).some(
+        (rule) => rule instanceof CSSMediaRule && rule.conditionText.includes('max-width: 1100px'),
+      )
+    } catch {
+      return false
+    }
+  })
+
+  expect(sheet).toBeDefined()
+
+  const mediaRule = Array.from((sheet as CSSStyleSheet).cssRules).find(
+    (rule) => rule instanceof CSSMediaRule && rule.conditionText.includes('max-width: 1100px'),
+  ) as CSSMediaRule | undefined
+
+  expect(mediaRule).toBeDefined()
+
+  const shellRule = Array.from(mediaRule!.cssRules).find(
+    (rule) => rule instanceof CSSStyleRule && rule.selectorText === `.${styles.shell}`,
+  ) as CSSStyleRule | undefined
+
+  expect(shellRule).toBeDefined()
+  expect(shellRule!.style.getPropertyValue('grid-template-columns')).toBe('1fr')
 })
