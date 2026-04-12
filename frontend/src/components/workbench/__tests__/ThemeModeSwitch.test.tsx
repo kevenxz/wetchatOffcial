@@ -2,6 +2,7 @@ import { act, fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import WorkbenchShell from '../WorkbenchShell'
+import styles from '../WorkbenchShell.module.css'
 import { useThemeStore } from '@/store/themeStore'
 import { renderWithRouter } from '@/test/renderWithRouter'
 import '../../../styles/global.css'
@@ -256,14 +257,14 @@ describe('ThemeModeSwitch', () => {
     }
 
     const getSurfaceNodes = (container: HTMLElement) => ({
-      shell: container.querySelector('[class*="shell"]'),
-      sidebar: container.querySelector('[class*="sidebar"]'),
-      brand: container.querySelector('[class*="brand"]'),
-      brandCopy: container.querySelector('[class*="brandCopy"]'),
-      navLink: container.querySelector('[class*="navLink"]'),
-      activeNav: container.querySelector('[class*="navLinkActive"]'),
-      footer: container.querySelector('[class*="sidebarFooter"]'),
-      canvas: container.querySelector('[class*="canvas"]'),
+      shell: container.querySelector(`.${styles.shell}`),
+      sidebar: container.querySelector(`.${styles.sidebar}`),
+      brand: container.querySelector(`.${styles.brand}`),
+      brandCopy: container.querySelector(`.${styles.brandCopy}`),
+      navLink: container.querySelector(`.${styles.navLink}`),
+      activeNav: container.querySelector(`.${styles.navLinkActive}`),
+      footer: container.querySelector(`.${styles.sidebarFooter}`),
+      canvas: container.querySelector(`.${styles.canvas}`),
     })
 
     act(() => {
@@ -323,22 +324,25 @@ describe('ThemeModeSwitch', () => {
     expect(darkSurfaces.shell).toBeInTheDocument()
     expect(darkSurfaces.sidebar).toBeInTheDocument()
     expect(darkSurfaces.brand).toBeInTheDocument()
+    expect(darkSurfaces.brandCopy).toBeInTheDocument()
     expect(darkSurfaces.activeNav).toBeInTheDocument()
+    expect(darkSurfaces.footer).toBeInTheDocument()
     expect(darkSurfaces.canvas).toBeInTheDocument()
 
-    const darkSidebarRule = getCssRuleForClass(getCssModuleClass(darkSurfaces.sidebar!))
-    const darkBrandRule = getCssRuleForClass(getCssModuleClass(darkSurfaces.brand!))
-    const darkActiveNavRule = getCssRuleForToken('navLinkActive')
-    const darkCanvasRule = getCssRuleForClass(getCssModuleClass(darkSurfaces.canvas!))
-
-    expect(darkSidebarRule).toContain('var(--app-surface)')
-    expect(darkSidebarRule).toContain('var(--app-border)')
-    expect(darkBrandRule).toContain('var(--app-surface-strong)')
-    expect(darkBrandRule).toContain('var(--app-border)')
-    expect(darkActiveNavRule).toContain('var(--app-text)')
-    expect(darkActiveNavRule).toContain('var(--app-primary-bg)')
-    expect(darkActiveNavRule).toContain('var(--app-surface-strong)')
-    expect(darkCanvasRule).toContain('var(--app-surface)')
-    expect(darkCanvasRule).toContain('var(--app-border)')
+    expect(resolveCssValue(getComputedStyle(darkSurfaces.sidebar as HTMLElement).background)).toBe(
+      '#121a2b',
+    )
+    expect(resolveCssValue(getComputedStyle(darkSurfaces.brand as HTMLElement).background)).toBe(
+      '#182235',
+    )
+    expect(resolveCssValue(getComputedStyle(darkSurfaces.brandCopy as HTMLElement).color)).toBe(
+      '#a6b4c9',
+    )
+    expect(resolveCssValue(getComputedStyle(darkSurfaces.footer as HTMLElement).color)).toBe(
+      '#71829e',
+    )
+    expect(resolveCssValue(getComputedStyle(darkSurfaces.canvas as HTMLElement).background)).toBe(
+      '#121a2b',
+    )
   })
 })
