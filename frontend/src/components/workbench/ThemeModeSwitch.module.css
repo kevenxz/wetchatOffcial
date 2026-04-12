@@ -1,3 +1,8 @@
+.root {
+  position: relative;
+  display: inline-flex;
+}
+
 .trigger {
   display: inline-flex;
   align-items: center;
@@ -36,6 +41,63 @@
   font-weight: var(--font-weight-semibold);
 }
 
-.menuCheck {
+.menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: var(--z-dropdown);
+  display: grid;
+  min-width: 216px;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 18px;
+  background: var(--bg-container);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(16px);
+}
+
+.menuItem {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.menuItem:hover,
+.menuItem:focus-visible {
+  background: rgba(125, 211, 252, 0.12);
+  color: var(--text-primary);
+}
+
+.menuItemSelected {
+  background: rgba(125, 211, 252, 0.16);
+}
+
+.menuIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary);
+}
+
+.menuLabel {
+  font-size: var(--font-sm);
+}
+
+.menuState {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
   color: var(--color-primary);
 }

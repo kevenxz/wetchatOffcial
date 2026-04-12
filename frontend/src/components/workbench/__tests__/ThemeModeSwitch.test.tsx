@@ -39,9 +39,9 @@ describe('ThemeModeSwitch', () => {
 
     await user.click(screen.getByRole('button', { name: /主题模式/i }))
 
-    expect(screen.getByRole('menuitem', { name: /跟随系统/i })).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: /浅色模式/i })).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: /深色模式/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitemradio', { name: /跟随系统/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitemradio', { name: /浅色模式/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitemradio', { name: /深色模式/i })).toBeInTheDocument()
   })
 
   it('updates the theme store when dark mode is selected', async () => {
@@ -58,7 +58,7 @@ describe('ThemeModeSwitch', () => {
     renderWithRouter(<WorkbenchShell />, { route: '/task' })
 
     await user.click(screen.getByRole('button', { name: /主题模式/i }))
-    await user.click(screen.getByRole('menuitem', { name: /深色模式/i }))
+    await user.click(screen.getByRole('menuitemradio', { name: /深色模式/i }))
 
     expect(useThemeStore.getState().mode).toBe('dark')
     expect(document.documentElement.dataset.theme).toBe('dark')
