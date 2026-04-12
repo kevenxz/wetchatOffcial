@@ -27,6 +27,18 @@ describe('themeStore helpers', () => {
     expect(getStoredThemeMode()).toBe('dark')
   })
 
+  it('falls back to system mode when storage access throws', () => {
+    const getItemSpy = vi
+      .spyOn(window.localStorage, 'getItem')
+      .mockImplementation(() => {
+        throw new Error('storage unavailable')
+      })
+
+    expect(getStoredThemeMode()).toBe('system')
+
+    getItemSpy.mockRestore()
+  })
+
   it('falls back to system mode when storage value is invalid', () => {
     localStorage.setItem(STORAGE_KEY, 'sepia')
     expect(getStoredThemeMode()).toBe('system')
@@ -65,5 +77,26 @@ describe('themeStore helpers', () => {
     unsubscribe()
 
     expect(removeEventListener).toHaveBeenCalledWith('change', callback)
+  })
+
+  it('uses the legacy MediaQueryList listener APIs when modern ones are unavailable', () => {
+    const addListener = vi.fn()
+    const removeListener = vi.fn()
+    const mediaQuery = {
+      matches: true,
+      addEventListener: undefined,
+      removeEventListener: undefined,
+      addListener,
+      removeListener,
+    } as unknown as MediaQueryList
+
+    const callback = vi.fn()
+    const unsubscribe = createSystemThemeListener(mediaQuery, callback)
+
+    expect(addListener).toHaveBeenCalledWith(callback)
+
+    unsubscribe()
+
+    expect(removeListener).toHaveBeenCalledWith(callback)
   })
 })
