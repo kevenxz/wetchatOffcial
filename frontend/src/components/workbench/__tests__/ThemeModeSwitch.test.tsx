@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import WorkbenchShell from '../WorkbenchShell'
 import { useThemeStore } from '@/store/themeStore'
 import { renderWithRouter } from '@/test/renderWithRouter'
+import '../../../styles/global.css'
 
 const resetThemeState = () => {
   act(() => {
@@ -158,5 +159,24 @@ describe('ThemeModeSwitch', () => {
 
     expect(useThemeStore.getState().mode).toBe('dark')
     expect(document.documentElement.dataset.theme).toBe('dark')
+  })
+
+  it('applies light theme variables to the document root', () => {
+    act(() => {
+      useThemeStore.setState({
+        mode: 'light',
+        resolvedTheme: 'light',
+        initialized: true,
+      })
+    })
+
+    document.documentElement.dataset.theme = 'light'
+
+    renderWithRouter(<WorkbenchShell />, { route: '/task' })
+
+    expect(document.documentElement.dataset.theme).toBe('light')
+    expect(getComputedStyle(document.documentElement).getPropertyValue('--app-bg').trim()).toBe(
+      '#f3f6fb',
+    )
   })
 })

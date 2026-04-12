@@ -15,7 +15,7 @@ html {
   -webkit-text-size-adjust: 100%;
   -moz-tab-size: 4;
   tab-size: 4;
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
@@ -24,9 +24,9 @@ body {
   font-size: var(--font-sm);
   font-weight: var(--font-weight-normal);
   line-height: var(--line-height-base);
-  color: var(--text-primary);
-  background: var(--bg-workbench-gradient);
-  background-color: var(--bg-workbench);
+  color: var(--app-text);
+  background: var(--app-bg-gradient);
+  background-color: var(--app-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -52,7 +52,7 @@ h5,
 h6 {
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
-  color: var(--text-primary);
+  color: var(--app-text);
 }
 
 p {
@@ -90,8 +90,8 @@ textarea {
 }
 
 ::selection {
-  background-color: var(--color-primary-bg-hover);
-  color: var(--text-primary);
+  background-color: var(--app-primary-bg-hover);
+  color: var(--app-text);
 }
 
 ::-webkit-scrollbar {
@@ -127,7 +127,7 @@ textarea {
 }
 
 .ant-layout-sider {
-  box-shadow: 2px 0 24px rgba(2, 8, 23, 0.32);
+  box-shadow: var(--app-shadow-md);
 }
 
 .ant-layout-content {
@@ -137,7 +137,7 @@ textarea {
 }
 
 .ant-menu-dark {
-  background: var(--bg-sider) !important;
+  background: var(--app-surface-strong) !important;
 }
 
 .text-primary {
@@ -145,11 +145,11 @@ textarea {
 }
 
 .text-secondary {
-  color: var(--text-secondary);
+  color: var(--app-text-secondary);
 }
 
 .text-disabled {
-  color: var(--text-disabled);
+  color: var(--app-text-disabled);
 }
 
 .full-height {
@@ -214,9 +214,9 @@ textarea {
 
 .backstage-surface-card {
   border-radius: 24px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(15, 23, 42, 0.78);
-  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.18);
+  border: 1px solid var(--app-border);
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow-md);
 }
 
 .backstage-surface-card .ant-card-body {
@@ -228,12 +228,12 @@ textarea {
   min-height: 560px;
   margin: 0 auto;
   padding: 24px 20px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
   border-radius: 24px;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--app-shadow-sm);
   overflow: auto;
-  color: #0f172a;
+  color: var(--app-text);
 }
 
 .backstage-code-area {
