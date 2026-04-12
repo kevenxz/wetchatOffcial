@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act } from '@testing-library/react'
 import {
   STORAGE_KEY,
   applyResolvedTheme,
   createSystemThemeListener,
   getStoredThemeMode,
   resolveThemeMode,
+  useThemeStore,
 } from '../themeStore'
 
 describe('themeStore helpers', () => {
@@ -98,5 +100,68 @@ describe('themeStore helpers', () => {
     unsubscribe()
 
     expect(removeListener).toHaveBeenCalledWith(callback)
+  })
+
+  it('initializes from system preference when storage is empty', () => {
+    act(() => {
+      useThemeStore.setState({
+        mode: 'system',
+        resolvedTheme: 'light',
+        initialized: false,
+      })
+      useThemeStore.getState().initialize(true)
+    })
+
+    expect(useThemeStore.getState().mode).toBe('system')
+    expect(useThemeStore.getState().resolvedTheme).toBe('dark')
+    expect(useThemeStore.getState().initialized).toBe(true)
+    expect(document.documentElement.dataset.theme).toBe('dark')
+  })
+
+  it('persists explicit theme selections', () => {
+    act(() => {
+      useThemeStore.setState({
+        mode: 'system',
+        resolvedTheme: 'light',
+        initialized: false,
+      })
+      useThemeStore.getState().setMode('dark', false)
+    })
+
+    expect(useThemeStore.getState().mode).toBe('dark')
+    expect(useThemeStore.getState().resolvedTheme).toBe('dark')
+    expect(useThemeStore.getState().initialized).toBe(true)
+    expect(localStorage.getItem(STORAGE_KEY)).toBe('dark')
+    expect(document.documentElement.dataset.theme).toBe('dark')
+  })
+
+  it('updates the resolved theme when system mode receives a new preference', () => {
+    act(() => {
+      useThemeStore.setState({
+        mode: 'system',
+        resolvedTheme: 'light',
+        initialized: false,
+      })
+      useThemeStore.getState().initialize(false)
+      useThemeStore.getState().syncSystemTheme(true)
+    })
+
+    expect(useThemeStore.getState().mode).toBe('system')
+    expect(useThemeStore.getState().resolvedTheme).toBe('dark')
+  })
+
+  it('ignores system updates when mode is explicitly selected', () => {
+    act(() => {
+      useThemeStore.setState({
+        mode: 'system',
+        resolvedTheme: 'light',
+        initialized: false,
+      })
+      useThemeStore.getState().setMode('light', false)
+      useThemeStore.getState().syncSystemTheme(true)
+    })
+
+    expect(useThemeStore.getState().mode).toBe('light')
+    expect(useThemeStore.getState().resolvedTheme).toBe('light')
   })
 })
