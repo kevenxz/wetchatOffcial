@@ -53,22 +53,20 @@
   --color-gray-9: #182235;
   --color-gray-10: #0b1020;
 
-  --text-primary: #e5edf9;
-  --text-secondary: #a6b4c9;
-  --text-tertiary: #71829e;
-  --text-disabled: rgba(229, 237, 249, 0.38);
-  --text-inverse: #0b1020;
+  --text-primary: var(--app-text);
+  --text-secondary: #516074;
+  --text-tertiary: #738196;
+  --text-disabled: rgba(15, 23, 42, 0.38);
+  --text-inverse: #0f172a;
 
-  --bg-workbench: #0b1020;
-  --bg-workbench-gradient: radial-gradient(circle at top left, rgba(125, 211, 252, 0.16), transparent 35%),
-    radial-gradient(circle at top right, rgba(167, 139, 250, 0.1), transparent 28%),
-    linear-gradient(180deg, #0b1020 0%, #0f172a 100%);
-  --bg-container: #121a2b;
-  --bg-elevated: #182235;
-  --bg-sider: #0e1627;
+  --bg-workbench: var(--app-bg);
+  --bg-workbench-gradient: var(--app-bg-gradient);
+  --bg-container: var(--app-surface);
+  --bg-elevated: var(--app-surface-strong);
+  --bg-sider: var(--app-surface);
 
-  --border-color: #273449;
-  --border-color-strong: #364760;
+  --border-color: var(--app-border);
+  --border-color-strong: var(--app-border-strong);
   --border-radius-sm: 6px;
   --border-radius: 10px;
   --border-radius-lg: 14px;
@@ -101,9 +99,9 @@
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
-  --shadow-sm: 0 1px 2px rgba(2, 8, 23, 0.18), 0 2px 6px rgba(2, 8, 23, 0.12);
-  --shadow-md: 0 18px 40px -24px rgba(2, 8, 23, 0.85), 0 10px 24px -18px rgba(2, 8, 23, 0.7);
-  --shadow-lg: 0 30px 60px -28px rgba(2, 8, 23, 0.95);
+  --shadow-sm: var(--app-shadow-sm);
+  --shadow-md: var(--app-shadow-md);
+  --shadow-lg: var(--app-shadow-lg);
 
   --transition-fast: 0.1s ease;
   --transition-base: 0.2s ease;

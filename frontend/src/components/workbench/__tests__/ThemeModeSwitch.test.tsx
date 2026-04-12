@@ -163,20 +163,17 @@ describe('ThemeModeSwitch', () => {
 
   it('applies light theme variables to the document root', () => {
     act(() => {
-      useThemeStore.setState({
-        mode: 'light',
-        resolvedTheme: 'light',
-        initialized: true,
-      })
+      useThemeStore.getState().setMode('light', false)
     })
-
-    document.documentElement.dataset.theme = 'light'
 
     renderWithRouter(<WorkbenchShell />, { route: '/task' })
 
     expect(document.documentElement.dataset.theme).toBe('light')
     expect(getComputedStyle(document.documentElement).getPropertyValue('--app-bg').trim()).toBe(
       '#f3f6fb',
+    )
+    expect(getComputedStyle(document.documentElement).getPropertyValue('--bg-workbench').trim()).toBe(
+      'var(--app-bg)',
     )
   })
 })
