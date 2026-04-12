@@ -111,4 +111,7 @@ test('renders schedule management as a compact toolbar and table layout', async 
   expect(await screen.findByRole('button', { name: '新建自动化规则' })).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: '规则明细' })).toBeInTheDocument()
   expect(screen.getByRole('table')).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: '执行规则' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: '推送目标' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: '公众号账号池' })).not.toBeInTheDocument()
 })

@@ -208,7 +208,7 @@ export default function TaskDetail() {
       ) : (
         <div className={styles.workspaceLayout}>
           <SectionBlock
-            title="执行空间"
+            title="执行轨迹"
             aside={<span className={styles.sectionStatus}>{statusMessage}</span>}
           >
             <div className={styles.executionLayout}>

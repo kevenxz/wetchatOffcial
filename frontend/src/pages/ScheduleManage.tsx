@@ -6,7 +6,6 @@ import {
   Card,
   Col,
   DatePicker,
-  Empty,
   Form,
   Input,
   InputNumber,
@@ -44,7 +43,7 @@ import {
   type ScheduleConfig,
   type ScheduleMode,
 } from '@/api'
-import { AutomationRuleCard, HeroPanel, MetricCard, SectionBlock } from '@/components/workbench'
+import { HeroPanel, SectionBlock } from '@/components/workbench'
 
 const { Text } = Typography
 const CURRENT_THEME_KEY = '__current__'
@@ -52,20 +51,6 @@ const HOTSPOT_CATEGORY_PRESETS = ['finance', 'ai', 'news', 'tech', 'community']
 const PAGE_STACK_STYLE = {
   display: 'grid',
   gap: 24,
-} as const
-const METRIC_GRID_STYLE = {
-  display: 'grid',
-  gap: 16,
-  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-} as const
-const RESPONSIVE_TWO_COLUMN_STYLE = {
-  display: 'grid',
-  gap: 24,
-  gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-} as const
-const PANEL_STACK_STYLE = {
-  display: 'grid',
-  gap: 16,
 } as const
 const FORM_STACK_STYLE = {
   display: 'grid',
@@ -163,22 +148,12 @@ const resolveFormHotspotCapture = (record?: ScheduleConfig | null): HotspotCaptu
   })
 }
 
-const formatScheduleRule = (record: ScheduleConfig): string => {
-  if (record.mode === 'once') {
-    return record.run_at ? `指定时间 · ${dayjs(record.run_at).format('YYYY-MM-DD HH:mm:ss')}` : '指定时间执行'
-  }
-  return `每 ${record.interval_minutes ?? 60} 分钟执行一次`
-}
-
 const formatDateTime = (value?: string | null): string => {
   if (!value) {
     return '等待触发'
   }
   return dayjs(value).format('YYYY-MM-DD HH:mm:ss')
 }
-
-const resolveAccountNames = (accountIds: string[], accounts: AccountConfig[]): string[] =>
-  accountIds.map((id) => accounts.find((item) => item.account_id === id)?.name || id)
 
 const formatThemeName = (name?: string | null): string => (name === CURRENT_THEME_KEY ? '当前配置' : name || '未配置')
 
@@ -229,9 +204,6 @@ export default function ScheduleManage() {
     label: name === CURRENT_THEME_KEY ? '当前配置' : name,
     value: name,
   }))
-  const runningSchedules = schedules.filter((item) => item.status === 'running')
-  const hotspotEnabledCount = schedules.filter((item) => item.hotspot_capture?.enabled).length
-  const targetAccountCount = Array.from(new Set(schedules.flatMap((item) => item.account_ids))).length
 
   const fetchData = async () => {
     setLoading(true)
@@ -476,170 +448,12 @@ export default function ScheduleManage() {
         title="自动化编排台"
         description="在同一块工作台内整理执行节奏、热点输入与推送目标。现有的新建、编辑、启动、停止、立即执行和删除能力保持不变，只重构规则可读性和配置分组。"
       >
-        <div style={{ display: 'grid', gap: 16 }}>
-          <div role="toolbar" aria-label="Schedule actions" style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button type="primary" size="large" onClick={openCreate}>
-              新建自动化规则
-            </Button>
-          </div>
-
-          <div style={METRIC_GRID_STYLE}>
-            <MetricCard
-              label="Rules"
-              value={loading ? '--' : String(schedules.length).padStart(2, '0')}
-              hint="当前编排台中的自动化规则数量"
-            />
-            <MetricCard
-              label="Running"
-              value={loading ? '--' : String(runningSchedules.length).padStart(2, '0')}
-              hint="正在持续执行的规则"
-            />
-            <MetricCard
-              label="Hotspot"
-              value={loading ? '--' : String(hotspotEnabledCount).padStart(2, '0')}
-              hint="已接入热点感知的规则"
-            />
-            <MetricCard
-              label="Targets"
-              value={loading ? '--' : String(targetAccountCount).padStart(2, '0')}
-              hint="已被规则覆盖的公众号推送目标"
-            />
-          </div>
+        <div role="toolbar" aria-label="Schedule actions" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Button type="primary" size="large" onClick={openCreate}>
+            新建自动化规则
+          </Button>
         </div>
       </HeroPanel>
-
-      <div style={RESPONSIVE_TWO_COLUMN_STYLE}>
-        <SectionBlock
-          title="执行规则"
-          aside={<Text type="secondary">按规则卡片查看执行节奏、热点输入和操作状态。</Text>}
-        >
-          <div style={PANEL_STACK_STYLE}>
-            {loading ? (
-              <Card>
-                <Space direction="vertical" size={8}>
-                  <Text strong>正在加载自动化规则...</Text>
-                  <Text type="secondary">正在同步规则、账号和主题配置，加载完成后会显示规则卡片和操作入口。</Text>
-                </Space>
-              </Card>
-            ) : schedules.length ? (
-              schedules.map((record) => {
-                const accountNames = resolveAccountNames(record.account_ids, wechatAccounts)
-
-                return (
-                  <AutomationRuleCard
-                    key={record.schedule_id}
-                    eyebrow={record.mode === 'once' ? 'One Shot' : 'Recurring'}
-                    title={record.name}
-                    status={
-                      <Tag color={record.status === 'running' ? 'processing' : 'default'}>
-                        {record.status === 'running' ? '运行中' : '已停止'}
-                      </Tag>
-                    }
-                    tags={
-                      <Space size={[6, 8]} wrap>
-                        {(record.generation_config?.audience_roles || []).map((role) => (
-                          <Tag color="blue" key={role}>
-                            {role}
-                          </Tag>
-                        ))}
-                        <Tag color="purple">
-                          {ARTICLE_STRATEGY_LABELS[record.generation_config?.article_strategy || 'auto']}
-                        </Tag>
-                        <Tag color="gold">{formatThemeName(record.theme_name)}</Tag>
-                      </Space>
-                    }
-                    items={[
-                      { label: '执行规则', value: formatScheduleRule(record) },
-                      {
-                        label: '推送目标',
-                        value: accountNames.length ? accountNames.join('、') : '还没有绑定推送账号',
-                      },
-                      { label: '热点输入', value: summarizeHotspotCapture(record) },
-                      { label: '下次执行', value: formatDateTime(record.next_run_at) },
-                    ]}
-                    note={
-                      record.last_error ? (
-                        <Text type="danger">最近错误：{record.last_error}</Text>
-                      ) : (
-                        <Text type="secondary">最近执行：{formatDateTime(record.last_run_at)}</Text>
-                      )
-                    }
-                    actions={
-                      <Space wrap>
-                        <Button onClick={() => openEdit(record)}>编辑</Button>
-                        {record.status === 'running' ? (
-                          <Button onClick={() => handleStop(record.schedule_id)}>停止</Button>
-                        ) : (
-                          <Button type="primary" onClick={() => handleStart(record.schedule_id)}>
-                            启动
-                          </Button>
-                        )}
-                        <Button onClick={() => handleRunNow(record.schedule_id)}>立即执行</Button>
-                        <Popconfirm title="确认删除该定时任务？" onConfirm={() => handleDelete(record.schedule_id)}>
-                          <Button danger>删除</Button>
-                        </Popconfirm>
-                      </Space>
-                    }
-                  />
-                )
-              })
-            ) : (
-              <Card>
-                <Empty description="还没有自动化规则，先配置一条编排规则。" image={Empty.PRESENTED_IMAGE_SIMPLE}>
-                  <Button type="primary" onClick={openCreate}>
-                    新建自动化规则
-                  </Button>
-                </Empty>
-              </Card>
-            )}
-          </div>
-        </SectionBlock>
-
-        <SectionBlock
-          title="推送目标"
-          aside={<Text type="secondary">查看可用账号、主题和编排提示。</Text>}
-        >
-          <div style={PANEL_STACK_STYLE}>
-            <Card size="small" title="公众号账号池">
-              {loading ? (
-                <Text type="secondary">正在加载账号与主题配置...</Text>
-              ) : wechatAccounts.length ? (
-                <Space size={[8, 8]} wrap>
-                  {wechatAccounts.map((account) => (
-                    <Tag key={account.account_id} color="blue">
-                      {account.name}
-                    </Tag>
-                  ))}
-                </Space>
-              ) : (
-                <Text type="secondary">暂无可用公众号账号，规则保存前仍需选择至少一个账号。</Text>
-              )}
-            </Card>
-
-            <Card size="small" title="主题风格">
-              {loading ? (
-                <Text type="secondary">正在加载账号与主题配置...</Text>
-              ) : (
-                <Space size={[8, 8]} wrap>
-                  {themeOptions.map((theme) => (
-                    <Tag key={theme.value} color={theme.value === CURRENT_THEME_KEY ? 'geekblue' : 'default'}>
-                      {theme.label}
-                    </Tag>
-                  ))}
-                </Space>
-              )}
-            </Card>
-
-            <Card size="small" title="编排提示">
-              <div style={PANEL_STACK_STYLE}>
-                <Text>间隔规则适合持续监测热点或固定栏目，单次规则适合预热、节日或活动节点。</Text>
-                <Text>热点抓取关闭时，系统会回退到任务名称或自定义回退主题继续生成。</Text>
-                <Text>规则卡片保留原有操作入口，表格区继续用于明细核对和快速巡检。</Text>
-              </div>
-            </Card>
-          </div>
-        </SectionBlock>
-      </div>
 
       <SectionBlock
         title="规则明细"

@@ -88,7 +88,8 @@ test('renders a compact task detail header and sectioned detail blocks', async (
 
   expect(await screen.findByRole('heading', { name: 'Agentic AI' })).toBeInTheDocument()
   expect(screen.getByRole('toolbar', { name: '任务操作' })).toBeInTheDocument()
-  expect(screen.getByRole('heading', { name: '执行轨道' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '执行轨迹' })).toBeInTheDocument()
+  expect(screen.getByRole('complementary', { name: '执行轨道' })).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: '任务信息' })).toBeInTheDocument()
   expect(screen.getByRole('heading', { name: '结构信号' })).toBeInTheDocument()
 })
