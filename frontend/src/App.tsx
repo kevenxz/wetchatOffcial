@@ -1,5 +1,8 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { WorkbenchShell } from '@/components/workbench'
+import { createSystemThemeListener } from '@/store/themeStore'
+import { useThemeStore } from '@/store/themeStore'
 import AccountConfigPage from '@/pages/AccountConfig'
 import ArticleManage from '@/pages/ArticleManage'
 import History from '@/pages/History'
@@ -10,6 +13,16 @@ import TaskCreate from '@/pages/TaskCreate'
 import TaskDetail from '@/pages/TaskDetail'
 
 export default function App() {
+  const syncSystemTheme = useThemeStore((state) => state.syncSystemTheme)
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+
+    return createSystemThemeListener(mediaQuery, (event) => {
+      syncSystemTheme(event.matches)
+    })
+  }, [syncSystemTheme])
+
   return (
     <BrowserRouter>
       <Routes>

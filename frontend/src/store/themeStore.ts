@@ -1,3 +1,5 @@
+import { create } from 'zustand'
+
 export type ThemeMode = 'system' | 'light' | 'dark'
 export type ResolvedTheme = 'light' | 'dark'
 
@@ -46,3 +48,62 @@ export function createSystemThemeListener(
     mediaQuery.removeListener(listener)
   }
 }
+
+export function bootstrapThemeStore(systemPrefersDark: boolean) {
+  const mode = getStoredThemeMode()
+  const resolvedTheme = resolveThemeMode(mode, systemPrefersDark)
+
+  applyResolvedTheme(resolvedTheme)
+  useThemeStore.setState({
+    mode,
+    resolvedTheme,
+    initialized: true,
+  })
+
+  return resolvedTheme
+}
+
+type ThemeState = {
+  mode: ThemeMode
+  resolvedTheme: ResolvedTheme
+  initialized: boolean
+  initialize: (systemPrefersDark: boolean) => void
+  setMode: (mode: ThemeMode, systemPrefersDark: boolean) => void
+  syncSystemTheme: (systemPrefersDark: boolean) => void
+}
+
+export const useThemeStore = create<ThemeState>((set, get) => ({
+  mode: 'system',
+  resolvedTheme: 'light',
+  initialized: false,
+  initialize: (systemPrefersDark) => {
+    const mode = getStoredThemeMode()
+    const resolvedTheme = resolveThemeMode(mode, systemPrefersDark)
+
+    applyResolvedTheme(resolvedTheme)
+    set({ mode, resolvedTheme, initialized: true })
+  },
+  setMode: (mode, systemPrefersDark) => {
+    const resolvedTheme = resolveThemeMode(mode, systemPrefersDark)
+
+    try {
+      window.localStorage.setItem(STORAGE_KEY, mode)
+    } catch {
+      // Ignore storage write failures and still update the in-memory theme state.
+    }
+
+    applyResolvedTheme(resolvedTheme)
+    set({ mode, resolvedTheme, initialized: true })
+  },
+  syncSystemTheme: (systemPrefersDark) => {
+    const { mode } = get()
+
+    if (mode !== 'system') {
+      return
+    }
+
+    const resolvedTheme = resolveThemeMode('system', systemPrefersDark)
+    applyResolvedTheme(resolvedTheme)
+    set({ resolvedTheme })
+  },
+}))
