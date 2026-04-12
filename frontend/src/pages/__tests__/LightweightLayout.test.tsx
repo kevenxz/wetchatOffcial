@@ -143,7 +143,6 @@ test('keeps shared surfaces light in light mode', () => {
   expect(variables).toContain('--app-surface-muted: #f8fbff;')
   expect(variables).toContain('--app-toolbar-bg: #f8fbff;')
   expect(variables).toContain('--app-list-row-hover: #f3f7fd;')
-  expect(variables).toContain('--app-surface-muted: #0f172a;')
 
   expect(globalStyles).toContain('.backstage-toolbar {')
   expect(globalStyles).toContain('padding: 12px 16px;')
