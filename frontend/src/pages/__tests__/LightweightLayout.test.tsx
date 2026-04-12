@@ -1,4 +1,6 @@
+import { render, screen } from '@testing-library/react'
 import { beforeEach, expect, test } from 'vitest'
+import HeroPanel from '@/components/workbench/HeroPanel'
 import WorkbenchShell from '@/components/workbench/WorkbenchShell'
 import styles from '@/components/workbench/WorkbenchShell.module.css'
 import { renderWithRouter } from '@/test/renderWithRouter'
@@ -45,23 +47,41 @@ test('renders a fixed 216px sidebar shell with compact main spacing', () => {
   expect(frameStyle.getPropertyValue('gap')).toBe('16px')
 })
 
-test('renders a compact page header instead of a tall hero panel', () => {
-  const { container } = renderWithRouter(<WorkbenchShell />, { route: '/task', theme: 'light' })
+test('renders a compact HeroPanel with spaced title and description', () => {
+  const { container } = render(
+    <HeroPanel eyebrow="Task" title="Compact header" description="Description text" />,
+  )
 
-  const panel = container.querySelector('[class*="panel"]') as HTMLElement | null
+  const panel = container.querySelector('section') as HTMLElement | null
+  const content = panel?.querySelector('[class*="content"]') as HTMLElement | null
   const title = panel?.querySelector('[class*="title"]') as HTMLElement | null
+  const description = screen.getByText('Description text')
 
   expect(panel).toBeInTheDocument()
+  expect(content).toBeInTheDocument()
   expect(title).toBeInTheDocument()
+  expect(description).toBeInTheDocument()
 
   const panelStyle = getComputedStyle(panel as HTMLElement)
+  const contentStyle = getComputedStyle(content as HTMLElement)
   const titleStyle = getComputedStyle(title as HTMLElement)
 
   expect(panelStyle.paddingTop).toBe('16px')
   expect(panelStyle.paddingRight).toBe('20px')
   expect(panelStyle.paddingBottom).toBe('16px')
   expect(panelStyle.paddingLeft).toBe('20px')
+  expect(contentStyle.gap).toBe('6px')
   expect(parseFloat(titleStyle.fontSize)).toBeLessThan(32)
+})
+
+test('omits the description when it is not provided', () => {
+  const { container } = render(<HeroPanel eyebrow="Task" title="Compact header" />)
+
+  const panel = container.querySelector('section') as HTMLElement | null
+
+  expect(panel).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Compact header' })).toBeInTheDocument()
+  expect(screen.queryByText('Description text')).not.toBeInTheDocument()
 })
 
 test('collapses the shell to a single column at the breakpoint', () => {

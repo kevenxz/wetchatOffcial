@@ -8,6 +8,11 @@
   box-shadow: none;
 }
 
+.content {
+  display: grid;
+  gap: 6px;
+}
+
 .panel::after {
   content: none;
 }

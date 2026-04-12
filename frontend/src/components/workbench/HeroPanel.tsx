@@ -12,7 +12,7 @@ export default function HeroPanel({ eyebrow, title, description, children }: Her
   return (
     <section className={styles.panel}>
       <p className={styles.eyebrow}>{eyebrow}</p>
-      <div>
+      <div className={styles.content}>
         <h1 className={styles.title}>{title}</h1>
         {description ? <p className={styles.description}>{description}</p> : null}
       </div>
