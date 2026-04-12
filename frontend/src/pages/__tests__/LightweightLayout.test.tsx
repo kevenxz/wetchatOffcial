@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event'
 import { render, screen } from '@testing-library/react'
 import { beforeEach, afterEach, expect, test, vi } from 'vitest'
 import HeroPanel from '@/components/workbench/HeroPanel'
@@ -209,6 +210,7 @@ test('keeps shared surfaces light in light mode', () => {
 })
 
 test('renders compact grouped config pages without metric-card emphasis', async () => {
+  const user = userEvent.setup()
   const styleConfig = renderWithRouter(<StyleConfigPage />, { route: '/settings' })
   const modelConfig = renderWithRouter(<ModelConfigPage />, { route: '/models' })
   const accountConfig = renderWithRouter(<AccountConfigPage />, { route: '/accounts' })
@@ -230,6 +232,8 @@ test('renders compact grouped config pages without metric-card emphasis', async 
   expect(screen.getByRole('list', { name: '账户配置提示' })).toBeInTheDocument()
 
   expect(screen.getByRole('button', { name: /主题中心/ })).toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: /主题中心/ }))
+  expect(await screen.findByRole('button', { name: /导出当前主题/ })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /保存配置/ })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /新增账户/ })).toBeInTheDocument()
 })

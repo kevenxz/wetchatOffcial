@@ -675,8 +675,18 @@ export default function StyleConfigPage() {
                       .then(() => message.success('CSS 已复制'))
                       .catch(() => message.error('复制失败'))
                   }
-                >
+                  >
                   复制 CSS
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() =>
+                    downloadJson(`${draftThemeName || 'theme'}.json`, {
+                      [draftThemeName || 'theme']: themeDraftConfig,
+                    })
+                  }
+                >
+                  导出当前主题
                 </Button>
                 {selectedThemeSource !== 'preset' && (
                   <Button size="small" type="primary" loading={themeSaving} onClick={() => void handleSaveTheme()}>
