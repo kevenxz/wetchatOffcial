@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getAntdTheme } from '../../theme'
 import {
   STORAGE_KEY,
   applyResolvedTheme,
@@ -163,5 +164,15 @@ describe('themeStore helpers', () => {
 
     expect(useThemeStore.getState().mode).toBe('light')
     expect(useThemeStore.getState().resolvedTheme).toBe('light')
+  })
+
+  it('returns distinct Ant Design tokens for light and dark themes', () => {
+    const lightTheme = getAntdTheme('light')
+    const darkTheme = getAntdTheme('dark')
+
+    expect(lightTheme.token?.colorBgLayout).toBe('#f3f6fb')
+    expect(darkTheme.token?.colorBgLayout).toBe('#0b1020')
+    expect(lightTheme.components?.Layout?.siderBg).toBe('#ffffff')
+    expect(darkTheme.components?.Layout?.siderBg).toBe('#0e1627')
   })
 })
