@@ -23,6 +23,7 @@ import { HeroPanel } from '@/components/workbench'
 
 const { Paragraph, Text, Title } = Typography
 const CURRENT_THEME_KEY = '__current__'
+const ARTICLE_LAYOUT_BREAKPOINT = 1100
 
 function mergeStyle(existing: string | null, next: string) {
   if (!existing) return next
@@ -80,6 +81,7 @@ export default function ArticleManage() {
   const [pushTargetTaskId, setPushTargetTaskId] = useState<string | null>(null)
   const [pushAccountIds, setPushAccountIds] = useState<string[]>([])
   const [singlePushThemeName, setSinglePushThemeName] = useState<string>(CURRENT_THEME_KEY)
+  const [isNarrowLayout, setIsNarrowLayout] = useState(false)
 
   const wechatAccounts = accounts.filter((item) => item.platform === 'wechat_mp' && item.enabled)
 
@@ -131,6 +133,19 @@ export default function ArticleManage() {
 
   useEffect(() => {
     void fetchData()
+  }, [])
+
+  useEffect(() => {
+    const updateLayoutMode = () => {
+      setIsNarrowLayout(window.innerWidth < ARTICLE_LAYOUT_BREAKPOINT)
+    }
+
+    updateLayoutMode()
+    window.addEventListener('resize', updateLayoutMode)
+
+    return () => {
+      window.removeEventListener('resize', updateLayoutMode)
+    }
   }, [])
 
   const openSinglePushModal = (taskId: string) => {
@@ -325,9 +340,10 @@ export default function ArticleManage() {
       </HeroPanel>
 
       <div
+        data-testid="article-manage-grid"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1.4fr) minmax(320px, 0.9fr)',
+          gridTemplateColumns: isNarrowLayout ? 'minmax(0, 1fr)' : 'minmax(0, 1.4fr) minmax(320px, 0.9fr)',
           gap: 16,
           alignItems: 'start',
         }}

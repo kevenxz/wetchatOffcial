@@ -87,6 +87,13 @@ beforeEach(() => {
 
 test('renders a list-first article workspace with inline preview', async () => {
   const user = userEvent.setup()
+  const originalInnerWidth = window.innerWidth
+
+  Object.defineProperty(window, 'innerWidth', {
+    writable: true,
+    value: 900,
+  })
+
   listArticlesMock.mockResolvedValue([
     {
       task_id: 'article-1',
@@ -124,6 +131,7 @@ test('renders a list-first article workspace with inline preview', async () => {
   expect(screen.getByRole('button', { name: '批量推送' })).toBeInTheDocument()
   expect(screen.getByText('文章标题')).toBeInTheDocument()
   expect(screen.getByText('选择一篇文章查看预览', { selector: '.ant-empty-description' })).toBeInTheDocument()
+  expect(screen.getByTestId('article-manage-grid')).toHaveStyle({ gridTemplateColumns: 'minmax(0, 1fr)' })
 
   await user.click(screen.getByRole('button', { name: /查\s*看/ }))
 
@@ -131,4 +139,9 @@ test('renders a list-first article workspace with inline preview', async () => {
   expect(screen.getByRole('heading', { name: '文章预览' })).toBeInTheDocument()
   expect(screen.getByRole('heading', { level: 4, name: '首篇文章' })).toBeInTheDocument()
   expect(screen.getByText('这是一段预览内容。')).toBeInTheDocument()
+
+  Object.defineProperty(window, 'innerWidth', {
+    writable: true,
+    value: originalInnerWidth,
+  })
 })
