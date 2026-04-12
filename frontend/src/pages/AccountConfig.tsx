@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import {
   DeleteOutlined,
@@ -9,7 +10,6 @@ import {
 } from '@ant-design/icons'
 import {
   Button,
-  Card,
   Form,
   Input,
   Modal,
@@ -34,7 +34,7 @@ import {
   testAccountConnection,
   updateAccount,
 } from '@/api'
-import { HeroPanel, MetricCard, SectionBlock, SignalCard } from '@/components/workbench'
+import { HeroPanel, SectionBlock, SignalCard } from '@/components/workbench'
 
 const { Text } = Typography
 
@@ -46,6 +46,27 @@ const PLATFORM_LABELS: Record<PlatformType, string> = {
 const PLATFORM_COLORS: Record<PlatformType, string> = {
   wechat_mp: 'blue',
   toutiao: 'orange',
+}
+
+const guidanceListStyle: CSSProperties = {
+  display: 'grid',
+  gap: 8,
+  margin: 0,
+  paddingInlineStart: 20,
+  listStyleType: 'disc',
+  listStylePosition: 'outside',
+  color: 'var(--text-secondary)',
+  fontSize: 13,
+  lineHeight: 1.6,
+}
+
+const panelStyle: CSSProperties = {
+  display: 'grid',
+  gap: 16,
+  padding: 20,
+  borderRadius: 16,
+  border: '1px solid var(--app-border)',
+  background: 'var(--app-surface)',
 }
 
 export default function AccountConfigPage() {
@@ -66,7 +87,7 @@ export default function AccountConfigPage() {
       const data = await listAccounts()
       setAccounts(data)
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '加载账号列表失败')
+      message.error(err instanceof Error ? err.message : '加载账户列表失败')
     } finally {
       setLoading(false)
     }
@@ -112,7 +133,7 @@ export default function AccountConfigPage() {
         }
         const updated = await updateAccount(editingAccount.account_id, patch)
         setAccounts((prev) => prev.map((account) => (account.account_id === updated.account_id ? updated : account)))
-        message.success('账号已更新')
+        message.success('账户已更新')
       } else {
         const data: CreateAccountRequest = {
           name: values.name,
@@ -123,7 +144,7 @@ export default function AccountConfigPage() {
         }
         const created = await createAccount(data)
         setAccounts((prev) => [created, ...prev])
-        message.success('账号已创建')
+        message.success('账户已创建')
       }
 
       setModalOpen(false)
@@ -140,7 +161,7 @@ export default function AccountConfigPage() {
     setAccounts((list) => list.filter((account) => account.account_id !== accountId))
     try {
       await deleteAccount(accountId)
-      message.success('账号已删除')
+      message.success('账户已删除')
     } catch (err) {
       setAccounts(previousAccounts)
       message.error(err instanceof Error ? err.message : '删除失败')
@@ -175,7 +196,7 @@ export default function AccountConfigPage() {
         message.error(result.message)
       }
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '测试连接失败')
+      message.error(err instanceof Error ? err.message : '连接测试失败')
     } finally {
       setTestingIds((prev) => {
         const next = new Set(prev)
@@ -187,7 +208,7 @@ export default function AccountConfigPage() {
 
   const columns: TableColumnsType<AccountConfig> = [
     {
-      title: '账号名称',
+      title: '账户名称',
       dataIndex: 'name',
       key: 'name',
       width: 180,
@@ -210,7 +231,7 @@ export default function AccountConfigPage() {
       title: 'AppSecret',
       key: 'app_secret',
       width: 140,
-      render: () => <Text type="secondary">••••••••</Text>,
+      render: () => <Text type="secondary">••••••••••••</Text>,
     },
     {
       title: '启用',
@@ -233,7 +254,7 @@ export default function AccountConfigPage() {
             编辑
           </Button>
           <Popconfirm
-            title="确认删除这个账号？"
+            title="确认删除这个账户吗？"
             description="删除后不可恢复。"
             onConfirm={() => handleDelete(record.account_id)}
             okText="删除"
@@ -253,63 +274,68 @@ export default function AccountConfigPage() {
     <div className="backstage-page">
       <HeroPanel
         eyebrow="System Backstage"
-        title="账号接入台"
-        description="统一管理微信公众号与其他投放账号的凭证、可用状态和联通性。"
+        title="账户接入配置"
+        description="统一管理微信公众号和其他投放账户的凭证、启用状态与连通性。"
       >
-        <div className="backstage-metric-grid">
-          <MetricCard label="Accounts" value={String(accounts.length).padStart(2, '0')} hint="后台已登记的账号数量" />
-          <MetricCard label="Enabled" value={String(enabledCount).padStart(2, '0')} hint="当前允许被调度和推送的账号" />
-          <MetricCard label="Platforms" value={String(platformCount).padStart(2, '0')} hint="已接入的平台类型数量" />
-        </div>
+        <ul style={guidanceListStyle} aria-label="账户配置提示">
+          <li>新增或编辑账户后，建议立刻执行一次连接测试。</li>
+          <li>启用状态会直接影响调度和发布链路的可用性。</li>
+          <li>AppSecret 编辑时可留空，避免覆盖已经存在的密钥。</li>
+        </ul>
       </HeroPanel>
 
       <div className="backstage-grid backstage-grid--double">
         <SectionBlock
-          title="账号清单"
+          title="账户清单"
           aside={
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-              新增账号
+              新增账户
             </Button>
           }
         >
-          <Card className="backstage-surface-card">
+          <div style={panelStyle}>
             <Table
               rowKey="account_id"
               columns={columns}
               dataSource={accounts}
               loading={loading}
               pagination={false}
-              locale={{ emptyText: '暂无账号，先从右上角新增一条接入配置。' }}
+              locale={{ emptyText: '暂无账户，先点击右上角新增一条接入配置。' }}
             />
-          </Card>
+          </div>
         </SectionBlock>
 
-        <SectionBlock
-          title="后台提示"
-          aside={<Text type="secondary">保留原有增删改、启停和连接测试行为。</Text>}
-        >
+        <SectionBlock title="接入提醒" aside={<Text type="secondary">保留原有增删改、启停和连接测试行为。</Text>}>
           <div className="backstage-note-list">
             <SignalCard
               icon={<WechatOutlined />}
               title="公众号优先"
-              description="微信号仍然是当前工作流的主要发布目标，账号启停会直接影响推送可见性。"
+              description="微信公众号仍然是当前工作流的主要发布目标，启停会直接影响推送可见性。"
             />
             <SignalCard
               icon={<LinkOutlined />}
               title="连接测试"
-              description="新增或更新密钥后建议立即测试连接，避免调度执行时才暴露凭证问题。"
+              description="新增或修改凭证后尽快测试连接，避免调度真正执行时才发现认证失败。"
             />
             <SignalCard
               icon={<SafetyCertificateOutlined />}
-              title="凭证治理"
-              description="编辑时保留 AppSecret 为空的能力，避免后台误覆盖已有生产密钥。"
+              title="凭证管理"
+              description="编辑时保留 AppSecret 为空的能力，避免误覆盖已有生产密钥。"
             />
+          </div>
+
+          <div style={panelStyle}>
+            <Space size={[8, 8]} wrap>
+              <Tag color="blue">账户数 {String(accounts.length).padStart(2, '0')}</Tag>
+              <Tag color="green">启用数 {String(enabledCount).padStart(2, '0')}</Tag>
+              <Tag color="gold">平台数 {String(platformCount).padStart(2, '0')}</Tag>
+            </Space>
           </div>
         </SectionBlock>
       </div>
 
       <Modal
-        title={editingAccount ? '编辑账号' : '新增账号'}
+        title={editingAccount ? '编辑账户' : '新增账户'}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         onOk={handleSubmit}
@@ -321,8 +347,8 @@ export default function AccountConfigPage() {
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item
             name="name"
-            label="账号名称"
-            rules={[{ required: true, message: '请输入账号名称' }]}
+            label="账户名称"
+            rules={[{ required: true, message: '请输入账户名称' }]}
           >
             <Input placeholder="例如：主账号、测试号" maxLength={100} />
           </Form.Item>

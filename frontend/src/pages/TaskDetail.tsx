@@ -185,7 +185,7 @@ export default function TaskDetail() {
         title={task?.keywords || '任务详情'}
         description="聚焦当前任务的执行轨迹、结构化结果和草稿交付状态。"
       >
-        <div className={styles.heroActions}>
+        <div className={styles.heroActions} role="toolbar" aria-label="任务操作">
           <Tag color={wsStatus === 'done' ? 'success' : wsStatus === 'failed' ? 'error' : 'processing'}>
             {STATUS_COPY[wsStatus] ?? wsStatus}
           </Tag>
@@ -208,7 +208,7 @@ export default function TaskDetail() {
       ) : (
         <div className={styles.workspaceLayout}>
           <SectionBlock
-            title="执行空间"
+            title="执行轨迹"
             aside={<span className={styles.sectionStatus}>{statusMessage}</span>}
           >
             <div className={styles.executionLayout}>

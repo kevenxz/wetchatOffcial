@@ -23,6 +23,15 @@ vi.mock('@/api', async () => {
   }
 })
 
+test('renders the model backstage page with updated shared copy', async () => {
+  render(<ModelConfigPage />)
+
+  expect(await screen.findByText('模型接入配置')).toBeInTheDocument()
+  expect(screen.getByText('统一管理文本与图片模型的密钥、网关和默认型号。')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '文本模型' })).toBeInTheDocument()
+  expect(screen.queryByText('模型接入台')).not.toBeInTheDocument()
+})
+
 beforeEach(() => {
   vi.clearAllMocks()
   listTasksMock.mockResolvedValue([])
@@ -75,7 +84,7 @@ beforeEach(() => {
   })
 })
 
-test('renders the history page with paginated card history', async () => {
+test('renders the history page as a table-first archive', async () => {
   listTasksMock.mockResolvedValue(
     Array.from({ length: 9 }, (_, index) => ({
       task_id: `task-${index}`,
@@ -104,13 +113,17 @@ test('renders the history page with paginated card history', async () => {
     </MemoryRouter>,
   )
 
-  expect(await screen.findByText('内容资产')).toBeInTheDocument()
-  expect(screen.getByText('卡片视图')).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: '内容资产' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /刷新/ })).toBeInTheDocument()
+  expect(screen.getByText('共 9 条')).toBeInTheDocument()
+  expect(screen.getByText('已完成 9 条')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '卡片视图' })).not.toBeInTheDocument()
+  expect(screen.getByText('任务 ID')).toBeInTheDocument()
   expect(screen.getByText('task-0')).toBeInTheDocument()
-  expect(screen.queryByText('task-8')).not.toBeInTheDocument()
+  expect(screen.getByText('task-8')).toBeInTheDocument()
 })
 
-test('renders the model backstage page with readable shared copy', async () => {
+test.skip('renders the model backstage page with readable shared copy', async () => {
   render(<ModelConfigPage />)
 
   expect(await screen.findByText('模型接入台')).toBeInTheDocument()

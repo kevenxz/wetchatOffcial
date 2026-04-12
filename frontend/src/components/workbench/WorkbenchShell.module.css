@@ -1,45 +1,43 @@
 .shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 216px minmax(0, 1fr);
   background-color: var(--app-bg);
-  background-image: var(--app-bg-gradient);
+  background-image: none;
 }
 
 .sidebar {
   display: grid;
   grid-template-rows: auto 1fr auto;
-  gap: 24px;
-  padding: 28px 22px;
+  gap: 16px;
+  padding: 20px 16px;
   border-right: 1px solid var(--app-border);
   background: var(--app-surface);
-  backdrop-filter: blur(18px);
 }
 
 .brand {
   display: grid;
-  gap: 8px;
-  padding: 14px 16px;
+  gap: 6px;
+  padding: 12px 14px;
   border: 1px solid var(--app-border);
-  border-radius: 22px;
-  background: var(--app-surface-strong);
-  box-shadow: var(--shadow-sm);
+  border-radius: 18px;
+  background: var(--app-surface);
 }
 
 .brandMark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
   background: var(--app-primary-bg);
   color: var(--app-primary);
   font-size: 1.15rem;
 }
 
 .brandTitle {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
 }
 
 .brandCopy {
@@ -48,16 +46,16 @@
 
 .nav {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .navLink {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: 1px solid transparent;
-  border-radius: 16px;
+  border-radius: 14px;
   color: var(--app-text-secondary);
   transition:
     border-color var(--transition-fast),
@@ -84,9 +82,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
   background: var(--app-primary-bg);
   color: var(--app-primary);
 }
@@ -97,12 +95,12 @@
 
 .main {
   min-width: 0;
-  padding: 28px;
+  padding: 20px 24px;
 }
 
 .frame {
   display: grid;
-  gap: 24px;
+  gap: 16px;
 }
 
 .toolbar {
@@ -124,11 +122,11 @@
 
 .canvas {
   min-height: 0;
-  padding: 24px;
+  padding: 20px;
   border: 1px solid var(--app-border);
-  border-radius: 28px;
+  border-radius: 24px;
   background: var(--app-surface);
-  box-shadow: var(--shadow-md);
+  box-shadow: none;
 }
 
 @media (max-width: 1100px) {

@@ -4,7 +4,7 @@ import styles from './HeroPanel.module.css'
 type HeroPanelProps = {
   eyebrow: string
   title: string
-  description: string
+  description?: string
   children?: ReactNode
 }
 
@@ -12,9 +12,9 @@ export default function HeroPanel({ eyebrow, title, description, children }: Her
   return (
     <section className={styles.panel}>
       <p className={styles.eyebrow}>{eyebrow}</p>
-      <div>
+      <div className={styles.content}>
         <h1 className={styles.title}>{title}</h1>
-        <p className={styles.description}>{description}</p>
+        {description ? <p className={styles.description}>{description}</p> : null}
       </div>
       {children}
     </section>

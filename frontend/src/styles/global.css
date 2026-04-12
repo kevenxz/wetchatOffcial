@@ -129,7 +129,9 @@ textarea {
 }
 
 .ant-layout-sider {
-  box-shadow: var(--app-shadow-md);
+  background: var(--bg-sider);
+  border-right: 1px solid var(--app-border);
+  box-shadow: none;
 }
 
 .ant-layout-content {
@@ -207,6 +209,11 @@ textarea {
   gap: 12px;
   align-items: center;
   justify-content: space-between;
+  padding: 12px 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  background: var(--app-toolbar-bg);
+  box-shadow: none;
 }
 
 .backstage-note-list {
@@ -215,27 +222,35 @@ textarea {
 }
 
 .backstage-surface-card {
-  border-radius: 24px;
+  border-radius: 16px;
   border: 1px solid var(--app-border);
   background: var(--app-surface);
-  box-shadow: var(--app-shadow-md);
+  box-shadow: none;
 }
 
 .backstage-surface-card .ant-card-body {
-  padding: 24px;
+  padding: 20px;
 }
 
 .backstage-preview-frame {
   max-width: 414px;
   min-height: 560px;
   margin: 0 auto;
-  padding: 24px 20px;
-  background: var(--app-surface);
+  padding: 20px;
+  background: var(--app-surface-muted);
   border: 1px solid var(--app-border);
-  border-radius: 24px;
-  box-shadow: var(--app-shadow-sm);
+  border-radius: 16px;
+  box-shadow: none;
   overflow: auto;
   color: var(--app-text);
+}
+
+.ant-table-wrapper .ant-table-tbody > tr > td {
+  transition: background-color var(--transition-fast);
+}
+
+.ant-table-wrapper .ant-table-tbody > tr:hover > td {
+  background: var(--app-list-row-hover) !important;
 }
 
 .backstage-code-area {

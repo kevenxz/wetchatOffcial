@@ -40,7 +40,7 @@ const demoTask: TaskResponse = {
   keywords: 'Agentic AI',
   original_keywords: 'Agentic AI',
   generation_config: {
-    audience_roles: ['开发者'],
+    audience_roles: ['Developer'],
     article_strategy: 'auto',
     style_hint: '',
   },
@@ -50,7 +50,7 @@ const demoTask: TaskResponse = {
   error: null,
   article_plan: {
     resolved_strategy: 'auto',
-    resolved_strategy_label: '自动判断',
+    resolved_strategy_label: 'Auto',
   },
 }
 
@@ -78,7 +78,7 @@ beforeEach(() => {
   window.history.replaceState({}, '', '/task/demo-id')
 })
 
-test('renders the task rail workspace for task detail', async () => {
+test('renders a compact task detail header and sectioned detail blocks', async () => {
   renderWithRouter(
     <Routes>
       <Route path="/task/:id" element={<TaskDetail />} />
@@ -86,6 +86,10 @@ test('renders the task rail workspace for task detail', async () => {
     { route: '/task/demo-id' },
   )
 
-  expect(await screen.findByText('执行轨道')).toBeInTheDocument()
-  expect(screen.getByText('结果预览')).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Agentic AI' })).toBeInTheDocument()
+  expect(screen.getByRole('toolbar', { name: '任务操作' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '执行轨迹' })).toBeInTheDocument()
+  expect(screen.getByRole('complementary', { name: '执行轨道' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '任务信息' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '结构信号' })).toBeInTheDocument()
 })

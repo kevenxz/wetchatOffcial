@@ -1,23 +1,10 @@
-﻿import { useEffect, useState } from 'react'
-import {
-  Button,
-  Card,
-  Empty,
-  Pagination,
-  Popconfirm,
-  Space,
-  Table,
-  Tag,
-  Tooltip,
-  message,
-} from 'antd'
-import { DeleteOutlined, EyeOutlined } from '@ant-design/icons'
+import { useEffect, useState } from 'react'
+import { Button, Card, Empty, Popconfirm, Space, Table, Tag, Tooltip, message } from 'antd'
+import { DeleteOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { ARTICLE_STRATEGY_LABELS, deleteTask, listTasks, type TaskResponse } from '@/api'
-import { AssetList } from '@/components/workbench'
-
-type HistoryViewMode = 'cards' | 'table'
+import { HeroPanel } from '@/components/workbench'
 
 const statusColorMap: Record<TaskResponse['status'], string> = {
   pending: 'default',
@@ -33,13 +20,9 @@ const statusTextMap: Record<TaskResponse['status'], string> = {
   failed: '失败',
 }
 
-const CARD_PAGE_SIZE = 8
-
 export default function History() {
   const [tasks, setTasks] = useState<TaskResponse[]>([])
   const [loading, setLoading] = useState(true)
-  const [viewMode, setViewMode] = useState<HistoryViewMode>('cards')
-  const [cardPage, setCardPage] = useState(1)
   const navigate = useNavigate()
 
   const fetchTasks = async () => {
@@ -57,13 +40,6 @@ export default function History() {
   useEffect(() => {
     void fetchTasks()
   }, [])
-
-  useEffect(() => {
-    const maxPage = Math.max(1, Math.ceil(tasks.length / CARD_PAGE_SIZE))
-    if (cardPage > maxPage) {
-      setCardPage(maxPage)
-    }
-  }, [cardPage, tasks.length])
 
   const handleDelete = async (taskId: string) => {
     try {
@@ -156,153 +132,42 @@ export default function History() {
     },
   ]
 
-  const renderCardView = () => {
-    if (!loading && tasks.length === 0) {
-      return (
-        <Card style={{ borderRadius: 24 }}>
-          <Empty description="还没有历史内容资产" />
-        </Card>
-      )
-    }
-
-    const paginatedTasks = tasks.slice((cardPage - 1) * CARD_PAGE_SIZE, cardPage * CARD_PAGE_SIZE)
-    const skeletonKeys = Array.from({ length: CARD_PAGE_SIZE }, (_, index) => `loading-${index}`)
-
-    return (
-      <>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-            gap: 16,
-          }}
-        >
-          {loading
-            ? skeletonKeys.map((key) => (
-                <Card
-                  key={key}
-                  loading
-                  style={{
-                    borderRadius: 24,
-                    background: 'rgba(15, 23, 42, 0.76)',
-                    borderColor: 'rgba(148, 163, 184, 0.16)',
-                  }}
-                />
-              ))
-            : paginatedTasks.map((task) => (
-                <Card
-                  key={task.task_id}
-                  style={{
-                    borderRadius: 24,
-                    background: 'rgba(15, 23, 42, 0.76)',
-                    borderColor: 'rgba(148, 163, 184, 0.16)',
-                  }}
-                >
-                  <Space direction="vertical" size={14} style={{ width: '100%' }}>
-                    <Space align="center" style={{ justifyContent: 'space-between', width: '100%' }}>
-                      <Tag color={statusColorMap[task.status]}>{statusTextMap[task.status] || task.status}</Tag>
-                      <Tooltip title={task.task_id}>
-                        <span style={{ color: '#94a3b8', fontFamily: 'monospace', fontSize: 12 }}>
-                          {task.task_id.slice(0, 8)}...
-                        </span>
-                      </Tooltip>
-                    </Space>
-
-                    <div>
-                      <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
-                        {task.keywords || '未命名任务'}
-                      </div>
-                      <div style={{ color: '#94a3b8', fontSize: 13 }}>
-                        创建于 {dayjs(task.created_at).format('YYYY-MM-DD HH:mm')}
-                      </div>
-                    </div>
-
-                    <Space size={[4, 8]} wrap>
-                      {task.generation_config?.audience_roles?.map((role: string) => (
-                        <Tag color="blue" key={role}>
-                          {role}
-                        </Tag>
-                      ))}
-                      <Tag color="purple">
-                        {ARTICLE_STRATEGY_LABELS[task.generation_config?.article_strategy || 'auto']}
-                      </Tag>
-                    </Space>
-
-                    <Space>
-                      <Button
-                        type="primary"
-                        ghost
-                        icon={<EyeOutlined />}
-                        onClick={() => navigate(`/task/${task.task_id}`)}
-                      >
-                        查看详情
-                      </Button>
-                      <Popconfirm
-                        title="确认删除"
-                        description="确定要删除这条任务记录吗？"
-                        onConfirm={() => handleDelete(task.task_id)}
-                        okText="删除"
-                        cancelText="取消"
-                      >
-                        <Button danger icon={<DeleteOutlined />}>
-                          删除
-                        </Button>
-                      </Popconfirm>
-                    </Space>
-                  </Space>
-                </Card>
-              ))}
-        </div>
-        {!loading && tasks.length > CARD_PAGE_SIZE ? (
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Pagination
-              current={cardPage}
-              pageSize={CARD_PAGE_SIZE}
-              total={tasks.length}
-              onChange={setCardPage}
-              showSizeChanger={false}
-            />
-          </div>
-        ) : null}
-      </>
-    )
-  }
-
   return (
-    <AssetList
-      eyebrow="Asset Archive"
-      title="内容资产"
-      description="统一回看历史任务、文章策略和执行状态，让可复用的内容沉淀成可浏览资产。"
-      meta={
-        <Space wrap>
-          <Tag bordered={false} color="cyan">
-            共 {tasks.length} 条
-          </Tag>
-          <Tag bordered={false} color="success">
-            已完成 {tasks.filter((task) => task.status === 'done').length} 条
-          </Tag>
+    <div className="backstage-page">
+      <HeroPanel
+        eyebrow="Asset Archive"
+        title="内容资产"
+        description="统一回看历史任务、文章策略和执行状态，让可复用的内容沉淀成可浏览资产。"
+      >
+        <Space wrap style={{ marginTop: 12, justifyContent: 'space-between', width: '100%' }}>
+          <Space wrap>
+            <Tag bordered={false} color="cyan">
+              共 {tasks.length} 条
+            </Tag>
+            <Tag bordered={false} color="success">
+              已完成 {tasks.filter((task) => task.status === 'done').length} 条
+            </Tag>
+          </Space>
+          <Button icon={<ReloadOutlined />} onClick={() => void fetchTasks()}>
+            刷新
+          </Button>
         </Space>
-      }
-      views={[
-        { key: 'cards', label: '卡片视图' },
-        { key: 'table', label: '表格视图' },
-      ]}
-      activeView={viewMode}
-      onViewChange={(nextView) => setViewMode(nextView as HistoryViewMode)}
-    >
-      {viewMode === 'cards' ? (
-        renderCardView()
-      ) : (
-        <Card style={{ borderRadius: 24 }}>
+      </HeroPanel>
+
+      <Card className="backstage-surface-card">
+        {tasks.length === 0 && !loading ? (
+          <Empty description="还没有历史内容资产" />
+        ) : (
           <Table
             columns={columns}
             dataSource={tasks}
             rowKey="task_id"
             loading={loading}
             pagination={{ pageSize: 10 }}
+            size="middle"
           />
-        </Card>
-      )}
-    </AssetList>
+        )}
+      </Card>
+    </div>
   )
 }
