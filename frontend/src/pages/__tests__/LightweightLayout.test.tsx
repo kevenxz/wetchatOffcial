@@ -49,7 +49,7 @@ test('renders a compact page header instead of a tall hero panel', () => {
   const { container } = renderWithRouter(<WorkbenchShell />, { route: '/task', theme: 'light' })
 
   const panel = container.querySelector('[class*="panel"]') as HTMLElement | null
-  const title = panel?.querySelector('h1') as HTMLElement | null
+  const title = panel?.querySelector('[class*="title"]') as HTMLElement | null
 
   expect(panel).toBeInTheDocument()
   expect(title).toBeInTheDocument()
@@ -61,8 +61,7 @@ test('renders a compact page header instead of a tall hero panel', () => {
   expect(panelStyle.paddingRight).toBe('20px')
   expect(panelStyle.paddingBottom).toBe('16px')
   expect(panelStyle.paddingLeft).toBe('20px')
-  expect(titleStyle.marginTop).toBe('0px')
-  expect(titleStyle.marginBottom).toBe('0px')
+  expect(parseFloat(titleStyle.fontSize)).toBeLessThan(32)
 })
 
 test('collapses the shell to a single column at the breakpoint', () => {

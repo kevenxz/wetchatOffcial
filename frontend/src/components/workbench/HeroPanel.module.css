@@ -22,9 +22,15 @@
 
 .title {
   margin: 0;
-  font-size: clamp(1.5rem, 2vw, 1.75rem);
+  font-size: 18px;
   line-height: 1.2;
   color: var(--app-text);
+}
+
+@supports (font-size: clamp(1rem, 2vw, 1rem)) {
+  .title {
+    font-size: clamp(1.125rem, 1.4vw, 1.5rem);
+  }
 }
 
 .description {
