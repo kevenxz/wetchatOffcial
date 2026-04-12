@@ -1,6 +1,6 @@
 import { CheckOutlined, DesktopOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons'
 import { Button } from 'antd'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useThemeStore, type ThemeMode } from '@/store/themeStore'
 import styles from './ThemeModeSwitch.module.css'
 
@@ -22,33 +22,50 @@ export default function ThemeModeSwitch() {
   const mode = useThemeStore((state) => state.mode)
   const setMode = useThemeStore((state) => state.setMode)
   const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([])
+
+  const closeMenu = () => {
+    setOpen(false)
+    triggerRef.current?.focus()
+  }
 
   useEffect(() => {
     if (!open) {
       return
     }
 
-    const handlePointerDown = (event: MouseEvent) => {
+    const handlePointerDown = (event: PointerEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false)
+        closeMenu()
       }
     }
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('pointerdown', handlePointerDown, true)
 
     return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('pointerdown', handlePointerDown, true)
     }
   }, [open])
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    const selectedIndex = themeModes.indexOf(mode)
+    setActiveIndex(selectedIndex >= 0 ? selectedIndex : 0)
+  }, [mode, open])
+
+  useLayoutEffect(() => {
+    if (!open) {
+      return
+    }
+
+    itemRefs.current[activeIndex]?.focus()
+  }, [activeIndex, open])
 
   const handleSelect = (nextMode: ThemeMode) => {
     const prefersDark =
@@ -56,18 +73,64 @@ export default function ThemeModeSwitch() {
       window.matchMedia('(prefers-color-scheme: dark)').matches
 
     setMode(nextMode, prefersDark)
-    setOpen(false)
+    closeMenu()
+  }
+
+  const moveFocus = (nextIndex: number) => {
+    const normalizedIndex = (nextIndex + themeModes.length) % themeModes.length
+    setActiveIndex(normalizedIndex)
+    itemRefs.current[normalizedIndex]?.focus()
+  }
+
+  const handleItemKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+      event.preventDefault()
+      moveFocus(index + 1)
+      return
+    }
+
+    if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+      event.preventDefault()
+      moveFocus(index - 1)
+      return
+    }
+
+    if (event.key === 'Home') {
+      event.preventDefault()
+      moveFocus(0)
+      return
+    }
+
+    if (event.key === 'End') {
+      event.preventDefault()
+      moveFocus(themeModes.length - 1)
+      return
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeMenu()
+    }
+  }
+
+  const handleTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      setOpen(true)
+    }
   }
 
   return (
     <div ref={containerRef} className={styles.root}>
       <Button
+        ref={triggerRef}
         type="text"
         className={styles.trigger}
         aria-label="主题模式"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
+        onKeyDown={handleTriggerKeyDown}
       >
         <span className={styles.triggerIcon} aria-hidden="true">
           {modeIconMap[mode]}
@@ -78,17 +141,22 @@ export default function ThemeModeSwitch() {
 
       {open ? (
         <div className={styles.menu} role="menu" aria-label="主题模式">
-          {themeModes.map((itemMode) => {
+          {themeModes.map((itemMode, index) => {
             const selected = itemMode === mode
 
             return (
               <button
                 key={itemMode}
+                ref={(element) => {
+                  itemRefs.current[index] = element
+                }}
                 type="button"
                 role="menuitemradio"
                 aria-checked={selected}
+                tabIndex={index === activeIndex ? 0 : -1}
                 className={`${styles.menuItem} ${selected ? styles.menuItemSelected : ''}`.trim()}
                 onClick={() => handleSelect(itemMode)}
+                onKeyDown={(event) => handleItemKeyDown(event, index)}
               >
                 <span className={styles.menuIcon} aria-hidden="true">
                   {modeIconMap[itemMode]}
