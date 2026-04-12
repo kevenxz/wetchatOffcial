@@ -1,5 +1,3 @@
-import { create } from 'zustand'
-
 export type ThemeMode = 'system' | 'light' | 'dark'
 export type ResolvedTheme = 'light' | 'dark'
 
@@ -36,43 +34,3 @@ export function createSystemThemeListener(
     mediaQuery.removeEventListener('change', listener)
   }
 }
-
-type ThemeState = {
-  mode: ThemeMode
-  resolvedTheme: ResolvedTheme
-  initialized: boolean
-  initialize: (systemPrefersDark: boolean) => void
-  setMode: (mode: ThemeMode, systemPrefersDark: boolean) => void
-  syncSystemTheme: (systemPrefersDark: boolean) => void
-}
-
-export const useThemeStore = create<ThemeState>()((set) => ({
-  mode: 'system',
-  resolvedTheme: 'light',
-  initialized: false,
-  initialize: (systemPrefersDark) => {
-    const mode = getStoredThemeMode()
-    const resolvedTheme = resolveThemeMode(mode, systemPrefersDark)
-
-    window.localStorage.setItem(STORAGE_KEY, mode)
-    applyResolvedTheme(resolvedTheme)
-    set({ mode, resolvedTheme, initialized: true })
-  },
-  setMode: (mode, systemPrefersDark) => {
-    const resolvedTheme = resolveThemeMode(mode, systemPrefersDark)
-
-    window.localStorage.setItem(STORAGE_KEY, mode)
-    applyResolvedTheme(resolvedTheme)
-    set({ mode, resolvedTheme, initialized: true })
-  },
-  syncSystemTheme: (systemPrefersDark) =>
-    set((state) => {
-      if (state.mode !== 'system') {
-        return state
-      }
-
-      const resolvedTheme = resolveThemeMode('system', systemPrefersDark)
-      applyResolvedTheme(resolvedTheme)
-      return { ...state, resolvedTheme }
-    }),
-}))
