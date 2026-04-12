@@ -1,20 +1,10 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import type { Key } from 'react'
-import {
-  Button,
-  Card,
-  Modal,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from 'antd'
+import { Button, Card, Modal, Select, Space, Table, Tag, Typography, message } from 'antd'
 import type { TableProps } from 'antd'
 import dayjs from 'dayjs'
-import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { marked } from 'marked'
 import {
   batchPushArticles,
   getCustomThemes,
@@ -29,19 +19,17 @@ import {
   type StyleConfig,
   type TaskResponse,
 } from '@/api'
+import { AssetList } from '@/components/workbench'
 
 const { Paragraph, Text } = Typography
 const CURRENT_THEME_KEY = '__current__'
 
 function mergeStyle(existing: string | null, next: string) {
-  // Merge inline styles while preserving existing declarations.
   if (!existing) return next
   return `${existing}${existing.trim().endsWith(';') ? ' ' : '; '}${next}`
 }
 
 function buildPreviewHtml(markdownText: string, config: StyleConfig | undefined) {
-  // Keep preview rendering consistent with StyleConfig page:
-  // markdown -> sanitize -> inject per-selector inline style.
   const rawHtml = marked.parse(markdownText || '', { breaks: true }) as string
   const cleanHtml = DOMPurify.sanitize(rawHtml)
   const parser = new DOMParser()
@@ -52,10 +40,12 @@ function buildPreviewHtml(markdownText: string, config: StyleConfig | undefined)
 
   Object.entries(config).forEach(([selector, styleStr]) => {
     if (!styleStr) return
+
     if (selector === 'container') {
       container.setAttribute('style', mergeStyle(container.getAttribute('style'), styleStr))
       return
     }
+
     doc.querySelectorAll(selector).forEach((element) => {
       const htmlElement = element as HTMLElement
       htmlElement.setAttribute('style', mergeStyle(htmlElement.getAttribute('style'), styleStr))
@@ -66,7 +56,6 @@ function buildPreviewHtml(markdownText: string, config: StyleConfig | undefined)
 }
 
 function getPushedAccountNames(pushRecords: PushRecord[] | undefined): string[] {
-  // Deduplicate success records for concise table display.
   const records = pushRecords ?? []
   const names = records
     .filter((item) => item.status === 'success')
@@ -75,7 +64,6 @@ function getPushedAccountNames(pushRecords: PushRecord[] | undefined): string[] 
 }
 
 export default function ArticleManage() {
-  // Data states for article list and selectable account/theme resources.
   const [articles, setArticles] = useState<TaskResponse[]>([])
   const [accounts, setAccounts] = useState<AccountConfig[]>([])
   const [loading, setLoading] = useState(false)
@@ -93,7 +81,6 @@ export default function ArticleManage() {
   const [pushAccountIds, setPushAccountIds] = useState<string[]>([])
   const [singlePushThemeName, setSinglePushThemeName] = useState<string>(CURRENT_THEME_KEY)
 
-  // Push only supports enabled WeChat public accounts.
   const wechatAccounts = accounts.filter((item) => item.platform === 'wechat_mp' && item.enabled)
 
   const accountOptions = wechatAccounts.map((item) => ({
@@ -114,7 +101,6 @@ export default function ArticleManage() {
   }
 
   const fetchData = async () => {
-    // Refresh all data sources that this page depends on.
     setLoading(true)
     try {
       const [articleList, accountList, currentConfig, preset, custom] = await Promise.all([
@@ -124,11 +110,13 @@ export default function ArticleManage() {
         getPresetThemes(),
         getCustomThemes(),
       ])
+
       setArticles(articleList)
       setAccounts(accountList)
       setCurrentTheme(currentConfig)
       setPresetThemes(preset)
       setCustomThemes(custom)
+
       const nextThemes: Record<string, string> = {}
       articleList.forEach((item) => {
         nextThemes[item.task_id] = item.article_theme || CURRENT_THEME_KEY
@@ -142,18 +130,16 @@ export default function ArticleManage() {
   }
 
   useEffect(() => {
-    fetchData()
+    void fetchData()
   }, [])
 
   const openSinglePushModal = (taskId: string) => {
-    // Pre-fill modal with page-level defaults and row-level selected theme.
     setPushTargetTaskId(taskId)
     setPushAccountIds(defaultAccountIds)
     setSinglePushThemeName(articleThemes[taskId] || CURRENT_THEME_KEY)
   }
 
   const handleThemeChange = async (taskId: string, themeName: string) => {
-    // Optimistic update for smoother UX; rollback on API failure.
     setArticleThemes((prev) => ({ ...prev, [taskId]: themeName }))
     try {
       const updated = await updateArticleTheme(taskId, themeName)
@@ -169,8 +155,8 @@ export default function ArticleManage() {
   }
 
   const submitSinglePush = async () => {
-    // Push one article to selected accounts with the selected modal theme.
     if (!pushTargetTaskId) return
+
     if (pushAccountIds.length === 0) {
       message.warning('请先选择至少一个公众号')
       return
@@ -190,12 +176,13 @@ export default function ArticleManage() {
   }
 
   const submitBatchPush = async () => {
-    // Build per-task theme map so batch push preserves row-level theme selections.
     const taskIds = selectedArticleKeys.map((key) => String(key))
+
     if (taskIds.length === 0) {
       message.warning('请先勾选要批量推送的文章')
       return
     }
+
     if (defaultAccountIds.length === 0) {
       message.warning('请先选择目标公众号')
       return
@@ -218,8 +205,10 @@ export default function ArticleManage() {
     }
   }
 
-  const previewThemeName = previewArticle ? articleThemes[previewArticle.task_id] || CURRENT_THEME_KEY : CURRENT_THEME_KEY
-  // Preview uses the same theme mapping as push to keep WYSIWYG behavior.
+  const previewThemeName = previewArticle
+    ? articleThemes[previewArticle.task_id] || CURRENT_THEME_KEY
+    : CURRENT_THEME_KEY
+
   const previewHtml = previewArticle
     ? buildPreviewHtml(
         String(previewArticle.generated_article?.content || ''),
@@ -232,8 +221,7 @@ export default function ArticleManage() {
       title: '文章标题',
       dataIndex: 'generated_article',
       key: 'title',
-      render: (article: TaskResponse['generated_article']) =>
-        article?.title ?? '未命名文章',
+      render: (article: TaskResponse['generated_article']) => article?.title ?? '未命名文章',
     },
     {
       title: '关键词',
@@ -261,9 +249,11 @@ export default function ArticleManage() {
       key: 'push_records',
       render: (records: PushRecord[] | undefined) => {
         const names = getPushedAccountNames(records)
+
         if (names.length === 0) {
           return <Text type="secondary">暂无</Text>
         }
+
         return (
           <Space size={[4, 8]} wrap>
             {names.map((name) => (
@@ -300,26 +290,43 @@ export default function ArticleManage() {
   ]
 
   return (
-    <div style={{ maxWidth: 1280, margin: '32px auto', padding: '0 24px' }}>
-      <Card
-        title={<span style={{ fontSize: 18, fontWeight: 600 }}>文章管理</span>}
-        extra={
-          <Space>
-            <Select
-              mode="multiple"
-              allowClear
-              style={{ width: 360 }}
-              placeholder="选择批量推送目标公众号"
-              value={defaultAccountIds}
-              onChange={setDefaultAccountIds}
-              options={accountOptions}
-            />
-            <Button type="primary" loading={pushing} onClick={submitBatchPush}>
-              批量推送
-            </Button>
-          </Space>
-        }
-      >
+    <AssetList
+      eyebrow="Publishing Assets"
+      title="文章库"
+      description="在统一资产视图里完成文章筛选、主题配置、预览校对和批量推送。"
+      meta={
+        <Space wrap>
+          <Tag bordered={false} color="blue">
+            文章 {articles.length}
+          </Tag>
+          <Tag bordered={false} color="gold">
+            已选 {selectedArticleKeys.length}
+          </Tag>
+          <Tag bordered={false} color="green">
+            公众号 {wechatAccounts.length}
+          </Tag>
+        </Space>
+      }
+      actions={
+        <Space wrap>
+          <Select
+            mode="multiple"
+            allowClear
+            style={{ width: 360, maxWidth: '100%' }}
+            placeholder="选择批量推送目标公众号"
+            value={defaultAccountIds}
+            onChange={setDefaultAccountIds}
+            options={accountOptions}
+          />
+          <Button type="primary" loading={pushing} onClick={submitBatchPush}>
+            批量推送
+          </Button>
+        </Space>
+      }
+
+
+    >
+      <Card style={{ borderRadius: 24 }}>
         <Table
           rowKey="task_id"
           loading={loading}
@@ -395,6 +402,6 @@ export default function ArticleManage() {
           </Paragraph>
         </Space>
       </Modal>
-    </div>
+    </AssetList>
   )
 }

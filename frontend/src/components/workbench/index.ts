@@ -1,3 +1,4 @@
+export { default as AssetList } from './AssetList'
 export { default as HeroPanel } from './HeroPanel'
 export { default as MetricCard } from './MetricCard'
 export { default as SectionBlock } from './SectionBlock'
