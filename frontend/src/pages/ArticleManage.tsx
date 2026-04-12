@@ -25,6 +25,14 @@ const { Paragraph, Text, Title } = Typography
 const CURRENT_THEME_KEY = '__current__'
 const ARTICLE_LAYOUT_BREAKPOINT = 1100
 
+function getInitialLayoutMode() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return window.innerWidth < ARTICLE_LAYOUT_BREAKPOINT
+}
+
 function mergeStyle(existing: string | null, next: string) {
   if (!existing) return next
   return `${existing}${existing.trim().endsWith(';') ? ' ' : '; '}${next}`
@@ -81,7 +89,7 @@ export default function ArticleManage() {
   const [pushTargetTaskId, setPushTargetTaskId] = useState<string | null>(null)
   const [pushAccountIds, setPushAccountIds] = useState<string[]>([])
   const [singlePushThemeName, setSinglePushThemeName] = useState<string>(CURRENT_THEME_KEY)
-  const [isNarrowLayout, setIsNarrowLayout] = useState(false)
+  const [isNarrowLayout, setIsNarrowLayout] = useState(getInitialLayoutMode)
 
   const wechatAccounts = accounts.filter((item) => item.platform === 'wechat_mp' && item.enabled)
 

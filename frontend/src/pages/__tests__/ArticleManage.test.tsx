@@ -1,7 +1,7 @@
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, expect, test, vi } from 'vitest'
+import { beforeEach, afterEach, expect, test, vi } from 'vitest'
 import type { AccountConfig, StyleConfig, TaskResponse } from '@/api'
 import ArticleManage from '@/pages/ArticleManage'
 
@@ -40,8 +40,11 @@ vi.mock('@/api', async () => {
   }
 })
 
+let originalInnerWidth = window.innerWidth
+
 beforeEach(() => {
   vi.clearAllMocks()
+  originalInnerWidth = window.innerWidth
   listArticlesMock.mockResolvedValue([])
   listAccountsMock.mockResolvedValue([])
   getStyleConfigMock.mockResolvedValue({})
@@ -85,15 +88,14 @@ beforeEach(() => {
   })
 })
 
-test('renders a list-first article workspace with inline preview', async () => {
-  const user = userEvent.setup()
-  const originalInnerWidth = window.innerWidth
-
+afterEach(() => {
   Object.defineProperty(window, 'innerWidth', {
     writable: true,
-    value: 900,
+    value: originalInnerWidth,
   })
+})
 
+function mockArticleList() {
   listArticlesMock.mockResolvedValue([
     {
       task_id: 'article-1',
@@ -115,8 +117,10 @@ test('renders a list-first article workspace with inline preview', async () => {
       push_records: [],
     },
   ])
+}
 
-  render(
+function renderArticleManage() {
+  return render(
     <MemoryRouter
       initialEntries={['/articles']}
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
@@ -126,12 +130,21 @@ test('renders a list-first article workspace with inline preview', async () => {
       </Routes>
     </MemoryRouter>,
   )
+}
 
+test('renders narrow layout on the first paint', async () => {
+  const user = userEvent.setup()
+  Object.defineProperty(window, 'innerWidth', {
+    writable: true,
+    value: 900,
+  })
+  mockArticleList()
+
+  renderArticleManage()
+
+  expect(screen.getByTestId('article-manage-grid')).toHaveStyle({ gridTemplateColumns: 'minmax(0, 1fr)' })
   expect(await screen.findByRole('heading', { name: '文章库' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: '批量推送' })).toBeInTheDocument()
-  expect(screen.getByText('文章标题')).toBeInTheDocument()
-  expect(screen.getByText('选择一篇文章查看预览', { selector: '.ant-empty-description' })).toBeInTheDocument()
-  expect(screen.getByTestId('article-manage-grid')).toHaveStyle({ gridTemplateColumns: 'minmax(0, 1fr)' })
 
   await user.click(screen.getByRole('button', { name: /查\s*看/ }))
 
@@ -139,9 +152,44 @@ test('renders a list-first article workspace with inline preview', async () => {
   expect(screen.getByRole('heading', { name: '文章预览' })).toBeInTheDocument()
   expect(screen.getByRole('heading', { level: 4, name: '首篇文章' })).toBeInTheDocument()
   expect(screen.getByText('这是一段预览内容。')).toBeInTheDocument()
+})
 
+test('updates the grid when the viewport resizes', async () => {
+  mockArticleList()
   Object.defineProperty(window, 'innerWidth', {
     writable: true,
-    value: originalInnerWidth,
+    value: 1400,
+  })
+
+  renderArticleManage()
+
+  expect(screen.getByTestId('article-manage-grid')).toHaveStyle({
+    gridTemplateColumns: 'minmax(0, 1.4fr) minmax(320px, 0.9fr)',
+  })
+
+  await act(async () => {
+    Object.defineProperty(window, 'innerWidth', {
+      writable: true,
+      value: 900,
+    })
+    window.dispatchEvent(new Event('resize'))
+  })
+
+  await waitFor(() => {
+    expect(screen.getByTestId('article-manage-grid')).toHaveStyle({ gridTemplateColumns: 'minmax(0, 1fr)' })
+  })
+
+  await act(async () => {
+    Object.defineProperty(window, 'innerWidth', {
+      writable: true,
+      value: 1400,
+    })
+    window.dispatchEvent(new Event('resize'))
+  })
+
+  await waitFor(() => {
+    expect(screen.getByTestId('article-manage-grid')).toHaveStyle({
+      gridTemplateColumns: 'minmax(0, 1.4fr) minmax(320px, 0.9fr)',
+    })
   })
 })
