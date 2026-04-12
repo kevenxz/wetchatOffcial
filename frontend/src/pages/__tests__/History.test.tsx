@@ -23,6 +23,15 @@ vi.mock('@/api', async () => {
   }
 })
 
+test('renders the model backstage page with updated shared copy', async () => {
+  render(<ModelConfigPage />)
+
+  expect(await screen.findByText('模型接入配置')).toBeInTheDocument()
+  expect(screen.getByText('统一管理文本与图片模型的密钥、网关和默认型号。')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '文本模型' })).toBeInTheDocument()
+  expect(screen.queryByText('模型接入台')).not.toBeInTheDocument()
+})
+
 beforeEach(() => {
   vi.clearAllMocks()
   listTasksMock.mockResolvedValue([])
@@ -114,7 +123,7 @@ test('renders the history page as a table-first archive', async () => {
   expect(screen.getByText('task-8')).toBeInTheDocument()
 })
 
-test('renders the model backstage page with readable shared copy', async () => {
+test.skip('renders the model backstage page with readable shared copy', async () => {
   render(<ModelConfigPage />)
 
   expect(await screen.findByText('模型接入台')).toBeInTheDocument()

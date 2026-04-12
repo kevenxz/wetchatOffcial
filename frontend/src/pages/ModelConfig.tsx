@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { useEffect, useState } from 'react'
 import {
   ApiOutlined,
@@ -27,7 +28,7 @@ const EMPTY_CONFIG: ModelConfig = {
   },
 }
 
-const guidanceListStyle = {
+const guidanceListStyle: CSSProperties = {
   display: 'grid',
   gap: 8,
   margin: 0,
@@ -39,7 +40,7 @@ const guidanceListStyle = {
   lineHeight: 1.6,
 }
 
-const panelStyle = {
+const panelStyle: CSSProperties = {
   display: 'grid',
   gap: 16,
   padding: 20,
@@ -48,7 +49,7 @@ const panelStyle = {
   background: 'var(--app-surface)',
 }
 
-const panelTitleStyle = {
+const panelTitleStyle: CSSProperties = {
   margin: 0,
   fontSize: 15,
   fontWeight: 600,

@@ -4,7 +4,6 @@ import {
   BgColorsOutlined,
   CopyOutlined,
   DeleteOutlined,
-  EditOutlined,
   ExportOutlined,
   EyeOutlined,
   ImportOutlined,

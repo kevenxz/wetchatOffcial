@@ -1,5 +1,5 @@
 import userEvent from '@testing-library/user-event'
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import { beforeEach, expect, test } from 'vitest'
 import TaskCreate from '@/pages/TaskCreate'
 import { renderWithRouter } from '@/test/renderWithRouter'

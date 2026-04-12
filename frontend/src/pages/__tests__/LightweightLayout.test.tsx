@@ -7,10 +7,9 @@ import styles from '@/components/workbench/WorkbenchShell.module.css'
 import AccountConfigPage from '@/pages/AccountConfig'
 import ModelConfigPage from '@/pages/ModelConfig'
 import StyleConfigPage from '@/pages/StyleConfig'
+import globalStylesSource from '@/styles/global.css?inline'
+import variablesSource from '@/styles/variables.css?inline'
 import { renderWithRouter } from '@/test/renderWithRouter'
-import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 const {
   getStyleConfigMock,
@@ -69,11 +68,6 @@ afterEach(() => {
     document.documentElement.dataset.theme = previousTheme
   }
 })
-
-function readStylesheetSource(relativePath: string) {
-  const testDir = dirname(fileURLToPath(import.meta.url))
-  return readFileSync(resolve(testDir, relativePath), 'utf8')
-}
 
 function getRuleBody(source: string, selector: string) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -178,8 +172,6 @@ test('collapses the shell to a single column at the breakpoint', () => {
 })
 
 test('keeps shared surfaces light in light mode', () => {
-  const variables = readStylesheetSource('../../styles/variables.css')
-  const globalStyles = readStylesheetSource('../../styles/global.css')
   const { container } = renderWithRouter(<WorkbenchShell />, { route: '/task' })
 
   const shell = container.firstElementChild as HTMLElement | null
@@ -190,23 +182,23 @@ test('keeps shared surfaces light in light mode', () => {
   expect(sidebar).toBeInTheDocument()
   expect(canvas).toBeInTheDocument()
 
-  const rootRule = getRuleBody(variables, ":root[data-theme='light']")
-  expect(getDeclarationValue(rootRule, '--app-surface-muted')).toBe('#f8fbff')
-  expect(getDeclarationValue(rootRule, '--app-toolbar-bg')).toBe('#f8fbff')
-  expect(getDeclarationValue(rootRule, '--app-list-row-hover')).toBe('#f3f7fd')
+  const rootRuleBody = getRuleBody(variablesSource, ":root[data-theme='light']")
+  expect(getDeclarationValue(rootRuleBody, '--app-surface-muted')).toBe('#f8fbff')
+  expect(getDeclarationValue(rootRuleBody, '--app-toolbar-bg')).toBe('#f8fbff')
+  expect(getDeclarationValue(rootRuleBody, '--app-list-row-hover')).toBe('#f3f7fd')
 
-  const toolbarRule = getRuleBody(globalStyles, '.backstage-toolbar')
-  expect(getDeclarationValue(toolbarRule, 'background')).toBe('var(--app-toolbar-bg)')
+  const toolbarRuleBody = getRuleBody(globalStylesSource, '.backstage-toolbar')
+  expect(getDeclarationValue(toolbarRuleBody, 'background')).toBe('var(--app-toolbar-bg)')
 
-  const cardRule = getRuleBody(globalStyles, '.backstage-surface-card')
-  expect(getDeclarationValue(cardRule, 'background')).toBe('var(--app-surface)')
+  const cardRuleBody = getRuleBody(globalStylesSource, '.backstage-surface-card')
+  expect(getDeclarationValue(cardRuleBody, 'background')).toBe('var(--app-surface)')
 
-  const previewRule = getRuleBody(globalStyles, '.backstage-preview-frame')
-  expect(getDeclarationValue(previewRule, 'background')).toBe('var(--app-surface-muted)')
+  const previewRuleBody = getRuleBody(globalStylesSource, '.backstage-preview-frame')
+  expect(getDeclarationValue(previewRuleBody, 'background')).toBe('var(--app-surface-muted)')
 
-  const hoverRule = getRuleBody(globalStyles, '.ant-table-wrapper .ant-table-tbody > tr:hover > td')
-  expect(getDeclarationValue(hoverRule, 'background')).toBe('var(--app-list-row-hover)')
-  expect(hoverRule).toContain('!important')
+  const hoverRuleBody = getRuleBody(globalStylesSource, '.ant-table-wrapper .ant-table-tbody > tr:hover > td')
+  expect(getDeclarationValue(hoverRuleBody, 'background')).toBe('var(--app-list-row-hover)')
+  expect(hoverRuleBody).toContain('!important')
 })
 
 test('renders compact grouped config pages without metric-card emphasis', async () => {

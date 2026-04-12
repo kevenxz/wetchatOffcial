@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import {
   DeleteOutlined,
@@ -47,7 +48,7 @@ const PLATFORM_COLORS: Record<PlatformType, string> = {
   toutiao: 'orange',
 }
 
-const guidanceListStyle = {
+const guidanceListStyle: CSSProperties = {
   display: 'grid',
   gap: 8,
   margin: 0,
@@ -59,20 +60,13 @@ const guidanceListStyle = {
   lineHeight: 1.6,
 }
 
-const panelStyle = {
+const panelStyle: CSSProperties = {
   display: 'grid',
   gap: 16,
   padding: 20,
   borderRadius: 16,
   border: '1px solid var(--app-border)',
   background: 'var(--app-surface)',
-}
-
-const panelTitleStyle = {
-  margin: 0,
-  fontSize: 15,
-  fontWeight: 600,
-  color: 'var(--app-text)',
 }
 
 export default function AccountConfigPage() {
