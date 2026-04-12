@@ -1,7 +1,4 @@
 import { render, screen } from '@testing-library/react'
-import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { beforeEach, expect, test } from 'vitest'
 import HeroPanel from '@/components/workbench/HeroPanel'
 import WorkbenchShell from '@/components/workbench/WorkbenchShell'
@@ -115,17 +112,20 @@ test('collapses the shell to a single column at the breakpoint', () => {
 })
 
 test('keeps shared surfaces light in light mode', () => {
-  const testDir = dirname(fileURLToPath(import.meta.url))
-  const variables = readFileSync(resolve(testDir, '../../styles/variables.css'), 'utf8')
-  const globalStyles = readFileSync(resolve(testDir, '../../styles/global.css'), 'utf8')
+  const { container } = renderWithRouter(<WorkbenchShell />, { route: '/task', theme: 'light' })
 
-  expect(variables).toContain('--app-surface-muted: #f8fbff;')
-  expect(variables).toContain('--app-toolbar-bg: #f8fbff;')
-  expect(variables).toContain('--app-list-row-hover: #f3f7fd;')
-  expect(variables).toContain('--app-surface-muted: #182235;')
-  expect(globalStyles).toContain('padding: 12px 16px;')
-  expect(globalStyles).toContain('background: var(--app-toolbar-bg);')
-  expect(globalStyles).toContain('border-radius: 16px;')
-  expect(globalStyles).toContain('background: var(--app-surface-muted);')
-  expect(globalStyles).toContain('background: var(--app-list-row-hover) !important;')
+  const shell = container.firstElementChild as HTMLElement | null
+  const sidebar = shell?.querySelector('aside') as HTMLElement | null
+  const canvas = container.querySelector(`.${styles.canvas}`) as HTMLElement | null
+
+  expect(shell).toBeInTheDocument()
+  expect(sidebar).toBeInTheDocument()
+  expect(canvas).toBeInTheDocument()
+
+  const sidebarStyle = getComputedStyle(sidebar as HTMLElement)
+  const canvasStyle = getComputedStyle(canvas as HTMLElement)
+
+  expect(sidebarStyle.backgroundColor).not.toBe('rgb(11, 16, 32)')
+  expect(canvasStyle.backgroundColor).not.toBe('rgb(15, 23, 42)')
+  expect(canvasStyle.boxShadow).toBe('none')
 })

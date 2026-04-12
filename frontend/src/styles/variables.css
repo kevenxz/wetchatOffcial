@@ -165,7 +165,7 @@
     radial-gradient(circle at top right, rgba(167, 139, 250, 0.1), transparent 24%),
     linear-gradient(180deg, #0b1020 0%, #0f172a 100%);
   --app-surface: #121a2b;
-  --app-surface-muted: #182235;
+  --app-surface-muted: #0f172a;
   --app-surface-strong: #182235;
   --app-toolbar-bg: #121a2b;
   --app-list-row-hover: #182235;
