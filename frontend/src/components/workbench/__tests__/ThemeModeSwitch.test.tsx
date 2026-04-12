@@ -319,10 +319,23 @@ describe('ThemeModeSwitch', () => {
     const darkRender = renderWithRouter(<WorkbenchShell />, { route: '/task' })
     const darkSurfaces = getSurfaceNodes(darkRender.container)
 
-    expect(darkSurfaces.sidebar).toBeInTheDocument()
-    expect(darkSurfaces.brand).toBeInTheDocument()
-    expect(darkSurfaces.activeNav).toBeInTheDocument()
-    expect(darkSurfaces.footer).toBeInTheDocument()
+    expect(document.documentElement.dataset.theme).toBe('dark')
+    expect(getComputedStyle(document.documentElement).getPropertyValue('--app-bg').trim()).toBe(
+      '#0b1020',
+    )
+    expect(getComputedStyle(document.documentElement).getPropertyValue('--app-text').trim()).toBe(
+      '#e5edf9',
+    )
+
+    const darkProbe = document.createElement('div')
+    darkProbe.style.backgroundColor = 'var(--app-surface)'
+    document.body.appendChild(darkProbe)
+
+    expect(resolveCssValue(getComputedStyle(darkProbe).backgroundColor)).toBe('#121a2b')
+
+    expect(darkSurfaces.shell).toBeInTheDocument()
     expect(darkSurfaces.canvas).toBeInTheDocument()
+
+    darkProbe.remove()
   })
 })
