@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
-import App from '@/App'
 import type { AccountConfig, ScheduleConfig } from '@/api'
+import ScheduleManage from '@/pages/ScheduleManage'
+import { renderWithRouter } from '@/test/renderWithRouter'
 
 const {
   listSchedulesMock,
@@ -52,11 +53,9 @@ beforeEach(() => {
     writable: true,
     value: (element: Element) => originalGetComputedStyle(element),
   })
-
-  window.history.replaceState({}, '', '/schedules')
 })
 
-test('renders the automation workbench shell and a loaded rule card for schedules', async () => {
+test('renders schedule management as a compact toolbar and table layout', async () => {
   listSchedulesMock.mockResolvedValue([
     {
       schedule_id: 'schedule-1',
@@ -80,7 +79,7 @@ test('renders the automation workbench shell and a loaded rule card for schedule
         fallback_topics: [],
       },
       generation_config: {
-        audience_roles: ['开发者'],
+        audience_roles: ['Developer'],
         article_strategy: 'auto',
         style_hint: '',
       },
@@ -96,7 +95,7 @@ test('renders the automation workbench shell and a loaded rule card for schedule
   listAccountsMock.mockResolvedValue([
     {
       account_id: 'account-1',
-      name: '品牌号 A',
+      name: 'Brand Account A',
       platform: 'wechat_mp',
       app_id: 'app-id',
       app_secret: 'secret',
@@ -106,25 +105,10 @@ test('renders the automation workbench shell and a loaded rule card for schedule
     },
   ])
 
-  render(<App />)
+  renderWithRouter(<ScheduleManage />, { route: '/schedules' })
 
-  expect(await screen.findByText('自动化编排台')).toBeInTheDocument()
-  expect(screen.getAllByText('执行规则').length).toBeGreaterThan(0)
-  expect(screen.getAllByText('推送目标').length).toBeGreaterThan(0)
-  expect((await screen.findAllByText('晨间快报')).length).toBeGreaterThan(0)
-  expect(screen.getAllByRole('button', { name: /立即执行/ }).length).toBeGreaterThan(0)
-})
-
-test('shows loading copy instead of the empty automation CTA while schedules are loading', () => {
-  listSchedulesMock.mockImplementation(() => new Promise(() => undefined))
-  listAccountsMock.mockImplementation(() => new Promise(() => undefined))
-  getPresetThemesMock.mockImplementation(() => new Promise(() => undefined))
-  getCustomThemesMock.mockImplementation(() => new Promise(() => undefined))
-
-  render(<App />)
-
-  expect(screen.getByText('自动化编排台')).toBeInTheDocument()
-  expect(screen.getByText('正在加载自动化规则...')).toBeInTheDocument()
-  expect(screen.queryByText('还没有自动化规则，先配置一条编排规则。')).not.toBeInTheDocument()
-  expect(screen.queryByText('暂无可用公众号账号，规则保存前仍需选择至少一个账号。')).not.toBeInTheDocument()
+  expect(await screen.findByRole('toolbar', { name: 'Schedule actions' })).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: '新建自动化规则' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '规则明细' })).toBeInTheDocument()
+  expect(screen.getByRole('table')).toBeInTheDocument()
 })

@@ -44,7 +44,7 @@ import {
   type ScheduleConfig,
   type ScheduleMode,
 } from '@/api'
-import { AutomationRuleCard, MetricCard, SectionBlock } from '@/components/workbench'
+import { AutomationRuleCard, HeroPanel, MetricCard, SectionBlock } from '@/components/workbench'
 
 const { Text } = Typography
 const CURRENT_THEME_KEY = '__current__'
@@ -52,22 +52,6 @@ const HOTSPOT_CATEGORY_PRESETS = ['finance', 'ai', 'news', 'tech', 'community']
 const PAGE_STACK_STYLE = {
   display: 'grid',
   gap: 24,
-} as const
-const HERO_STYLE = {
-  padding: 32,
-  borderRadius: 28,
-  border: '1px solid rgba(148, 163, 184, 0.18)',
-  background:
-    'radial-gradient(circle at top left, rgba(52, 211, 153, 0.18), transparent 34%), linear-gradient(145deg, rgba(6, 78, 59, 0.62), rgba(15, 23, 42, 0.96))',
-  boxShadow: '0 28px 80px rgba(15, 23, 42, 0.28)',
-} as const
-const HERO_HEADER_STYLE = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: 24,
-  alignItems: 'flex-start',
-  flexWrap: 'wrap',
-  marginBottom: 24,
 } as const
 const METRIC_GRID_STYLE = {
   display: 'grid',
@@ -487,31 +471,42 @@ export default function ScheduleManage() {
 
   return (
     <div style={PAGE_STACK_STYLE}>
-      <section style={HERO_STYLE}>
-        <div style={HERO_HEADER_STYLE}>
-          <div style={{ maxWidth: 720 }}>
-            <Text style={{ color: 'rgba(167, 243, 208, 0.88)', letterSpacing: '0.18em', textTransform: 'uppercase' }}>
-              Automation Workbench
-            </Text>
-            <h1 style={{ margin: '10px 0 12px', fontSize: 'clamp(2rem, 4vw, 3.1rem)', lineHeight: 1.05 }}>
-              自动化编排台
-            </h1>
-            <p style={{ margin: 0, color: 'rgba(226, 232, 240, 0.88)', fontSize: '1rem', lineHeight: 1.8 }}>
-              在同一块工作台内整理执行节奏、热点输入与推送目标。现有的新建、编辑、启动、停止、立即执行和删除能力保持不变，只重构规则可读性和配置分组。
-            </p>
+      <HeroPanel
+        eyebrow="Automation Workbench"
+        title="自动化编排台"
+        description="在同一块工作台内整理执行节奏、热点输入与推送目标。现有的新建、编辑、启动、停止、立即执行和删除能力保持不变，只重构规则可读性和配置分组。"
+      >
+        <div style={{ display: 'grid', gap: 16 }}>
+          <div role="toolbar" aria-label="Schedule actions" style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button type="primary" size="large" onClick={openCreate}>
+              新建自动化规则
+            </Button>
           </div>
-          <Button type="primary" size="large" onClick={openCreate}>
-            新建自动化规则
-          </Button>
-        </div>
 
-        <div style={METRIC_GRID_STYLE}>
-          <MetricCard label="Rules" value={loading ? '--' : String(schedules.length).padStart(2, '0')} hint="当前编排台中的自动化规则数量" />
-          <MetricCard label="Running" value={loading ? '--' : String(runningSchedules.length).padStart(2, '0')} hint="正在持续执行的规则" />
-          <MetricCard label="Hotspot" value={loading ? '--' : String(hotspotEnabledCount).padStart(2, '0')} hint="已接入热点感知的规则" />
-          <MetricCard label="Targets" value={loading ? '--' : String(targetAccountCount).padStart(2, '0')} hint="已被规则覆盖的公众号推送目标" />
+          <div style={METRIC_GRID_STYLE}>
+            <MetricCard
+              label="Rules"
+              value={loading ? '--' : String(schedules.length).padStart(2, '0')}
+              hint="当前编排台中的自动化规则数量"
+            />
+            <MetricCard
+              label="Running"
+              value={loading ? '--' : String(runningSchedules.length).padStart(2, '0')}
+              hint="正在持续执行的规则"
+            />
+            <MetricCard
+              label="Hotspot"
+              value={loading ? '--' : String(hotspotEnabledCount).padStart(2, '0')}
+              hint="已接入热点感知的规则"
+            />
+            <MetricCard
+              label="Targets"
+              value={loading ? '--' : String(targetAccountCount).padStart(2, '0')}
+              hint="已被规则覆盖的公众号推送目标"
+            />
+          </div>
         </div>
-      </section>
+      </HeroPanel>
 
       <div style={RESPONSIVE_TWO_COLUMN_STYLE}>
         <SectionBlock
