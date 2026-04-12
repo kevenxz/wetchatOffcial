@@ -6,6 +6,19 @@ import { useThemeStore } from '@/store/themeStore'
 import { renderWithRouter } from '@/test/renderWithRouter'
 import '../../../styles/global.css'
 
+const resolveCssValue = (value: string): string => {
+  const trimmed = value.trim()
+  const match = trimmed.match(/^var\((--[\w-]+)\)$/)
+
+  if (!match) {
+    return trimmed
+  }
+
+  const resolved = getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim()
+
+  return resolved === trimmed ? resolved : resolveCssValue(resolved)
+}
+
 const resetThemeState = () => {
   act(() => {
     useThemeStore.setState({
@@ -168,12 +181,20 @@ describe('ThemeModeSwitch', () => {
 
     renderWithRouter(<WorkbenchShell />, { route: '/task' })
 
+    const bridgeProbe = document.createElement('div')
+    bridgeProbe.style.backgroundColor = 'var(--bg-workbench)'
+    document.body.appendChild(bridgeProbe)
+
     expect(document.documentElement.dataset.theme).toBe('light')
     expect(getComputedStyle(document.documentElement).getPropertyValue('--app-bg').trim()).toBe(
       '#f3f6fb',
     )
-    expect(getComputedStyle(document.documentElement).getPropertyValue('--bg-workbench').trim()).toBe(
-      'var(--app-bg)',
-    )
+    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f3f6fb')
+
+    document.documentElement.removeAttribute('data-theme')
+
+    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f3f6fb')
+
+    bridgeProbe.remove()
   })
 })
