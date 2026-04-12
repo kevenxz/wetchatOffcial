@@ -2,10 +2,8 @@ import React from 'react'
 import { render, screen } from '@testing-library/react'
 import { act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import App from '../../App'
 import { getAntdTheme } from '../../theme'
 import {
-  bootstrapThemeStore,
   STORAGE_KEY,
   applyResolvedTheme,
   createSystemThemeListener,
@@ -13,12 +11,38 @@ import {
   resolveThemeMode,
   useThemeStore,
 } from '../themeStore'
+import { ThemeBootstrap, bootstrapThemeFromWindow } from '../../themeBootstrap'
+
+let capturedTheme: ReturnType<typeof getAntdTheme> | undefined
+
+vi.mock('../../App', () => ({
+  default: () => React.createElement('div', null, 'theme bootstrap app'),
+}))
+
+vi.mock('antd', async () => {
+  const actual = await vi.importActual<typeof import('antd')>('antd')
+
+  return {
+    ...actual,
+    ConfigProvider: ({
+      theme,
+      children,
+    }: {
+      theme?: ReturnType<typeof getAntdTheme>
+      children?: React.ReactNode
+    }) => {
+      capturedTheme = theme
+      return React.createElement(React.Fragment, null, children)
+    },
+  }
+})
 
 describe('themeStore helpers', () => {
   beforeEach(() => {
     localStorage.clear()
     document.documentElement.removeAttribute('data-theme')
     document.documentElement.style.colorScheme = ''
+    capturedTheme = undefined
   })
 
   afterEach(() => {
@@ -180,30 +204,35 @@ describe('themeStore helpers', () => {
     expect(darkTheme.components?.Layout?.siderBg).toBe('#0e1627')
   })
 
-  it('boots the stored theme before the app shell renders', () => {
+  it('boots the real startup path from matchMedia and feeds the resolved theme into the provider', () => {
     localStorage.setItem(STORAGE_KEY, 'dark')
+
+    const matchMedia = vi.fn(() => ({
+      matches: false,
+      media: '(prefers-color-scheme: dark)',
+      onchange: null,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      dispatchEvent: () => false,
+    }))
 
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
-      value: () => ({
-        matches: false,
-        media: '(prefers-color-scheme: dark)',
-        onchange: null,
-        addListener: () => undefined,
-        removeListener: () => undefined,
-        addEventListener: () => undefined,
-        removeEventListener: () => undefined,
-        dispatchEvent: () => false,
-      }),
+      value: matchMedia,
     })
 
-    expect(bootstrapThemeStore(false)).toBe('dark')
+    expect(bootstrapThemeFromWindow()).toBe('dark')
+    expect(matchMedia).toHaveBeenCalledWith('(prefers-color-scheme: dark)')
     expect(document.documentElement.dataset.theme).toBe('dark')
     expect(useThemeStore.getState().resolvedTheme).toBe('dark')
+    expect(capturedTheme).toBeUndefined()
 
-    render(React.createElement(App))
+    render(React.createElement(ThemeBootstrap))
 
     expect(document.documentElement.dataset.theme).toBe('dark')
-    expect(screen.getByText('Brand Studio', { selector: 'strong' })).toBeInTheDocument()
+    expect(capturedTheme).toBe(getAntdTheme('dark'))
+    expect(screen.getByText('theme bootstrap app')).toBeInTheDocument()
   })
 })
