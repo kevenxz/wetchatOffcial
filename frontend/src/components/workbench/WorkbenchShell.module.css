@@ -43,7 +43,7 @@
 }
 
 .brandCopy {
-  color: var(--text-secondary);
+  color: var(--app-text-secondary);
 }
 
 .nav {
@@ -58,7 +58,7 @@
   padding: 12px 14px;
   border: 1px solid transparent;
   border-radius: 16px;
-  color: var(--text-secondary);
+  color: var(--app-text-secondary);
   transition:
     border-color var(--transition-fast),
     background-color var(--transition-fast),
@@ -67,14 +67,14 @@
 }
 
 .navLink:hover {
-  color: var(--text-primary);
+  color: var(--app-text);
   border-color: var(--app-border-strong);
   background: var(--app-surface-strong);
   transform: translateX(2px);
 }
 
 .navLinkActive {
-  color: var(--text-primary);
+  color: var(--app-text);
   border-color: var(--app-border-strong);
   background: linear-gradient(135deg, var(--app-primary-bg), var(--app-surface-strong));
   box-shadow: inset 0 0 0 1px var(--app-border);
@@ -92,7 +92,7 @@
 }
 
 .sidebarFooter {
-  color: var(--text-tertiary);
+  color: var(--app-text-tertiary);
 }
 
 .main {

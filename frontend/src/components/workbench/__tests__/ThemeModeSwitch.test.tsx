@@ -221,6 +221,28 @@ describe('ThemeModeSwitch', () => {
       throw new Error(`Unable to find CSS rule for ${className}`)
     }
 
+    const getCssRuleForToken = (token: string) => {
+      for (const sheet of Array.from(document.styleSheets)) {
+        let rules: CSSRuleList
+
+        try {
+          rules = sheet.cssRules
+        } catch {
+          continue
+        }
+
+        const matchingRule = Array.from(rules).find(
+          (rule) => 'cssText' in rule && rule.cssText.includes(`_${token}_`),
+        )
+
+        if (matchingRule && 'cssText' in matchingRule) {
+          return matchingRule.cssText
+        }
+      }
+
+      throw new Error(`Unable to find CSS rule for token ${token}`)
+    }
+
     const getCssModuleClass = (element: Element, token?: string) => {
       if (!token) {
         return element.className
@@ -237,6 +259,8 @@ describe('ThemeModeSwitch', () => {
       shell: container.querySelector('[class*="shell"]'),
       sidebar: container.querySelector('[class*="sidebar"]'),
       brand: container.querySelector('[class*="brand"]'),
+      brandCopy: container.querySelector('[class*="brandCopy"]'),
+      navLink: container.querySelector('[class*="navLink"]'),
       activeNav: container.querySelector('[class*="navLinkActive"]'),
       footer: container.querySelector('[class*="sidebarFooter"]'),
       canvas: container.querySelector('[class*="canvas"]'),
@@ -252,6 +276,8 @@ describe('ThemeModeSwitch', () => {
     expect(lightSurfaces.shell).toBeInTheDocument()
     expect(lightSurfaces.sidebar).toBeInTheDocument()
     expect(lightSurfaces.brand).toBeInTheDocument()
+    expect(lightSurfaces.brandCopy).toBeInTheDocument()
+    expect(lightSurfaces.navLink).toBeInTheDocument()
     expect(lightSurfaces.activeNav).toBeInTheDocument()
     expect(lightSurfaces.footer).toBeInTheDocument()
     expect(lightSurfaces.canvas).toBeInTheDocument()
@@ -259,7 +285,9 @@ describe('ThemeModeSwitch', () => {
     const shellRule = getCssRuleForClass(getCssModuleClass(lightSurfaces.shell!))
     const sidebarRule = getCssRuleForClass(getCssModuleClass(lightSurfaces.sidebar!))
     const brandRule = getCssRuleForClass(getCssModuleClass(lightSurfaces.brand!))
-    const activeNavRule = getCssRuleForClass(getCssModuleClass(lightSurfaces.activeNav!, 'navLinkActive'))
+    const brandCopyRule = getCssRuleForClass(getCssModuleClass(lightSurfaces.brandCopy!))
+    const navLinkRule = getCssRuleForToken('navLink')
+    const activeNavRule = getCssRuleForToken('navLinkActive')
     const footerRule = getCssRuleForClass(getCssModuleClass(lightSurfaces.footer!))
     const canvasRule = getCssRuleForClass(getCssModuleClass(lightSurfaces.canvas!))
 
@@ -269,9 +297,18 @@ describe('ThemeModeSwitch', () => {
     expect(sidebarRule).toContain('var(--app-border)')
     expect(brandRule).toContain('var(--app-surface-strong)')
     expect(brandRule).toContain('var(--app-border)')
+    expect(brandCopyRule).toContain('var(--app-text-secondary)')
+    expect(navLinkRule).toContain('var(--app-text-secondary)')
     expect(activeNavRule).toContain('var(--app-primary-bg)')
     expect(activeNavRule).toContain('var(--app-surface-strong)')
-    expect(footerRule).toContain('var(--text-tertiary)')
+    expect(footerRule).toContain('var(--app-text-tertiary)')
+    expect(activeNavRule).toContain('var(--app-text)')
+    expect(sidebarRule).not.toContain('var(--text-')
+    expect(brandRule).not.toContain('var(--text-')
+    expect(brandCopyRule).not.toContain('var(--text-')
+    expect(navLinkRule).not.toContain('var(--text-')
+    expect(activeNavRule).not.toContain('var(--text-')
+    expect(footerRule).not.toContain('var(--text-')
     expect(canvasRule).toContain('var(--app-surface)')
     expect(canvasRule).toContain('var(--app-border)')
 
