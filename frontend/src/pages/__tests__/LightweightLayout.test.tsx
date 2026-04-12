@@ -1,11 +1,18 @@
 import { render, screen } from '@testing-library/react'
-import { beforeEach, expect, test } from 'vitest'
+import { beforeEach, afterEach, expect, test } from 'vitest'
 import HeroPanel from '@/components/workbench/HeroPanel'
 import WorkbenchShell from '@/components/workbench/WorkbenchShell'
 import styles from '@/components/workbench/WorkbenchShell.module.css'
 import { renderWithRouter } from '@/test/renderWithRouter'
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+let previousTheme: string | undefined
 
 beforeEach(() => {
+  previousTheme = document.documentElement.dataset.theme
+  document.documentElement.dataset.theme = 'light'
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: (query: string) => ({
@@ -19,6 +26,14 @@ beforeEach(() => {
       dispatchEvent: () => false,
     }),
   })
+})
+
+afterEach(() => {
+  if (previousTheme === undefined) {
+    delete document.documentElement.dataset.theme
+  } else {
+    document.documentElement.dataset.theme = previousTheme
+  }
 })
 
 test('renders a fixed 216px sidebar shell with compact main spacing', () => {
@@ -112,7 +127,10 @@ test('collapses the shell to a single column at the breakpoint', () => {
 })
 
 test('keeps shared surfaces light in light mode', () => {
-  const { container } = renderWithRouter(<WorkbenchShell />, { route: '/task', theme: 'light' })
+  const testDir = dirname(fileURLToPath(import.meta.url))
+  const variables = readFileSync(resolve(testDir, '../../styles/variables.css'), 'utf8')
+  const globalStyles = readFileSync(resolve(testDir, '../../styles/global.css'), 'utf8')
+  const { container } = renderWithRouter(<WorkbenchShell />, { route: '/task' })
 
   const shell = container.firstElementChild as HTMLElement | null
   const sidebar = shell?.querySelector('aside') as HTMLElement | null
@@ -122,10 +140,19 @@ test('keeps shared surfaces light in light mode', () => {
   expect(sidebar).toBeInTheDocument()
   expect(canvas).toBeInTheDocument()
 
-  const sidebarStyle = getComputedStyle(sidebar as HTMLElement)
-  const canvasStyle = getComputedStyle(canvas as HTMLElement)
+  expect(variables).toContain('--app-surface-muted: #f8fbff;')
+  expect(variables).toContain('--app-toolbar-bg: #f8fbff;')
+  expect(variables).toContain('--app-list-row-hover: #f3f7fd;')
+  expect(variables).toContain('--app-surface-muted: #0f172a;')
 
-  expect(sidebarStyle.backgroundColor).not.toBe('rgb(11, 16, 32)')
-  expect(canvasStyle.backgroundColor).not.toBe('rgb(15, 23, 42)')
-  expect(canvasStyle.boxShadow).toBe('none')
+  expect(globalStyles).toContain('.backstage-toolbar {')
+  expect(globalStyles).toContain('padding: 12px 16px;')
+  expect(globalStyles).toContain('background: var(--app-toolbar-bg);')
+  expect(globalStyles).toContain('.backstage-surface-card {')
+  expect(globalStyles).toContain('border-radius: 16px;')
+  expect(globalStyles).toContain('background: var(--app-surface);')
+  expect(globalStyles).toContain('.backstage-preview-frame {')
+  expect(globalStyles).toContain('background: var(--app-surface-muted);')
+  expect(globalStyles).toContain('.ant-table-wrapper .ant-table-tbody > tr:hover > td {')
+  expect(globalStyles).toContain('background: var(--app-list-row-hover) !important;')
 })
