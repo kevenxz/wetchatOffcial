@@ -15,7 +15,6 @@ html {
   -webkit-text-size-adjust: 100%;
   -moz-tab-size: 4;
   tab-size: 4;
-  color-scheme: light;
 }
 
 body {
@@ -27,6 +26,9 @@ body {
   color: var(--app-text);
   background: var(--app-bg-gradient);
   background-color: var(--app-bg);
+  transition:
+    color var(--transition-base),
+    background-color var(--transition-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
