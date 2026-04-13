@@ -1,11 +1,9 @@
-import { BulbOutlined, CompassOutlined, WechatOutlined } from '@ant-design/icons'
+import { WechatOutlined } from '@ant-design/icons'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { navigationItems, resolveRouteMeta } from '@/config/navigation'
 import HeroPanel from './HeroPanel'
-import MetricCard from './MetricCard'
 import ThemeModeSwitch from './ThemeModeSwitch'
 import SectionBlock from './SectionBlock'
-import SignalCard from './SignalCard'
 import styles from './WorkbenchShell.module.css'
 
 export default function WorkbenchShell() {
@@ -48,35 +46,18 @@ export default function WorkbenchShell() {
           <div className={styles.toolbar}>
             <ThemeModeSwitch />
           </div>
+
           <HeroPanel
             eyebrow={routeMeta.contextEyebrow}
             title={routeMeta.contextTitle}
             description={routeMeta.contextDescription}
-          >
-            <div className={styles.metrics}>
-              <MetricCard label="Focus" value="01" hint="当前界面统一由路由元数据驱动" />
-              <MetricCard label="Shell" value="Live" hint="导航、标题和内容画布已接通" />
-              <MetricCard label="Stage" value="Task 2" hint="页面内部重设计留给后续任务" />
-            </div>
-          </HeroPanel>
+          />
 
           <div className={styles.overview}>
             <SectionBlock title="工作区">
               <div className={styles.canvas}>
                 <Outlet />
               </div>
-            </SectionBlock>
-            <SectionBlock title="工作台信号">
-              <SignalCard
-                icon={<CompassOutlined />}
-                title="Route metadata"
-                description="标题、说明和导航状态从共享配置解析，便于后续扩展。"
-              />
-              <SignalCard
-                icon={<BulbOutlined />}
-                title="Shared container"
-                description="当前只提供统一框架，不改写现有页面内部逻辑。"
-              />
             </SectionBlock>
           </div>
         </div>

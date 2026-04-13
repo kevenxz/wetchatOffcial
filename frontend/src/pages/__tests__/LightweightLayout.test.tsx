@@ -126,11 +126,11 @@ test('renders a compact HeroPanel with spaced title and description', () => {
   const contentStyle = getComputedStyle(content as HTMLElement)
   const titleStyle = getComputedStyle(title as HTMLElement)
 
-  expect(panelStyle.paddingTop).toBe('16px')
-  expect(panelStyle.paddingRight).toBe('20px')
-  expect(panelStyle.paddingBottom).toBe('16px')
-  expect(panelStyle.paddingLeft).toBe('20px')
-  expect(contentStyle.gap).toBe('6px')
+  expect(panelStyle.paddingTop).toBe('2px')
+  expect(panelStyle.paddingRight).toBe('0px')
+  expect(panelStyle.paddingBottom).toBe('0px')
+  expect(panelStyle.paddingLeft).toBe('0px')
+  expect(contentStyle.gap).toBe('4px')
   expect(parseFloat(titleStyle.fontSize)).toBeLessThan(32)
 })
 
