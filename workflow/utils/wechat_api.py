@@ -1,7 +1,10 @@
-"""封装微信 API 素材上传相关的操作方法。"""
+"""Helpers for downloading and uploading images to WeChat APIs."""
 from __future__ import annotations
 
 import mimetypes
+import os
+import ssl
+from pathlib import Path
 from urllib.parse import urlparse
 
 import httpx
@@ -9,19 +12,18 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-# 正文插图允许的类型（微信 uploadimg 兼容性优先）
 ARTICLE_ALLOWED_IMG_TYPES = {"image/jpeg", "image/png", "image/gif"}
-# 封面素材允许的类型（永久素材接口更严格，禁用 webp/svg）
 COVER_ALLOWED_IMG_TYPES = {"image/jpeg", "image/png", "image/gif"}
+INSECURE_SSL_FALLBACK_ENV = "WECHAT_IMAGE_DOWNLOAD_INSECURE_SSL_FALLBACK"
 
 
-def _detect_image_mime(content: bytes, content_type_header: str, img_url: str) -> str:
-    """根据响应头、URL 后缀和文件内容推断真实图片类型。"""
+def _detect_image_mime(content: bytes, content_type_header: str, image_ref: str) -> str:
+    """Infer the image MIME type from headers, file suffix, and file signature."""
     content_type = content_type_header.lower().split(";")[0].strip()
     if content_type:
         return content_type
 
-    guessed, _ = mimetypes.guess_type(urlparse(img_url).path)
+    guessed, _ = mimetypes.guess_type(urlparse(image_ref).path)
     if guessed:
         return guessed
 
@@ -35,7 +37,6 @@ def _detect_image_mime(content: bytes, content_type_header: str, img_url: str) -
     if head.startswith(b"RIFF") and b"WEBP" in content[:16]:
         return "image/webp"
 
-    # camo/github/shields 等来源常见 svg，微信素材接口不支持
     text_head = content[:256].lstrip().lower()
     if text_head.startswith(b"<?xml") or text_head.startswith(b"<svg") or b"<svg" in text_head:
         return "image/svg+xml"
@@ -43,97 +44,179 @@ def _detect_image_mime(content: bytes, content_type_header: str, img_url: str) -
     return ""
 
 
+def _is_enabled(value: str | None, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _should_retry_without_ssl_verify() -> bool:
+    return _is_enabled(os.getenv(INSECURE_SSL_FALLBACK_ENV), default=True)
+
+
+def _is_ssl_verification_error(exc: Exception) -> bool:
+    current: BaseException | None = exc
+    while current is not None:
+        if isinstance(current, ssl.SSLCertVerificationError):
+            return True
+
+        message = str(current).lower()
+        if "certificate verify failed" in message or "certificate_verify_failed" in message:
+            return True
+
+        current = current.__cause__ or current.__context__
+    return False
+
+
+def _is_remote_image_ref(image_ref: str) -> bool:
+    parsed = urlparse(image_ref)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
+def _normalize_image_content(
+    content: bytes,
+    *,
+    image_ref: str,
+    content_type_header: str,
+    allowed_types: set[str],
+    filename_hint: str | None = None,
+) -> tuple[bytes, str, str]:
+    content_type = _detect_image_mime(content, content_type_header, image_ref)
+
+    if content_type == "image/svg+xml":
+        logger.warning("skip_unsupported_svg_image", image_ref=image_ref)
+        return b"", "", ""
+
+    if content_type not in allowed_types:
+        logger.warning(
+            "skip_unsupported_image_type",
+            image_ref=image_ref,
+            content_type=content_type or "unknown",
+        )
+        return b"", "", ""
+
+    ext = "jpg" if content_type == "image/jpeg" else content_type.split("/")[-1]
+    filename = filename_hint or f"upload_img.{ext}"
+    return content, filename, content_type
+
+
 async def _download_image(
     client: httpx.AsyncClient,
-    img_url: str,
+    image_ref: str,
     allowed_types: set[str],
 ) -> tuple[bytes, str, str]:
-    """下载远端图片，返回二进制内容、文件名和 MimeType。"""
+    """Download a remote image and return content, filename, and MIME type."""
     try:
-        resp = await client.get(img_url, follow_redirects=True, timeout=15.0)
-        resp.raise_for_status()
-        
-        content = resp.content
-        content_type = _detect_image_mime(content, resp.headers.get("Content-Type", ""), img_url)
+        response = await client.get(image_ref, follow_redirects=True, timeout=15.0)
+        response.raise_for_status()
+        return _normalize_image_content(
+            response.content,
+            image_ref=image_ref,
+            content_type_header=response.headers.get("Content-Type", ""),
+            allowed_types=allowed_types,
+        )
+    except Exception as exc:  # noqa: BLE001
+        if _is_ssl_verification_error(exc) and _should_retry_without_ssl_verify():
+            logger.warning("download_image_ssl_verify_failed_retry_insecure", url=image_ref, error=str(exc))
+            try:
+                async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, verify=False) as insecure_client:
+                    response = await insecure_client.get(image_ref, follow_redirects=True, timeout=15.0)
+                    response.raise_for_status()
+                    return _normalize_image_content(
+                        response.content,
+                        image_ref=image_ref,
+                        content_type_header=response.headers.get("Content-Type", ""),
+                        allowed_types=allowed_types,
+                    )
+            except Exception as insecure_exc:  # noqa: BLE001
+                logger.warning(
+                    "download_image_failed_after_insecure_retry",
+                    url=image_ref,
+                    error=str(insecure_exc),
+                )
+                return b"", "", ""
 
-        if content_type == "image/svg+xml":
-            logger.warning("skip_unsupported_svg_image", url=img_url)
-            return b"", "", ""
-
-        if content_type not in allowed_types:
-            logger.warning("skip_unsupported_image_type", url=img_url, content_type=content_type or "unknown")
-            return b"", "", ""
-
-        # 生成一个模拟的文件名
-        ext = "jpg" if content_type == "image/jpeg" else content_type.split("/")[-1]
-        filename = f"upload_img.{ext}"
-        
-        return content, filename, content_type
-    except Exception as e:
-        logger.warning("download_image_failed", url=img_url, error=str(e))
+        logger.warning("download_image_failed", url=image_ref, error=str(exc))
         return b"", "", ""
 
 
-async def upload_cover_material(client: httpx.AsyncClient, img_url: str, access_token: str) -> str:
-    """上传封面图片为草稿箱需要的“永久素材 (media_id)”。
-    微信要求：草稿的 thumb_media_id 必须是由新增永久图文素材或者新增实体图片素材生成的。
-    
-    Returns:
-        media_id: 微信服务器返回的永久素材 media_id，上传失败则返回空字符串。
-    """
-    if not img_url:
-        return ""
-        
-    img_data, filename, content_type = await _download_image(client, img_url, COVER_ALLOWED_IMG_TYPES)
-    if not img_data:
-        return ""
-        
-    url = f"https://api.weixin.qq.com/cgi-bin/material/add_material?access_token={access_token}&type=image"
-    
-    files = {
-        "media": (filename, img_data, content_type)
-    }
-    
+def _load_local_image(image_ref: str, allowed_types: set[str]) -> tuple[bytes, str, str]:
+    """Load a locally generated image and return content, filename, and MIME type."""
     try:
-        resp = await client.post(url, files=files, timeout=20.0)
-        data = resp.json()
+        path = Path(image_ref).expanduser()
+        if not path.is_absolute():
+            path = (Path.cwd() / path).resolve()
+        if not path.is_file():
+            logger.warning("load_local_image_failed", image_ref=str(path), error="file not found")
+            return b"", "", ""
+
+        return _normalize_image_content(
+            path.read_bytes(),
+            image_ref=str(path),
+            content_type_header="",
+            allowed_types=allowed_types,
+            filename_hint=path.name,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("load_local_image_failed", image_ref=image_ref, error=str(exc))
+        return b"", "", ""
+
+
+async def _read_image_source(
+    client: httpx.AsyncClient,
+    image_ref: str,
+    allowed_types: set[str],
+) -> tuple[bytes, str, str]:
+    if _is_remote_image_ref(image_ref):
+        return await _download_image(client, image_ref, allowed_types)
+    return _load_local_image(image_ref, allowed_types)
+
+
+async def upload_cover_material(client: httpx.AsyncClient, image_ref: str, access_token: str) -> str:
+    """Upload cover image and return the permanent media_id required by drafts."""
+    if not image_ref:
+        return ""
+
+    image_bytes, filename, content_type = await _read_image_source(client, image_ref, COVER_ALLOWED_IMG_TYPES)
+    if not image_bytes:
+        return ""
+
+    url = f"https://api.weixin.qq.com/cgi-bin/material/add_material?access_token={access_token}&type=image"
+    files = {"media": (filename, image_bytes, content_type)}
+
+    try:
+        response = await client.post(url, files=files, timeout=20.0)
+        data = response.json()
         if "media_id" in data:
             return data["media_id"]
-        else:
-            logger.error("upload_material_failed", result=data, url=img_url)
-            return ""
-    except Exception as e:
-        logger.error("upload_material_exception", url=img_url, error=str(e))
+
+        logger.error("upload_material_failed", result=data, image_ref=image_ref)
+        return ""
+    except Exception as exc:  # noqa: BLE001
+        logger.error("upload_material_exception", image_ref=image_ref, error=str(exc))
         return ""
 
 
-async def upload_article_image(client: httpx.AsyncClient, img_url: str, access_token: str) -> str:
-    """上传正文插图获取微信白名单图床 URL (不会产生 media_id，不占用永久素材库配额)。
-    
-    Returns:
-        wechat_url: 微信图床 URL (`http://mmbiz.qpic.cn/...`)，失败则返回原 URL。
-    """
-    if not img_url:
+async def upload_article_image(client: httpx.AsyncClient, image_ref: str, access_token: str) -> str:
+    """Upload an in-article image and return the WeChat-hosted image URL."""
+    if not image_ref:
         return ""
-        
-    img_data, filename, content_type = await _download_image(client, img_url, ARTICLE_ALLOWED_IMG_TYPES)
-    if not img_data:
-        return img_url # 如果下载失败就不强求了，兜底用外网连接
-        
+
+    image_bytes, filename, content_type = await _read_image_source(client, image_ref, ARTICLE_ALLOWED_IMG_TYPES)
+    if not image_bytes:
+        return image_ref if _is_remote_image_ref(image_ref) else ""
+
     url = f"https://api.weixin.qq.com/cgi-bin/media/uploadimg?access_token={access_token}"
-    
-    files = {
-        "media": (filename, img_data, content_type)
-    }
-    
+    files = {"media": (filename, image_bytes, content_type)}
+
     try:
-        resp = await client.post(url, files=files, timeout=20.0)
-        data = resp.json()
+        response = await client.post(url, files=files, timeout=20.0)
+        data = response.json()
         if "url" in data:
             return data["url"]
-        else:
-            logger.warning("uploadimg_failed", result=data, url=img_url)
-            return img_url
-    except Exception as e:
-        logger.warning("uploadimg_exception", url=img_url, error=str(e))
-        return img_url
+
+        logger.warning("uploadimg_failed", result=data, image_ref=image_ref)
+        return image_ref if _is_remote_image_ref(image_ref) else ""
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("uploadimg_exception", image_ref=image_ref, error=str(exc))
+        return image_ref if _is_remote_image_ref(image_ref) else ""

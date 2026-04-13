@@ -1,32 +1,19 @@
+import type { CSSProperties } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Button,
-  Card,
-  Col,
-  Divider,
-  Input,
-  Menu,
-  Modal,
-  Popconfirm,
-  Row,
-  Space,
-  Spin,
-  Tag,
-  Typography,
-  message,
-} from 'antd'
-import {
   BgColorsOutlined,
+  CopyOutlined,
   DeleteOutlined,
-  EditOutlined,
+  ExportOutlined,
+  EyeOutlined,
   ImportOutlined,
   PlusOutlined,
   ReloadOutlined,
   SaveOutlined,
 } from '@ant-design/icons'
-import { marked } from 'marked'
+import { Button, Divider, Input, Modal, Popconfirm, Space, Spin, Tag, Typography, message } from 'antd'
 import DOMPurify from 'dompurify'
-
+import { marked } from 'marked'
 import {
   createCustomTheme,
   deleteCustomTheme,
@@ -40,8 +27,9 @@ import {
   type PresetThemes,
   type StyleConfig,
 } from '@/api'
+import { HeroPanel, SectionBlock, SignalCard } from '@/components/workbench'
 
-const { Title, Text } = Typography
+const { Text, Paragraph } = Typography
 const { TextArea } = Input
 
 const CURRENT_THEME_KEY = '__current__'
@@ -50,11 +38,11 @@ const EMPTY_THEME_NAME = '未命名主题'
 const DEFAULT_PREVIEW_MARKDOWN = `
 # 微信公众号主题预览
 
-这是一段正文示例，用于查看默认主题在公众号文章中的阅读效果。这里包含 **强调文本**、*斜体文本*、~~删除线~~ 和 [链接样式](https://mp.weixin.qq.com)。
+这是一段正文示例，用于查看默认主题在公众号文章中的阅读效果。这里包含**强调文本**、*斜体文本*、~~删除线~~ 和 [链接样式](https://mp.weixin.qq.com)。
 
 ## 二级标题示例
 
-> 这是引用内容示例，用于观察左侧强调线、背景色和段落间距。
+> 这是一段引用内容，用于观察左侧强调线、背景色和段落间距。
 
 ### 三级标题示例
 
@@ -62,21 +50,19 @@ const DEFAULT_PREVIEW_MARKDOWN = `
 - 列表项二：适合展示步骤说明
 - 列表项三：适合展示重点结论
 
-1. 有序列表也需要保持清晰层级
-2. 适中的行高和留白会更适合移动端阅读
+1. 有序列表同样需要保持清晰层级
+2. 适中的行高和留白更适合移动端阅读
 
-\`行内代码\` 可以用于标注术语或命令。
+\`行内代码\` 可用于标注术语或命令。
 
 \`\`\`python
 def hello():
     print("wechat")
 \`\`\`
 
----
-
 | 配置项 | 说明 |
 | --- | --- |
-| 标题 | 使用绿色主题强调层级 |
+| 标题 | 使用品牌主色强调层级 |
 | 正文 | 保持简洁、易读、适配手机端 |
 `
 
@@ -201,6 +187,40 @@ function downloadJson(filename: string, payload: unknown) {
   URL.revokeObjectURL(url)
 }
 
+const guidanceListStyle: CSSProperties = {
+  display: 'grid',
+  gap: 8,
+  margin: 0,
+  paddingInlineStart: 20,
+  listStyleType: 'disc',
+  listStylePosition: 'outside',
+  color: 'var(--text-secondary)',
+  fontSize: 13,
+  lineHeight: 1.6,
+}
+
+const panelStyle: CSSProperties = {
+  display: 'grid',
+  gap: 16,
+  padding: 20,
+  borderRadius: 16,
+  border: '1px solid var(--app-border)',
+  background: 'var(--app-surface)',
+}
+
+const panelHeadingStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 15,
+  fontWeight: 600,
+  color: 'var(--app-text)',
+}
+
+const previewHeaderStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+}
+
 export default function StyleConfigPage() {
   const importRef = useRef<HTMLInputElement | null>(null)
 
@@ -220,6 +240,8 @@ export default function StyleConfigPage() {
   const [selectedThemeKey, setSelectedThemeKey] = useState(CURRENT_THEME_KEY)
   const [selectedThemeSource, setSelectedThemeSource] = useState<ThemeSource>('current')
 
+  const activeSelectorCount = Object.values(currentConfig).filter(Boolean).length
+
   const fetchData = async () => {
     setLoading(true)
     try {
@@ -232,6 +254,7 @@ export default function StyleConfigPage() {
       setCurrentConfig(normalized)
       setPresetThemes(presetData)
       setCustomThemes(customData)
+      setActiveThemeName('当前主题')
       setDraftThemeName('当前主题')
       setThemeDraftConfig(normalized)
       setThemeCssText(toCssText(normalized))
@@ -246,7 +269,7 @@ export default function StyleConfigPage() {
   }
 
   useEffect(() => {
-    fetchData()
+    void fetchData()
   }, [])
 
   const pagePreviewHtml = useMemo(
@@ -320,7 +343,7 @@ export default function StyleConfigPage() {
     setSaving(true)
     try {
       await updateStyleConfig(currentConfig)
-      message.success('系统配置已保存')
+      message.success('系统样式已保存')
     } catch (err: any) {
       message.error(err.message || '保存失败')
     } finally {
@@ -379,116 +402,145 @@ export default function StyleConfigPage() {
     }
   }
 
-  const selectedThemeTag = selectedThemeSource === 'preset'
-    ? '内置主题'
-    : selectedThemeSource === 'custom'
-      ? '自定义主题'
-      : '当前配置'
+  const selectedThemeTag =
+    selectedThemeSource === 'preset'
+      ? '内置主题'
+      : selectedThemeSource === 'custom'
+        ? '自定义主题'
+        : '当前配置'
 
-  const themeMenuItems = [
-    {
-      key: 'group-current',
-      type: 'group' as const,
-      label: '当前配置',
-      children: [{ key: CURRENT_THEME_KEY, icon: <EditOutlined />, label: '当前主题' }],
-    },
-    {
-      key: 'group-preset',
-      type: 'group' as const,
-      label: '内置主题',
-      children: Object.keys(presetThemes).map((name) => ({
-        key: name,
-        icon: <BgColorsOutlined />,
-        label: name,
-      })),
-    },
-    {
-      key: 'group-custom',
-      type: 'group' as const,
-      label: '自定义主题',
-      children: Object.keys(customThemes).map((name) => ({
-        key: name,
-        icon: <SaveOutlined />,
-        label: name,
-      })),
-    },
+  const presetNames = Object.keys(presetThemes)
+  const customNames = Object.keys(customThemes)
+  const themeButtons = [
+    { key: CURRENT_THEME_KEY, label: '当前主题', source: 'current' as const },
+    ...presetNames.map((name) => ({ key: name, label: name, source: 'preset' as const })),
+    ...customNames.map((name) => ({ key: name, label: name, source: 'custom' as const })),
   ]
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: '100px 0' }}>
-        <Spin size="large" tip="加载样式配置中..." />
+      <div className="backstage-loading">
+        <Space direction="vertical" size={12} align="center">
+          <Spin size="large" />
+          <Text type="secondary">正在同步当前样式与主题资产...</Text>
+        </Space>
       </div>
     )
   }
 
   return (
-    <div style={{ maxWidth: 1680, margin: '24px auto', padding: '0 24px' }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 20 }}>
-        <Col>
-          <Title level={2} style={{ margin: 0 }}>系统配置</Title>
-          <Text type="secondary">默认展示 Markdown 文本和实时效果，样式编辑通过顶部主题管理进入。</Text>
-        </Col>
-        <Col>
-          <Space size={12}>
-            <Button icon={<ReloadOutlined />} onClick={fetchData}>重新加载</Button>
-            <Button icon={<BgColorsOutlined />} onClick={openThemeManager}>主题管理</Button>
-            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSaveConfig}>保存配置</Button>
-          </Space>
-        </Col>
-      </Row>
+    <div className="backstage-page">
+      <HeroPanel
+        eyebrow="System Backstage"
+        title="品牌样式管理台"
+        description="把公众号文章的 Markdown 预览、当前生效样式和主题资产放在同一块后台界面里。"
+      >
+        <ul style={guidanceListStyle} aria-label="样式提示">
+          <li>先查看实时预览，再保存当前样式。</li>
+          <li>需要复用时进入主题中心编辑或另存。</li>
+          <li>样式范围直接对应 Markdown 常见元素。</li>
+        </ul>
+      </HeroPanel>
 
-      <Row gutter={24}>
-        <Col xs={24} lg={14}>
-          <Card
-            title={(
-              <Space size={8}>
-                <span style={{ width: 8, height: 8, borderRadius: 999, background: '#22c55e', display: 'inline-block' }} />
-                <span>MARKDOWN 编辑器</span>
-              </Space>
-            )}
-            styles={{ body: { padding: 0 } }}
-          >
-            <div style={{ borderBottom: '1px solid #f0f0f0', padding: '10px 16px', color: '#64748b', fontSize: 13 }}>
-              当前主题：{activeThemeName}
+      <SectionBlock
+        title="当前生效样式"
+        aside={
+          <Space wrap>
+            <Button icon={<ReloadOutlined />} onClick={() => void fetchData()}>
+              重新加载
+            </Button>
+            <Button icon={<BgColorsOutlined />} onClick={openThemeManager}>
+              主题中心
+            </Button>
+            <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={() => void handleSaveConfig()}>
+              保存当前样式
+            </Button>
+          </Space>
+        }
+      >
+        <div className="backstage-grid backstage-grid--preview">
+          <div className="backstage-surface-card" style={panelStyle}>
+            <div style={previewHeaderStyle}>
+              <span style={panelHeadingStyle}>Markdown 预览</span>
+              <Tag color="geekblue">{activeThemeName}</Tag>
             </div>
             <TextArea
               value={previewMarkdown}
-              onChange={(e) => setPreviewMarkdown(e.target.value)}
+              onChange={(event) => setPreviewMarkdown(event.target.value)}
               autoSize={{ minRows: 28, maxRows: 28 }}
-              bordered={false}
-              style={{ padding: 20, fontFamily: 'Consolas, Monaco, monospace', fontSize: 14, lineHeight: 1.8 }}
+              className="backstage-code-area"
+              style={{ resize: 'none' }}
             />
-          </Card>
-        </Col>
+          </div>
 
-        <Col xs={24} lg={10}>
-          <Card
-            title={(
-              <Space size={8}>
-                <span>实时预览</span>
-                <Text type="secondary">微信公众号效果</Text>
-              </Space>
-            )}
-            styles={{ body: { background: '#f8fafc', minHeight: 780 } }}
-          >
-            <div
-              style={{
-                maxWidth: 414,
-                minHeight: 720,
-                margin: '0 auto',
-                padding: '24px 20px',
-                background: '#fff',
-                border: '1px solid #e5e7eb',
-                boxShadow: '0 12px 30px rgba(15, 23, 42, 0.08)',
-                overflow: 'auto',
-              }}
-            >
-              <div dangerouslySetInnerHTML={{ __html: pagePreviewHtml }} style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }} />
+          <div className="backstage-surface-card" style={panelStyle}>
+            <div style={previewHeaderStyle}>
+              <EyeOutlined />
+              <span style={panelHeadingStyle}>微信样式预览</span>
             </div>
-          </Card>
-        </Col>
-      </Row>
+            <div className="backstage-preview-frame" style={{ minHeight: 560 }}>
+              <div
+                dangerouslySetInnerHTML={{ __html: pagePreviewHtml }}
+                style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}
+              />
+            </div>
+          </div>
+        </div>
+      </SectionBlock>
+
+      <div className="backstage-grid backstage-grid--double">
+        <SectionBlock
+          title="主题资产"
+          aside={<Text type="secondary">保留主题编辑、导入导出和另存为能力。</Text>}
+        >
+          <div className="backstage-stack">
+            <div style={panelStyle}>
+              <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                当前样式会直接作用于预览窗口。若要沉淀为可复用资产，先在主题中心创建副本。
+              </Paragraph>
+              <Space size={[8, 8]} wrap>
+                <Tag color="geekblue">当前主题：{activeThemeName}</Tag>
+                <Tag color="blue">内置 {presetNames.length}</Tag>
+                <Tag color="green">自定义 {customNames.length}</Tag>
+                <Tag color="cyan">选择器 {activeSelectorCount}</Tag>
+              </Space>
+            </div>
+
+            <div className="backstage-note-list">
+              <SignalCard
+                icon={<BgColorsOutlined />}
+                title="先看预览，再存主题"
+                description="主题编辑器仍然使用 CSS 文本驱动，预览窗口可以即时确认标题、段落与表格样式。"
+              />
+              <SignalCard
+                icon={<ImportOutlined />}
+                title="支持导入导出"
+                description="自定义主题仍可通过 JSON 导入导出，便于在不同环境或品牌项目之间迁移。"
+              />
+              <SignalCard
+                icon={<ExportOutlined />}
+                title="当前配置可另存"
+                description="内置主题保持只读；如需改造，请基于当前配置另存为新主题后再继续编辑。"
+              />
+            </div>
+          </div>
+        </SectionBlock>
+
+        <SectionBlock title="样式范围">
+          <div style={panelStyle}>
+            <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+              当前编辑器覆盖容器、标题、正文、引用、链接、代码块和表格等微信公众号常见元素。
+            </Paragraph>
+            <Space size={[8, 8]} wrap>
+              {STYLE_FIELDS.map((field) => (
+                <Tag key={field} color={currentConfig[field] ? 'success' : 'default'}>
+                  {field}
+                </Tag>
+              ))}
+            </Space>
+          </div>
+        </SectionBlock>
+      </div>
 
       <input
         ref={importRef}
@@ -505,17 +557,19 @@ export default function StyleConfigPage() {
       />
 
       <Modal
-        title="主题管理"
+        title="主题中心"
         open={themeManagerOpen}
         onCancel={() => setThemeManagerOpen(false)}
         width={1440}
-        footer={(
-          <Space>
+        footer={
+          <Space wrap>
             <Button onClick={() => setThemeManagerOpen(false)}>取消</Button>
             <Button onClick={() => downloadJson('themes-export.json', customThemes)}>导出主题</Button>
-            <Button type="primary" onClick={handleApplyTheme}>应用主题</Button>
+            <Button type="primary" onClick={handleApplyTheme}>
+              应用到当前样式
+            </Button>
           </Space>
-        )}
+        }
         styles={{ body: { padding: 0 } }}
       >
         <div style={{ height: '72vh', minHeight: 620, maxHeight: 760, display: 'flex', overflow: 'hidden' }}>
@@ -538,14 +592,21 @@ export default function StyleConfigPage() {
             <Button icon={<ImportOutlined />} size="large" block onClick={() => importRef.current?.click()}>
               导入主题
             </Button>
+
             <div style={{ minHeight: 0, overflow: 'auto', paddingRight: 4 }}>
-              <Menu
-                mode="inline"
-                selectedKeys={[selectedThemeKey]}
-                onSelect={({ key }) => handleThemeSelect(String(key))}
-                items={themeMenuItems}
-                style={{ borderInlineEnd: 'none', background: 'transparent' }}
-              />
+              <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                {themeButtons.map((item) => (
+                  <Button
+                    key={item.key}
+                    type={selectedThemeKey === item.key ? 'primary' : 'default'}
+                    onClick={() => handleThemeSelect(item.key)}
+                    block
+                    style={{ textAlign: 'left' }}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </Space>
             </div>
           </div>
 
@@ -562,24 +623,25 @@ export default function StyleConfigPage() {
             <div style={{ padding: '14px 18px', borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
               <Space size={10}>
                 <Text strong>实时预览</Text>
-                <Tag color={selectedThemeSource === 'preset' ? 'blue' : selectedThemeSource === 'custom' ? 'green' : 'default'}>
+                <Tag
+                  color={
+                    selectedThemeSource === 'preset'
+                      ? 'blue'
+                      : selectedThemeSource === 'custom'
+                        ? 'green'
+                        : 'default'
+                  }
+                >
                   {selectedThemeTag}
                 </Tag>
               </Space>
             </div>
             <div style={{ padding: 24, overflow: 'auto', minHeight: 0 }}>
-              <div
-                style={{
-                  maxWidth: 414,
-                  minHeight: 560,
-                  margin: '0 auto',
-                  padding: '24px 20px',
-                  background: '#fff',
-                  border: '1px solid #e5e7eb',
-                  boxShadow: '0 12px 30px rgba(15, 23, 42, 0.08)',
-                }}
-              >
-                <div dangerouslySetInnerHTML={{ __html: draftPreviewHtml }} style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }} />
+              <div className="backstage-preview-frame" style={{ minHeight: 560 }}>
+                <div
+                  dangerouslySetInnerHTML={{ __html: draftPreviewHtml }}
+                  style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}
+                />
               </div>
             </div>
           </div>
@@ -597,16 +659,49 @@ export default function StyleConfigPage() {
           >
             <Space align="center" style={{ justifyContent: 'space-between', width: '100%' }}>
               <Space size={10}>
-                <Text strong style={{ fontSize: 16 }}>主题编辑</Text>
+                <Text strong style={{ fontSize: 16 }}>
+                  主题编辑
+                </Text>
                 <Tag>{editorMode === 'create' ? '新建' : editorMode === 'edit' ? '编辑' : '浏览'}</Tag>
               </Space>
               <Space size={8}>
-                {selectedThemeSource === 'custom' && editorMode !== 'create' && (
-                  <Button size="small" onClick={() => setEditorMode('edit')}>编辑</Button>
+                <Button
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={() =>
+                    navigator.clipboard
+                      .writeText(themeCssText)
+                      .then(() => message.success('CSS 已复制'))
+                      .catch(() => message.error('复制失败'))
+                  }
+                  >
+                  复制 CSS
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() =>
+                    downloadJson(`${draftThemeName || 'theme'}.json`, {
+                      [draftThemeName || 'theme']: themeDraftConfig,
+                    })
+                  }
+                >
+                  导出当前主题
+                </Button>
+                {selectedThemeSource !== 'preset' && (
+                  <Button size="small" type="primary" loading={themeSaving} onClick={() => void handleSaveTheme()}>
+                    {editorMode === 'edit' ? '更新主题' : '保存为新主题'}
+                  </Button>
                 )}
                 {selectedThemeSource === 'custom' && (
-                  <Popconfirm title="确定删除这个自定义主题吗？" onConfirm={handleDeleteTheme}>
-                    <Button size="small" danger icon={<DeleteOutlined />}>删除</Button>
+                  <Popconfirm
+                    title="确认删除这个自定义主题吗？"
+                    onConfirm={() => void handleDeleteTheme()}
+                    okText="删除"
+                    cancelText="取消"
+                  >
+                    <Button size="small" danger icon={<DeleteOutlined />}>
+                      删除
+                    </Button>
                   </Popconfirm>
                 )}
               </Space>
@@ -619,40 +714,24 @@ export default function StyleConfigPage() {
                 <Text strong>主题名称</Text>
                 <Input
                   value={draftThemeName}
-                  onChange={(e) => setDraftThemeName(e.target.value)}
+                  onChange={(event) => setDraftThemeName(event.target.value)}
                   disabled={selectedThemeSource === 'preset' && editorMode === 'browse'}
                   style={{ marginTop: 8 }}
                 />
-              </div>
-
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <Button size="small" onClick={() => navigator.clipboard.writeText(themeCssText).then(() => message.success('CSS 已复制'))}>
-                  复制 CSS
-                </Button>
-                <Button size="small" onClick={() => downloadJson(`${draftThemeName || 'theme'}.json`, { [draftThemeName || 'theme']: themeDraftConfig })}>
-                  导出当前主题
-                </Button>
-                {selectedThemeSource !== 'preset' && (
-                  <Button size="small" type="primary" loading={themeSaving} onClick={handleSaveTheme}>
-                    {editorMode === 'edit' ? '更新主题' : '保存为新主题'}
-                  </Button>
-                )}
               </div>
 
               <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
                 <Text strong>CSS 样式</Text>
                 <TextArea
                   value={themeCssText}
-                  onChange={(e) => handleCssChange(e.target.value)}
+                  onChange={(event) => handleCssChange(event.target.value)}
                   disabled={selectedThemeSource === 'preset' && editorMode === 'browse'}
+                  className="backstage-code-area"
                   style={{
                     marginTop: 8,
                     height: '100%',
                     minHeight: 420,
                     resize: 'none',
-                    fontFamily: 'Consolas, Monaco, monospace',
-                    fontSize: 13,
-                    lineHeight: 1.7,
                   }}
                 />
               </div>
@@ -667,7 +746,7 @@ export default function StyleConfigPage() {
                   fontSize: 13,
                 }}
               >
-                内置主题默认只读。要修改它，请点击“新建自定义主题”或先应用后另存为自定义主题。
+                内置主题保持只读。若要调整，请先从当前配置另存为自定义主题，再继续编辑。
               </div>
             </div>
           </div>

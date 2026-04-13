@@ -1,9 +1,24 @@
 import { useEffect, useState } from 'react'
-import { Card, Table, Tag, Button, Popconfirm, message, Space, Tooltip } from 'antd'
-import { EyeOutlined, DeleteOutlined } from '@ant-design/icons'
+import { Button, Card, Empty, Popconfirm, Space, Table, Tag, Tooltip, message } from 'antd'
+import { DeleteOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import { listTasks, deleteTask, TaskResponse } from '@/api'
 import dayjs from 'dayjs'
+import { ARTICLE_STRATEGY_LABELS, deleteTask, listTasks, type TaskResponse } from '@/api'
+import { HeroPanel } from '@/components/workbench'
+
+const statusColorMap: Record<TaskResponse['status'], string> = {
+  pending: 'default',
+  running: 'processing',
+  done: 'success',
+  failed: 'error',
+}
+
+const statusTextMap: Record<TaskResponse['status'], string> = {
+  pending: '排队中',
+  running: '执行中',
+  done: '已完成',
+  failed: '失败',
+}
 
 export default function History() {
   const [tasks, setTasks] = useState<TaskResponse[]>([])
@@ -15,24 +30,24 @@ export default function History() {
     try {
       const data = await listTasks()
       setTasks(data)
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : '获取任务列表失败')
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '获取任务列表失败')
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchTasks()
+    void fetchTasks()
   }, [])
 
   const handleDelete = async (taskId: string) => {
     try {
       await deleteTask(taskId)
       message.success('删除成功')
-      fetchTasks()
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : '删除失败')
+      await fetchTasks()
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '删除失败')
     }
   }
 
@@ -42,11 +57,9 @@ export default function History() {
       dataIndex: 'task_id',
       key: 'task_id',
       width: 150,
-      render: (id: string) => (
-        <Tooltip title={id}>
-          <span style={{ fontFamily: 'monospace', color: '#666' }}>
-            {id.substring(0, 8)}...
-          </span>
+      render: (taskId: string) => (
+        <Tooltip title={taskId}>
+          <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>{taskId.slice(0, 8)}...</span>
         </Tooltip>
       ),
     },
@@ -57,25 +70,30 @@ export default function History() {
       ellipsis: true,
     },
     {
+      title: '角色 / 策略',
+      key: 'generation_config',
+      width: 240,
+      render: (_: unknown, record: TaskResponse) => (
+        <Space size={[4, 8]} wrap>
+          {record.generation_config?.audience_roles?.map((role) => (
+            <Tag color="blue" key={role}>
+              {role}
+            </Tag>
+          ))}
+          <Tag color="purple">
+            {ARTICLE_STRATEGY_LABELS[record.generation_config?.article_strategy || 'auto']}
+          </Tag>
+        </Space>
+      ),
+    },
+    {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
       width: 100,
-      render: (status: TaskResponse['status']) => {
-        const colorMap: Record<string, string> = {
-          pending: 'default',
-          running: 'processing',
-          done: 'success',
-          failed: 'error',
-        }
-        const textMap: Record<string, string> = {
-          pending: '排队中',
-          running: '执行中',
-          done: '已完成',
-          failed: '失败',
-        }
-        return <Tag color={colorMap[status]}>{textMap[status] || status}</Tag>
-      },
+      render: (status: TaskResponse['status']) => (
+        <Tag color={statusColorMap[status]}>{statusTextMap[status] || status}</Tag>
+      ),
     },
     {
       title: '创建时间',
@@ -102,8 +120,8 @@ export default function History() {
             title="确认删除"
             description="确定要删除这条任务记录吗？"
             onConfirm={() => handleDelete(record.task_id)}
-            okText="是"
-            cancelText="否"
+            okText="删除"
+            cancelText="取消"
           >
             <Button type="link" danger size="small" icon={<DeleteOutlined />}>
               删除
@@ -115,18 +133,40 @@ export default function History() {
   ]
 
   return (
-    <div style={{ maxWidth: 1000, margin: '40px auto', padding: '0 24px' }}>
-      <Card
-        title={<span style={{ fontSize: 18, fontWeight: 600 }}>历史任务</span>}
-        variant="borderless"
+    <div className="backstage-page">
+      <HeroPanel
+        eyebrow="Asset Archive"
+        title="内容资产"
+        description="统一回看历史任务、文章策略和执行状态，让可复用的内容沉淀成可浏览资产。"
       >
-        <Table
-          columns={columns}
-          dataSource={tasks}
-          rowKey="task_id"
-          loading={loading}
-          pagination={{ pageSize: 10 }}
-        />
+        <Space wrap style={{ marginTop: 12, justifyContent: 'space-between', width: '100%' }}>
+          <Space wrap>
+            <Tag bordered={false} color="cyan">
+              共 {tasks.length} 条
+            </Tag>
+            <Tag bordered={false} color="success">
+              已完成 {tasks.filter((task) => task.status === 'done').length} 条
+            </Tag>
+          </Space>
+          <Button icon={<ReloadOutlined />} onClick={() => void fetchTasks()}>
+            刷新
+          </Button>
+        </Space>
+      </HeroPanel>
+
+      <Card className="backstage-surface-card">
+        {tasks.length === 0 && !loading ? (
+          <Empty description="还没有历史内容资产" />
+        ) : (
+          <Table
+            columns={columns}
+            dataSource={tasks}
+            rowKey="task_id"
+            loading={loading}
+            pagination={{ pageSize: 10 }}
+            size="middle"
+          />
+        )}
       </Card>
     </div>
   )

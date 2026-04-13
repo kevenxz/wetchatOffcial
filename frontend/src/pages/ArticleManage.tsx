@@ -1,20 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { Key } from 'react'
-import {
-  Button,
-  Card,
-  Modal,
-  Select,
-  Space,
-  Table,
-  Tag,
-  Typography,
-  message,
-} from 'antd'
+import { Button, Card, Empty, Modal, Select, Space, Table, Tag, Typography, message } from 'antd'
 import type { TableProps } from 'antd'
 import dayjs from 'dayjs'
-import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { marked } from 'marked'
 import {
   batchPushArticles,
   getCustomThemes,
@@ -29,19 +19,26 @@ import {
   type StyleConfig,
   type TaskResponse,
 } from '@/api'
+import { HeroPanel } from '@/components/workbench'
 
-const { Paragraph, Text } = Typography
+const { Paragraph, Text, Title } = Typography
 const CURRENT_THEME_KEY = '__current__'
+const ARTICLE_LAYOUT_BREAKPOINT = 1100
+
+function getInitialLayoutMode() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return window.innerWidth < ARTICLE_LAYOUT_BREAKPOINT
+}
 
 function mergeStyle(existing: string | null, next: string) {
-  // Merge inline styles while preserving existing declarations.
   if (!existing) return next
   return `${existing}${existing.trim().endsWith(';') ? ' ' : '; '}${next}`
 }
 
 function buildPreviewHtml(markdownText: string, config: StyleConfig | undefined) {
-  // Keep preview rendering consistent with StyleConfig page:
-  // markdown -> sanitize -> inject per-selector inline style.
   const rawHtml = marked.parse(markdownText || '', { breaks: true }) as string
   const cleanHtml = DOMPurify.sanitize(rawHtml)
   const parser = new DOMParser()
@@ -52,10 +49,12 @@ function buildPreviewHtml(markdownText: string, config: StyleConfig | undefined)
 
   Object.entries(config).forEach(([selector, styleStr]) => {
     if (!styleStr) return
+
     if (selector === 'container') {
       container.setAttribute('style', mergeStyle(container.getAttribute('style'), styleStr))
       return
     }
+
     doc.querySelectorAll(selector).forEach((element) => {
       const htmlElement = element as HTMLElement
       htmlElement.setAttribute('style', mergeStyle(htmlElement.getAttribute('style'), styleStr))
@@ -66,7 +65,6 @@ function buildPreviewHtml(markdownText: string, config: StyleConfig | undefined)
 }
 
 function getPushedAccountNames(pushRecords: PushRecord[] | undefined): string[] {
-  // Deduplicate success records for concise table display.
   const records = pushRecords ?? []
   const names = records
     .filter((item) => item.status === 'success')
@@ -75,7 +73,6 @@ function getPushedAccountNames(pushRecords: PushRecord[] | undefined): string[] 
 }
 
 export default function ArticleManage() {
-  // Data states for article list and selectable account/theme resources.
   const [articles, setArticles] = useState<TaskResponse[]>([])
   const [accounts, setAccounts] = useState<AccountConfig[]>([])
   const [loading, setLoading] = useState(false)
@@ -92,8 +89,8 @@ export default function ArticleManage() {
   const [pushTargetTaskId, setPushTargetTaskId] = useState<string | null>(null)
   const [pushAccountIds, setPushAccountIds] = useState<string[]>([])
   const [singlePushThemeName, setSinglePushThemeName] = useState<string>(CURRENT_THEME_KEY)
+  const [isNarrowLayout, setIsNarrowLayout] = useState(getInitialLayoutMode)
 
-  // Push only supports enabled WeChat public accounts.
   const wechatAccounts = accounts.filter((item) => item.platform === 'wechat_mp' && item.enabled)
 
   const accountOptions = wechatAccounts.map((item) => ({
@@ -114,7 +111,6 @@ export default function ArticleManage() {
   }
 
   const fetchData = async () => {
-    // Refresh all data sources that this page depends on.
     setLoading(true)
     try {
       const [articleList, accountList, currentConfig, preset, custom] = await Promise.all([
@@ -124,11 +120,13 @@ export default function ArticleManage() {
         getPresetThemes(),
         getCustomThemes(),
       ])
+
       setArticles(articleList)
       setAccounts(accountList)
       setCurrentTheme(currentConfig)
       setPresetThemes(preset)
       setCustomThemes(custom)
+
       const nextThemes: Record<string, string> = {}
       articleList.forEach((item) => {
         nextThemes[item.task_id] = item.article_theme || CURRENT_THEME_KEY
@@ -142,18 +140,29 @@ export default function ArticleManage() {
   }
 
   useEffect(() => {
-    fetchData()
+    void fetchData()
+  }, [])
+
+  useEffect(() => {
+    const updateLayoutMode = () => {
+      setIsNarrowLayout(window.innerWidth < ARTICLE_LAYOUT_BREAKPOINT)
+    }
+
+    updateLayoutMode()
+    window.addEventListener('resize', updateLayoutMode)
+
+    return () => {
+      window.removeEventListener('resize', updateLayoutMode)
+    }
   }, [])
 
   const openSinglePushModal = (taskId: string) => {
-    // Pre-fill modal with page-level defaults and row-level selected theme.
     setPushTargetTaskId(taskId)
     setPushAccountIds(defaultAccountIds)
     setSinglePushThemeName(articleThemes[taskId] || CURRENT_THEME_KEY)
   }
 
   const handleThemeChange = async (taskId: string, themeName: string) => {
-    // Optimistic update for smoother UX; rollback on API failure.
     setArticleThemes((prev) => ({ ...prev, [taskId]: themeName }))
     try {
       const updated = await updateArticleTheme(taskId, themeName)
@@ -169,8 +178,8 @@ export default function ArticleManage() {
   }
 
   const submitSinglePush = async () => {
-    // Push one article to selected accounts with the selected modal theme.
     if (!pushTargetTaskId) return
+
     if (pushAccountIds.length === 0) {
       message.warning('请先选择至少一个公众号')
       return
@@ -190,12 +199,13 @@ export default function ArticleManage() {
   }
 
   const submitBatchPush = async () => {
-    // Build per-task theme map so batch push preserves row-level theme selections.
     const taskIds = selectedArticleKeys.map((key) => String(key))
+
     if (taskIds.length === 0) {
       message.warning('请先勾选要批量推送的文章')
       return
     }
+
     if (defaultAccountIds.length === 0) {
       message.warning('请先选择目标公众号')
       return
@@ -218,22 +228,16 @@ export default function ArticleManage() {
     }
   }
 
-  const previewThemeName = previewArticle ? articleThemes[previewArticle.task_id] || CURRENT_THEME_KEY : CURRENT_THEME_KEY
-  // Preview uses the same theme mapping as push to keep WYSIWYG behavior.
-  const previewHtml = previewArticle
-    ? buildPreviewHtml(
-        String(previewArticle.generated_article?.content || ''),
-        themeConfigMap[previewThemeName],
-      )
-    : ''
+  const previewThemeName = previewArticle
+    ? articleThemes[previewArticle.task_id] || CURRENT_THEME_KEY
+    : CURRENT_THEME_KEY
 
   const columns: TableProps<TaskResponse>['columns'] = [
     {
       title: '文章标题',
       dataIndex: 'generated_article',
       key: 'title',
-      render: (article: TaskResponse['generated_article']) =>
-        article?.title ?? '未命名文章',
+      render: (article: TaskResponse['generated_article']) => article?.title ?? '未命名文章',
     },
     {
       title: '关键词',
@@ -261,9 +265,11 @@ export default function ArticleManage() {
       key: 'push_records',
       render: (records: PushRecord[] | undefined) => {
         const names = getPushedAccountNames(records)
+
         if (names.length === 0) {
           return <Text type="secondary">暂无</Text>
         }
+
         return (
           <Space size={[4, 8]} wrap>
             {names.map((name) => (
@@ -299,16 +305,36 @@ export default function ArticleManage() {
     },
   ]
 
+  const previewTitle = previewArticle?.generated_article?.title ?? '请选择一篇文章查看预览'
+  const previewContent = previewArticle ? String(previewArticle.generated_article?.content || '') : ''
+  const previewHtml = previewArticle
+    ? buildPreviewHtml(previewContent, themeConfigMap[previewThemeName])
+    : ''
+
   return (
-    <div style={{ maxWidth: 1280, margin: '32px auto', padding: '0 24px' }}>
-      <Card
-        title={<span style={{ fontSize: 18, fontWeight: 600 }}>文章管理</span>}
-        extra={
-          <Space>
+    <div className="backstage-page">
+      <HeroPanel
+        eyebrow="Publishing Assets"
+        title="文章库"
+        description="在统一资产视图里完成文章筛选、主题配置、预览校对和批量推送。"
+      >
+        <Space wrap style={{ marginTop: 12, justifyContent: 'space-between', width: '100%' }}>
+          <Space wrap>
+            <Tag bordered={false} color="blue">
+              文章 {articles.length}
+            </Tag>
+            <Tag bordered={false} color="gold">
+              已选 {selectedArticleKeys.length}
+            </Tag>
+            <Tag bordered={false} color="green">
+              公众号 {wechatAccounts.length}
+            </Tag>
+          </Space>
+          <Space wrap>
             <Select
               mode="multiple"
               allowClear
-              style={{ width: 360 }}
+              style={{ width: 360, maxWidth: '100%' }}
               placeholder="选择批量推送目标公众号"
               value={defaultAccountIds}
               onChange={setDefaultAccountIds}
@@ -318,53 +344,71 @@ export default function ArticleManage() {
               批量推送
             </Button>
           </Space>
-        }
-      >
-        <Table
-          rowKey="task_id"
-          loading={loading}
-          columns={columns}
-          dataSource={articles}
-          rowSelection={{
-            selectedRowKeys: selectedArticleKeys,
-            onChange: setSelectedArticleKeys,
-          }}
-          pagination={{ pageSize: 10 }}
-        />
-      </Card>
+        </Space>
+      </HeroPanel>
 
-      <Modal
-        open={Boolean(previewArticle)}
-        onCancel={() => setPreviewArticle(null)}
-        title="微信样式预览"
-        footer={null}
-        width={980}
+      <div
+        data-testid="article-manage-grid"
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isNarrowLayout ? 'minmax(0, 1fr)' : 'minmax(0, 1.4fr) minmax(320px, 0.9fr)',
+          gap: 16,
+          alignItems: 'start',
+        }}
       >
-        {previewArticle?.generated_article ? (
-          <div>
-            <Space style={{ marginBottom: 16 }}>
-              <Tag color="blue">主题</Tag>
-              <Text>{themeOptions.find((item) => item.value === previewThemeName)?.label || '当前配置'}</Text>
-            </Space>
-            <div
-              style={{
-                maxWidth: 430,
-                minHeight: 680,
-                margin: '0 auto',
-                padding: '24px 20px',
-                background: '#fff',
-                border: '1px solid #e5e7eb',
-                boxShadow: '0 12px 30px rgba(15, 23, 42, 0.08)',
-                overflow: 'auto',
-              }}
-            >
-              <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+        <Card className="backstage-surface-card">
+          <Table
+            rowKey="task_id"
+            loading={loading}
+            columns={columns}
+            dataSource={articles}
+            rowSelection={{
+              selectedRowKeys: selectedArticleKeys,
+              onChange: setSelectedArticleKeys,
+            }}
+            pagination={{ pageSize: 10 }}
+            size="middle"
+          />
+        </Card>
+
+        <Card className="backstage-surface-card">
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <div>
+              <Title level={3} style={{ marginBottom: 8 }}>
+                文章预览
+              </Title>
+              {previewArticle ? (
+                <Space wrap>
+                  <Tag color="blue">主题</Tag>
+                  <Text>{themeOptions.find((item) => item.value === previewThemeName)?.label || '当前配置'}</Text>
+                </Space>
+              ) : (
+                <Text type="secondary">选择一篇文章查看预览</Text>
+              )}
             </div>
-          </div>
-        ) : (
-          <Text type="secondary">该文章暂无可预览内容</Text>
-        )}
-      </Modal>
+
+            {previewArticle?.generated_article ? (
+              <div
+                style={{
+                  maxHeight: 720,
+                  padding: '20px 18px',
+                  overflow: 'auto',
+                  background: '#fff',
+                  border: '1px solid #e5e7eb',
+                  boxShadow: '0 12px 30px rgba(15, 23, 42, 0.08)',
+                }}
+              >
+                <Title level={4} style={{ marginTop: 0 }}>
+                  {previewTitle}
+                </Title>
+                <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+              </div>
+            ) : (
+              <Empty description="选择一篇文章查看预览" />
+            )}
+          </Space>
+        </Card>
+      </div>
 
       <Modal
         open={Boolean(pushTargetTaskId)}

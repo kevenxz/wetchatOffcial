@@ -29,6 +29,7 @@ from api.store import (
     task_store,
 )
 from api.ws_manager import manager
+from workflow.article_generation import normalize_generation_config
 from workflow.graph import run_workflow
 from workflow.utils.wechat_draft_service import push_article_to_wechat_draft
 
@@ -76,6 +77,16 @@ def _compute_next_run(schedule: ScheduleConfig, now: datetime | None = None) -> 
     if schedule.mode == ScheduleMode.interval and schedule.interval_minutes:
         return now + timedelta(minutes=schedule.interval_minutes)
     return None
+
+
+def _resolve_schedule_keywords(schedule: ScheduleConfig) -> str:
+    """Resolve the initial workflow keywords for one schedule run."""
+    if schedule.hotspot_capture.enabled:
+        # Hotspot-enabled runs always start from schedule name, then capture node rewrites keywords.
+        return schedule.name
+    if schedule.hot_topics:
+        return random.choice(schedule.hot_topics)
+    return schedule.name
 
 
 class SchedulerEngine:
@@ -166,14 +177,17 @@ class SchedulerEngine:
 
         self._running_schedule_ids.add(schedule.schedule_id)
         now = _utc_now()
-        # When hot topics are configured, pick one topic as this run's keyword.
-        keywords = random.choice(schedule.hot_topics) if schedule.hot_topics else schedule.name
+        keywords = _resolve_schedule_keywords(schedule)
+        hotspot_capture_config = schedule.hotspot_capture.model_dump(mode="python")
 
         task = TaskResponse(
             task_id=str(uuid.uuid4()),
             keywords=keywords,
+            original_keywords=keywords,
+            generation_config=schedule.generation_config,
             status=TaskStatus.pending,
             created_at=now,
+            hotspot_capture_config=hotspot_capture_config,
             article_theme=schedule.theme_name,
         )
         task_store[task.task_id] = task
@@ -186,12 +200,15 @@ class SchedulerEngine:
             trigger=trigger,
             task_id=task.task_id,
             keywords=keywords,
+            hotspot_capture_enabled=schedule.hotspot_capture.enabled,
         )
 
         try:
             await run_workflow(
                 task_id=task.task_id,
                 keywords=task.keywords,
+                generation_config=normalize_generation_config(task.generation_config.model_dump()),
+                hotspot_capture_config=hotspot_capture_config,
                 progress_callback=self._progress_callback,
                 skip_auto_push=True,
             )
@@ -241,6 +258,28 @@ class SchedulerEngine:
             if new_status in ("done", "failed") and data.get("result"):
                 result = data["result"]
                 if isinstance(result, dict):
+                    next_generation_config = result.get("generation_config")
+                    if isinstance(next_generation_config, dict):
+                        task.generation_config = task.generation_config.model_copy(update=next_generation_config)
+                    next_keywords = result.get("keywords")
+                    if isinstance(next_keywords, str) and next_keywords.strip():
+                        task.keywords = next_keywords.strip()
+                    next_original_keywords = result.get("original_keywords")
+                    if isinstance(next_original_keywords, str) and next_original_keywords.strip():
+                        task.original_keywords = next_original_keywords.strip()
+                    hotspot_capture_config = result.get("hotspot_capture_config")
+                    if isinstance(hotspot_capture_config, dict):
+                        task.hotspot_capture_config = hotspot_capture_config
+                    hotspot_candidates = result.get("hotspot_candidates")
+                    if isinstance(hotspot_candidates, list):
+                        task.hotspot_candidates = hotspot_candidates
+                    selected_hotspot = result.get("selected_hotspot")
+                    if isinstance(selected_hotspot, dict) or selected_hotspot is None:
+                        task.selected_hotspot = selected_hotspot
+                    task.user_intent = result.get("user_intent")
+                    task.style_profile = result.get("style_profile")
+                    task.article_blueprint = result.get("article_blueprint")
+                    task.article_plan = result.get("article_plan")
                     task.generated_article = result.get("generated_article")
                     task.draft_info = result.get("draft_info")
             save_tasks()

@@ -11,8 +11,10 @@ def mock_state():
     return WorkflowState(
         task_id="test_task_123",
         keywords="ai news",
+        generation_config={"audience_roles": ["泛科技读者"], "article_strategy": "auto"},
         search_results=["https://example.com/1", "https://example.com/2"],
         extracted_contents=[],
+        article_plan={},
         generated_article={},
         draft_info=None,
         retry_count=0,
@@ -20,6 +22,7 @@ def mock_state():
         status="running",
         current_skill="",
         progress=0,
+        skip_auto_push=False,
     )
 
 

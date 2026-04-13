@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
-from api.models import AccountConfig, ScheduleConfig, TaskResponse
+from api.models import AccountConfig, ImageModelConfig, ModelConfig, ScheduleConfig, TaskResponse, TextModelConfig
 
 DATA_DIR = Path("data")
 TASKS_FILE = DATA_DIR / "tasks.json"
 STYLE_CONFIG_FILE = DATA_DIR / "style_config.json"
 CUSTOM_THEMES_FILE = DATA_DIR / "custom_themes.json"
+MODEL_CONFIG_FILE = DATA_DIR / "model_config.json"
 ACCOUNTS_FILE = DATA_DIR / "accounts.json"
 SCHEDULES_FILE = DATA_DIR / "schedules.json"
 
@@ -140,6 +142,7 @@ PRESET_THEMES: dict[str, dict[str, str]] = {
 
 _style_config: dict[str, str] = {}
 _custom_themes: dict[str, dict[str, str]] = {}
+_model_config: ModelConfig | None = None
 
 
 def _merge_default_style(config: dict[str, str]) -> dict[str, str]:
@@ -240,6 +243,61 @@ def save_style_config(new_style: dict[str, str]) -> dict[str, str]:
     _style_config = _merge_default_style(current)
     _write_json(STYLE_CONFIG_FILE, _style_config)
     return dict(_style_config)
+
+
+def _is_enabled(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _default_model_config_from_env() -> ModelConfig:
+    text_api_key = os.getenv("OPENAI_API_KEY", "").strip()
+    text_base_url = (os.getenv("OPENAI_API_BASE") or "").strip() or None
+    text_model = (os.getenv("OPENAI_MODEL") or "gpt-4o").strip() or "gpt-4o"
+
+    image_enabled = _is_enabled(os.getenv("DALLE_ENABLED"))
+    image_api_key = (os.getenv("IMAGE_API_KEY") or text_api_key).strip()
+    image_base_url = (os.getenv("IMAGE_API_BASE") or text_base_url or "").strip() or None
+    image_model = (
+        (os.getenv("IMAGE_MODEL") or os.getenv("DALLE_MODEL") or "dall-e-3").strip()
+        or "dall-e-3"
+    )
+
+    return ModelConfig(
+        text=TextModelConfig(
+            api_key=text_api_key,
+            base_url=text_base_url,
+            model=text_model,
+        ),
+        image=ImageModelConfig(
+            enabled=image_enabled,
+            api_key=image_api_key,
+            base_url=image_base_url,
+            model=image_model,
+        ),
+    )
+
+
+def get_model_config() -> ModelConfig:
+    global _model_config
+    if _model_config is not None:
+        return _model_config.model_copy(deep=True)
+
+    raw_config = _load_json(MODEL_CONFIG_FILE)
+    if raw_config:
+        try:
+            _model_config = ModelConfig(**raw_config)
+            return _model_config.model_copy(deep=True)
+        except Exception:
+            pass
+
+    return _default_model_config_from_env()
+
+
+def save_model_config(new_config: ModelConfig) -> ModelConfig:
+    global _model_config
+    _model_config = new_config.model_copy(deep=True)
+    _write_json(MODEL_CONFIG_FILE, _model_config.model_dump(mode="json"))
+    return _model_config.model_copy(deep=True)
 
 
 _account_store: dict[str, AccountConfig] = {}

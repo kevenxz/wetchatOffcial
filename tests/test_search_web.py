@@ -1,18 +1,30 @@
 """Tests for search_web skill."""
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from __future__ import annotations
 
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+from workflow.skills.search_web import _dedupe_results, search_web_node
 from workflow.state import WorkflowState
-from workflow.skills.search_web import search_web_node, _filter_links
 
 
 @pytest.fixture
-def mock_state():
+def mock_state() -> WorkflowState:
     return WorkflowState(
         task_id="test_task_123",
-        keywords="ai news",
+        keywords="OpenAI GPT-4o",
+        generation_config={"audience_roles": ["泛科技读者"], "article_strategy": "auto", "style_hint": ""},
+        user_intent={"topic": "OpenAI GPT-4o", "resolved_strategy": "trend_outlook", "primary_role": "泛科技读者"},
+        style_profile={},
+        article_blueprint={},
+        search_queries=[
+            {"query": "OpenAI GPT-4o official announcement", "intent": "official_fact", "priority": 1},
+            {"query": "OpenAI GPT-4o latest news analysis", "intent": "reputable_news", "priority": 2},
+        ],
         search_results=[],
         extracted_contents=[],
+        article_plan={},
         generated_article={},
         draft_info=None,
         retry_count=0,
@@ -20,80 +32,87 @@ def mock_state():
         status="running",
         current_skill="",
         progress=0,
+        skip_auto_push=False,
     )
 
 
-def test_filter_links():
-    links = [
-        "https://example.com/1",
-        "https://example.com/1/",
-        "https://example.com/2",
-        "https://example.com/2"
+def test_dedupe_results() -> None:
+    results = [
+        {"url": "https://openai.com/blog/gpt-4o", "title": "a"},
+        {"url": "https://openai.com/blog/gpt-4o", "title": "duplicate"},
+        {"url": "https://platform.openai.com/docs", "title": "b"},
     ]
-    filtered = _filter_links(links)
-    assert filtered == ["https://example.com/1", "https://example.com/2"]
+    deduped = _dedupe_results(results)
+    assert [item["url"] for item in deduped] == [
+        "https://openai.com/blog/gpt-4o",
+        "https://platform.openai.com/docs",
+    ]
 
 
 @pytest.mark.asyncio
-async def test_search_web_node_google_success(mock_state):
-    with patch("workflow.skills.search_web.httpx.AsyncClient") as mock_client_class:
-        with patch.dict("os.environ", {"SERPAPI_API_KEY": "fake_key"}):
-            # Setup mock
-            mock_client = AsyncMock()
-            mock_client_class.return_value.__aenter__.return_value = mock_client
-            
-            mock_resp = MagicMock()
-            mock_resp.json.return_value = {
-                "organic_results": [
-                    {"link": "https://example.com/a"},
-                    {"link": "https://example.com/b"},
-                ]
+async def test_search_web_node_collects_structured_results(mock_state: WorkflowState) -> None:
+    with patch.dict("os.environ", {"SERPAPI_API_KEY": "fake-key"}, clear=True):
+        with patch("workflow.skills.search_web._search_google", new=AsyncMock(return_value=[
+            {
+                "url": "https://openai.com/index/hello-gpt-4o",
+                "title": "Introducing GPT-4o",
+                "snippet": "Official announcement from OpenAI",
             }
-            mock_client.get.return_value = mock_resp
-            
-            # Execute
-            result = await search_web_node(mock_state)
-            
-            # Assert
-            assert result["status"] == "running"
-            assert "error" not in result
-            assert result["current_skill"] == "search_web"
-            assert result["search_results"] == ["https://example.com/a", "https://example.com/b"]
-            assert result["retry_count"] == 0
-
-
-@pytest.mark.asyncio
-async def test_search_web_node_retry(mock_state):
-    with patch("workflow.skills.search_web.httpx.AsyncClient") as mock_client_class:
-        with patch("workflow.skills.search_web.asyncio.sleep") as mock_sleep:
-            with patch.dict("os.environ", {"SERPAPI_API_KEY": "fake_key"}):
-                mock_client = AsyncMock()
-                mock_client_class.return_value.__aenter__.return_value = mock_client
-                
-                # First 2 times raise exception, 3rd time success
-                mock_resp = MagicMock()
-                mock_resp.json.return_value = {
-                    "organic_results": [{"link": "https://example.com/c"}]
+        ])):
+            with patch("workflow.skills.search_web._search_duckduckgo", new=AsyncMock(return_value=[
+                {
+                    "url": "https://www.theverge.com/ai/123",
+                    "title": "The Verge on GPT-4o",
+                    "snippet": "Coverage and analysis",
                 }
-                
-                mock_client.get.side_effect = [
-                    Exception("Network Error 1"),
-                    Exception("Network Error 2"),
-                    mock_resp
-                ]
-                
+            ])):
                 result = await search_web_node(mock_state)
-                
-                assert result["status"] == "running"
-                assert result["search_results"] == ["https://example.com/c"]
-                assert result["retry_count"] == 2
-                assert mock_client.get.call_count == 3
+
+    assert result["status"] == "running"
+    assert result["current_skill"] == "search_web"
+    assert len(result["search_results"]) >= 2
+    first = result["search_results"][0]
+    assert {"url", "title", "domain", "provider", "source_type", "relevance_score"} <= set(first.keys())
 
 
 @pytest.mark.asyncio
-async def test_search_web_node_no_api_key(mock_state):
+async def test_search_web_node_uses_duckduckgo_without_api_keys(mock_state: WorkflowState) -> None:
     with patch.dict("os.environ", {}, clear=True):
-        result = await search_web_node(mock_state)
-        
-        assert result["status"] == "failed"
-        assert "未配置搜索引擎 API Key" in result["error"]
+        with patch("workflow.skills.search_web._search_duckduckgo", new=AsyncMock(return_value=[
+            {
+                "url": "https://openai.com/blog/gpt-4o",
+                "title": "Introducing GPT-4o",
+                "snippet": "Official announcement",
+            }
+        ])):
+            result = await search_web_node(mock_state)
+
+    assert result["status"] == "running"
+    assert result["search_results"][0]["provider"] == "duckduckgo"
+
+
+@pytest.mark.asyncio
+async def test_search_web_node_failed_when_all_providers_empty(mock_state: WorkflowState) -> None:
+    with patch.dict("os.environ", {}, clear=True):
+        with patch("workflow.skills.search_web._search_duckduckgo", new=AsyncMock(return_value=[])):
+            result = await search_web_node(mock_state)
+
+    assert result["status"] == "failed"
+    assert "未能搜索到有效结果" in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_search_web_node_retries_provider_calls(mock_state: WorkflowState) -> None:
+    mock_state["search_queries"] = [mock_state["search_queries"][0]]
+    ddg_mock = AsyncMock(side_effect=[Exception("network-1"), Exception("network-2"), [{
+        "url": "https://openai.com/blog/gpt-4o",
+        "title": "Introducing GPT-4o",
+        "snippet": "Official announcement",
+    }]])
+    with patch.dict("os.environ", {}, clear=True):
+        with patch("workflow.skills.search_web.asyncio.sleep", new=AsyncMock()):
+            with patch("workflow.skills.search_web._search_duckduckgo", new=ddg_mock):
+                result = await search_web_node(mock_state)
+
+    assert result["status"] == "running"
+    assert ddg_mock.await_count == 3

@@ -1,11 +1,11 @@
 import { create } from 'zustand'
-import { createTask as apiCreateTask, type TaskResponse } from '@/api'
+import { createTask as apiCreateTask, type CreateTaskRequest, type TaskResponse } from '@/api'
 
 interface TaskState {
   currentTask: TaskResponse | null
   isCreating: boolean
   error: string | null
-  createTask: (keywords: string) => Promise<string>
+  createTask: (payload: CreateTaskRequest) => Promise<string>
   clearError: () => void
 }
 
@@ -14,10 +14,10 @@ const useTaskStore = create<TaskState>()((set) => ({
   isCreating: false,
   error: null,
 
-  createTask: async (keywords: string) => {
+  createTask: async (payload: CreateTaskRequest) => {
     set({ isCreating: true, error: null })
     try {
-      const task = await apiCreateTask(keywords)
+      const task = await apiCreateTask(payload)
       set({ currentTask: task, isCreating: false })
       return task.task_id
     } catch (err) {

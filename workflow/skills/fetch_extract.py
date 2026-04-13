@@ -1,11 +1,8 @@
-"""Skill 2: fetch_and_extract 节点实现。
-并发抓取网页链接，提取正文、标题和图片。
-"""
+"""Fetch top-ranked pages and extract clean article content."""
 from __future__ import annotations
 
 import asyncio
 import time
-from urllib.parse import urlparse
 
 import httpx
 import structlog
@@ -18,26 +15,23 @@ logger = structlog.get_logger(__name__)
 
 
 def _is_valid_image(url: str, img_tag: dict | None = None) -> bool:
-    """粗略校验图片格式和尺寸（如果有 width/height 属性）。"""
+    """Validate image format and rough size."""
     if not url:
         return False
-        
+
     url_lower = url.lower()
-    # 允许的后缀或包含关键字
     valid_ext = (".jpg", ".jpeg", ".png", ".webp")
     if not any(ext in url_lower for ext in valid_ext):
-        # 有些图床没有显式后缀，简单放行以保证覆盖面，
-        # 但过滤掉常见的 非图片 或 gif/svg 格式
         if ".gif" in url_lower or ".svg" in url_lower or "base64" in url_lower:
             return False
-            
+
     if img_tag:
         try:
-            w = int(img_tag.get("width", 0))
-            h = int(img_tag.get("height", 0))
-            if w > 0 and w < 300:
+            width = int(img_tag.get("width", 0))
+            height = int(img_tag.get("height", 0))
+            if width > 0 and width < 300:
                 return False
-            if h > 0 and h < 300:
+            if height > 0 and height < 300:
                 return False
         except (ValueError, TypeError):
             pass
@@ -45,76 +39,92 @@ def _is_valid_image(url: str, img_tag: dict | None = None) -> bool:
     return True
 
 
-async def _fetch_and_extract_single(url: str, client: httpx.AsyncClient) -> dict | None:
-    """抓取单个 URL 并提取内容。"""
+def _extract_source_items(search_results: list) -> list[dict]:
+    items: list[dict] = []
+    seen: set[str] = set()
+    for entry in search_results:
+        if isinstance(entry, str):
+            url = entry
+            item = {"url": url}
+        else:
+            item = dict(entry)
+            url = item.get("url", "")
+        if not url or url in seen:
+            continue
+        seen.add(url)
+        items.append(item)
+    return items
+
+
+async def _fetch_and_extract_single(item: dict, client: httpx.AsyncClient) -> dict | None:
+    """Fetch one URL and extract text, title and images."""
+    url = item["url"]
     try:
         resp = await client.get(url, follow_redirects=True)
         resp.raise_for_status()
         html_content = resp.text
-    except Exception as e:
-        logger.warning(
-            "fetch_failed",
-            url=url,
-            error=str(e),
-        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("fetch_failed", url=url, error=str(exc))
         return None
 
-    # 1. Trafilatura 提取正文和标题
     extracted_text = trafilatura.extract(html_content, include_images=False, include_links=False)
-    
-    # 2. BeautifulSoup 补充提取标题和图片
     soup = BeautifulSoup(html_content, "html.parser")
-    title = ""
-    
-    # 如果 trafilatura 没有提取到 title，用 bs4 补救
-    if soup.title and soup.title.string:
-        title = soup.title.string.strip()
-        
+    title = soup.title.string.strip() if soup.title and soup.title.string else item.get("title", "").strip()
+
     if not extracted_text:
-        # Fallback to bs4 text extraction if trafilatura fails
         paragraphs = soup.find_all("p")
-        extracted_text = "\n".join([p.get_text(separator=" ", strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20])
-        
+        extracted_text = "\n".join(
+            [
+                paragraph.get_text(separator=" ", strip=True)
+                for paragraph in paragraphs
+                if len(paragraph.get_text(strip=True)) > 20
+            ]
+        )
+
     if not extracted_text or len(extracted_text) < 50:
         logger.warning("extract_failed_or_too_short", url=url)
         return None
 
-    # 提取图片
-    images = []
+    images: list[str] = []
     for img in soup.find_all("img"):
         src = img.get("src") or img.get("data-src")
-        if src and src.startswith("http"):
-            # 校验图片
-            if _is_valid_image(src, img.attrs):
-                images.append(src)
-                if len(images) >= 5: # 单页面最多采集 5 张
-                    break
+        if src and src.startswith("http") and _is_valid_image(src, img.attrs):
+            images.append(src)
+            if len(images) >= 5:
+                break
 
     return {
         "url": url,
         "title": title,
         "text": extracted_text,
-        "images": images
+        "images": images,
+        "source_meta": {
+            "query": item.get("query", ""),
+            "query_intent": item.get("query_intent", ""),
+            "provider": item.get("provider", ""),
+            "domain": item.get("domain", ""),
+            "source_type": item.get("source_type", ""),
+            "final_score": item.get("final_score", 0),
+            "snippet": item.get("snippet", ""),
+        },
     }
 
 
 async def fetch_extract_node(state: WorkflowState) -> dict:
-    """并发抓取所有 search_results 的内容。"""
+    """Fetch top search results and extract clean content."""
     task_id = state["task_id"]
-    urls = state.get("search_results", [])
-    
+    source_items = _extract_source_items(state.get("search_results", []))[:8]
+
     start_time = time.monotonic()
-    
     logger.info(
         "skill_start",
         task_id=task_id,
         skill="fetch_and_extract",
         status="running",
-        url_count=len(urls),
+        url_count=len(source_items),
     )
-    
-    if not urls:
-        duration_ms = round((time.monotonic() - start_time) * 1000)
+
+    if not source_items:
         logger.warning("no_urls_to_fetch", task_id=task_id)
         return {
             "status": "failed",
@@ -122,23 +132,24 @@ async def fetch_extract_node(state: WorkflowState) -> dict:
             "error": "没有找到可提取的 URL",
         }
 
-    # 并发抓取
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        )
     }
     timeout = httpx.Timeout(15.0)
-    
-    extracted = []
-    async with httpx.AsyncClient(headers=headers, timeout=timeout) as client:
-        tasks = [_fetch_and_extract_single(url, client) for url in urls]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-    for res in results:
-        if isinstance(res, dict) and res:
-            extracted.append(res)
-            
-    duration_ms = round((time.monotonic() - start_time) * 1000)
 
+    extracted: list[dict] = []
+    async with httpx.AsyncClient(headers=headers, timeout=timeout) as client:
+        tasks = [_fetch_and_extract_single(item, client) for item in source_items]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for result in results:
+        if isinstance(result, dict) and result:
+            extracted.append(result)
+
+    duration_ms = round((time.monotonic() - start_time) * 1000)
     if not extracted:
         error_msg = "所有页面抓取或内容提取均失败"
         logger.error(
@@ -154,7 +165,7 @@ async def fetch_extract_node(state: WorkflowState) -> dict:
             "current_skill": "fetch_and_extract",
             "error": error_msg,
         }
-        
+
     logger.info(
         "skill_done",
         task_id=task_id,
@@ -167,6 +178,6 @@ async def fetch_extract_node(state: WorkflowState) -> dict:
     return {
         "status": "running",
         "current_skill": "fetch_and_extract",
-        "progress": 50,
+        "progress": 68,
         "extracted_contents": extracted,
     }

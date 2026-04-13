@@ -5,13 +5,16 @@ import structlog
 from fastapi import APIRouter, Body, HTTPException
 from pydantic import BaseModel, Field
 
+from api.models import ModelConfig
 from api.store import (
     create_custom_theme,
     delete_custom_theme,
     get_custom_themes,
+    get_model_config,
     get_preset_themes,
     get_style_config,
     import_custom_themes,
+    save_model_config,
     save_style_config,
     update_custom_theme,
 )
@@ -35,6 +38,23 @@ async def get_styles() -> dict[str, str]:
 async def update_styles(body: dict[str, str] = Body(...)) -> dict[str, str]:
     updated = save_style_config(body)
     logger.info("style_config_updated", keys_updated=len(updated))
+    return updated
+
+
+@router.get("/model", response_model=ModelConfig)
+async def get_models() -> ModelConfig:
+    return get_model_config()
+
+
+@router.put("/model", response_model=ModelConfig)
+async def update_models(body: ModelConfig) -> ModelConfig:
+    updated = save_model_config(body)
+    logger.info(
+        "model_config_updated",
+        text_model=updated.text.model,
+        image_enabled=updated.image.enabled,
+        image_model=updated.image.model,
+    )
     return updated
 
 

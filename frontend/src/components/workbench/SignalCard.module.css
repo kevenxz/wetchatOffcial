@@ -1,0 +1,33 @@
+.card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid rgba(56, 189, 248, 0.24);
+  border-radius: 18px;
+  background: rgba(8, 47, 73, 0.34);
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: rgba(56, 189, 248, 0.14);
+  color: #7dd3fc;
+}
+
+.body {
+  display: grid;
+  gap: 4px;
+}
+
+.title {
+  font-size: 0.95rem;
+}
+
+.description {
+  color: var(--text-secondary);
+}
