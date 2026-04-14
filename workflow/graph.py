@@ -10,8 +10,21 @@ import structlog
 from langgraph.graph import END, StateGraph
 
 from workflow.article_generation import normalize_generation_config
+from workflow.skills.analyze_hotspot_opportunities import analyze_hotspot_opportunities_node
+from workflow.skills.build_evidence_pack import build_evidence_pack_node
+from workflow.skills.compose_draft import compose_draft_node
 from workflow.skills.intake_task_brief import intake_task_brief_node
 from workflow.skills.planner_agent import planner_agent_node
+from workflow.skills.generate_visual_assets import generate_visual_assets_node
+from workflow.skills.plan_article_angle import plan_article_angle_node
+from workflow.skills.plan_research import plan_research_node
+from workflow.skills.plan_visual_assets import plan_visual_assets_node
+from workflow.skills.quality_gate import quality_gate_node
+from workflow.skills.resolve_article_type import resolve_article_type_node
+from workflow.skills.review_article_draft import review_article_draft_node
+from workflow.skills.review_visual_assets import review_visual_assets_node
+from workflow.skills.run_research import run_research_node
+from workflow.skills.targeted_revision import targeted_revision_node
 from workflow.skills.build_article_blueprint import build_article_blueprint_node
 from workflow.skills.capture_hot_topics import capture_hot_topics_node
 from workflow.skills.error_handler import error_handler
@@ -67,12 +80,37 @@ def _route_after_generate_images(state: WorkflowState) -> str:
     return "next"
 
 
+def _route_quality_action(state: WorkflowState) -> str:
+    if state.get("status") == "failed":
+        return "error"
+
+    action = state.get("quality_state", {}).get("next_action")
+    if action == "revise_writing":
+        return "revise_writing"
+    if action == "revise_visuals":
+        return "revise_visuals"
+    return "pass"
+
+
 def build_graph() -> StateGraph:
     """Build and compile the workflow graph."""
     graph = StateGraph(WorkflowState)
 
     graph.add_node("intake_task_brief", intake_task_brief_node)
     graph.add_node("planner_agent", planner_agent_node)
+    graph.add_node("analyze_hotspot_opportunities", analyze_hotspot_opportunities_node)
+    graph.add_node("plan_research", plan_research_node)
+    graph.add_node("run_research", run_research_node)
+    graph.add_node("build_evidence_pack", build_evidence_pack_node)
+    graph.add_node("resolve_article_type", resolve_article_type_node)
+    graph.add_node("plan_article_angle", plan_article_angle_node)
+    graph.add_node("compose_draft", compose_draft_node)
+    graph.add_node("review_article_draft", review_article_draft_node)
+    graph.add_node("plan_visual_assets", plan_visual_assets_node)
+    graph.add_node("generate_visual_assets", generate_visual_assets_node)
+    graph.add_node("review_visual_assets", review_visual_assets_node)
+    graph.add_node("quality_gate", quality_gate_node)
+    graph.add_node("targeted_revision", targeted_revision_node)
     graph.add_node("initialize", initialize_node)
     graph.add_node("capture_hot_topics", capture_hot_topics_node)
     graph.add_node("interpret_user_intent", interpret_user_intent_node)
@@ -90,8 +128,23 @@ def build_graph() -> StateGraph:
 
     graph.set_entry_point("intake_task_brief")
     graph.add_conditional_edges("intake_task_brief", _route_status, {"error": "error_handler", "next": "planner_agent"})
-    graph.add_conditional_edges("planner_agent", _route_status, {"error": "error_handler", "next": "initialize"})
-    graph.add_edge("initialize", "capture_hot_topics")
+    graph.add_conditional_edges("planner_agent", _route_status, {"error": "error_handler", "next": "analyze_hotspot_opportunities"})
+    graph.add_conditional_edges("analyze_hotspot_opportunities", _route_status, {"error": "error_handler", "next": "plan_research"})
+    graph.add_conditional_edges("plan_research", _route_status, {"error": "error_handler", "next": "run_research"})
+    graph.add_conditional_edges("run_research", _route_status, {"error": "error_handler", "next": "build_evidence_pack"})
+    graph.add_conditional_edges("build_evidence_pack", _route_status, {"error": "error_handler", "next": "resolve_article_type"})
+    graph.add_conditional_edges("resolve_article_type", _route_status, {"error": "error_handler", "next": "plan_article_angle"})
+    graph.add_conditional_edges("plan_article_angle", _route_status, {"error": "error_handler", "next": "compose_draft"})
+    graph.add_conditional_edges("compose_draft", _route_status, {"error": "error_handler", "next": "review_article_draft"})
+    graph.add_conditional_edges("review_article_draft", _route_status, {"error": "error_handler", "next": "plan_visual_assets"})
+    graph.add_conditional_edges("plan_visual_assets", _route_status, {"error": "error_handler", "next": "generate_visual_assets"})
+    graph.add_conditional_edges("generate_visual_assets", _route_status, {"error": "error_handler", "next": "review_visual_assets"})
+    graph.add_conditional_edges("review_visual_assets", _route_status, {"error": "error_handler", "next": "quality_gate"})
+    graph.add_conditional_edges(
+        "quality_gate",
+        _route_quality_action,
+        {"error": "error_handler", "pass": "push_to_draft", "revise_writing": "compose_draft", "revise_visuals": "generate_visual_assets"},
+    )
     graph.add_conditional_edges("capture_hot_topics", _route_status, {"error": "error_handler", "next": "interpret_user_intent"})
     graph.add_conditional_edges("interpret_user_intent", _route_status, {"error": "error_handler", "next": "infer_style_profile"})
     graph.add_conditional_edges("infer_style_profile", _route_status, {"error": "error_handler", "next": "build_article_blueprint"})
