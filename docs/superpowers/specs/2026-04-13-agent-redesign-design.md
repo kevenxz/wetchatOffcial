@@ -534,3 +534,8 @@ These decisions were agreed during brainstorming:
 ## Next Step
 
 After review approval, create an implementation plan that breaks the redesign into staged repository changes while preserving current production stability.
+
+## Implementation Status
+
+- Status: Core planner-led workflow stages implemented in branch `feature/agent-redesign-spec`
+- Verified by: `pytest -v`

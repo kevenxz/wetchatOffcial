@@ -1068,3 +1068,8 @@ git commit -m "补充agent重构文档与交接说明"
 
 - 状态块统一使用 `task_brief`、`planning_state`、`research_state`、`writing_state`、`visual_state`、`quality_state`。
 - 阶段名称统一使用 `intake_task_brief`、`planner_agent`、`analyze_hotspot_opportunities`、`plan_research`、`run_research`、`build_evidence_pack`、`resolve_article_type`、`plan_article_angle`、`compose_draft`、`review_article_draft`、`plan_visual_assets`、`generate_visual_assets`、`review_visual_assets`、`quality_gate`、`targeted_revision`。
+
+## 执行状态
+
+- Status: Core planner-led workflow stages implemented in branch `feature/agent-redesign-spec`
+- Verified by: `pytest -v`

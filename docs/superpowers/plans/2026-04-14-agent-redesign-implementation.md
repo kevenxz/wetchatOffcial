@@ -1067,3 +1067,8 @@ No spec gap remains unassigned.
 
 - State block names are consistently `task_brief`, `planning_state`, `research_state`, `writing_state`, `visual_state`, `quality_state`.
 - Stage names are consistently `intake_task_brief`, `planner_agent`, `analyze_hotspot_opportunities`, `plan_research`, `run_research`, `build_evidence_pack`, `resolve_article_type`, `plan_article_angle`, `compose_draft`, `review_article_draft`, `plan_visual_assets`, `generate_visual_assets`, `review_visual_assets`, `quality_gate`, `targeted_revision`.
+
+## Execution Status
+
+- Status: Core planner-led workflow stages implemented in branch `feature/agent-redesign-spec`
+- Verified by: `pytest -v`

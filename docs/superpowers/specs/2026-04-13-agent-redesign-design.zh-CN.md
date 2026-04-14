@@ -534,3 +534,8 @@ stateDiagram-v2
 ## 下一步
 
 在你审阅并批准本设计后，输出一份实施计划，将重构拆解为可在当前仓库内逐步落地的开发阶段，同时尽量保持现有生产链路稳定。
+
+## 实施状态
+
+- Status: Core planner-led workflow stages implemented in branch `feature/agent-redesign-spec`
+- Verified by: `pytest -v`

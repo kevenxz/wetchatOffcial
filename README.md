@@ -30,3 +30,9 @@
    - 生产构建/预览：`npm run build && npm run preview`。
 
 完成以上步骤后，即可通过前端界面或直接调用 API 触发文章生成并推送到公众号草稿箱。持续运行时注意妥善保管 `.env` 中的密钥，并定期备份 `data/` 目录以保留历史任务和样式配置。
+## Agent Workflow
+
+The workflow now runs through `intake_task_brief`, `planner_agent`, `analyze_hotspot_opportunities`, `plan_research`, `run_research`, `build_evidence_pack`, `resolve_article_type`, `plan_article_angle`, `compose_draft`, `review_article_draft`, `plan_visual_assets`, `generate_visual_assets`, `review_visual_assets`, and `quality_gate` before draft publishing.
+
+Status: Implemented in branch `feature/agent-redesign-spec`
+Verified by: `pytest -v`
