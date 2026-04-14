@@ -8,6 +8,7 @@ DEFAULT_AUDIENCE_ROLE = "泛科技读者"
 DEFAULT_AUDIENCE_ROLES = [DEFAULT_AUDIENCE_ROLE]
 DEFAULT_ARTICLE_STRATEGY = "auto"
 DEFAULT_STYLE_HINT = ""
+DEFAULT_RUNTIME_PROFILE = "quality_first"
 
 ARTICLE_STRATEGY_VALUES = (
     "auto",
@@ -103,6 +104,8 @@ def normalize_generation_config(config: Mapping[str, Any] | None) -> dict[str, A
     roles: list[str] = []
     strategy = DEFAULT_ARTICLE_STRATEGY
     style_hint = DEFAULT_STYLE_HINT
+    runtime_profile = DEFAULT_RUNTIME_PROFILE
+    image_policy: dict[str, Any] = {}
 
     if isinstance(config, Mapping):
         raw_roles = config.get("audience_roles")
@@ -122,6 +125,14 @@ def normalize_generation_config(config: Mapping[str, Any] | None) -> dict[str, A
         if isinstance(raw_style_hint, str):
             style_hint = raw_style_hint.strip()
 
+        raw_runtime_profile = config.get("runtime_profile")
+        if isinstance(raw_runtime_profile, str):
+            runtime_profile = raw_runtime_profile.strip() or DEFAULT_RUNTIME_PROFILE
+
+        raw_image_policy = config.get("image_policy")
+        if isinstance(raw_image_policy, Mapping):
+            image_policy = dict(raw_image_policy)
+
     if not roles:
         roles = list(DEFAULT_AUDIENCE_ROLES)
     if strategy not in ARTICLE_STRATEGY_VALUES:
@@ -131,6 +142,8 @@ def normalize_generation_config(config: Mapping[str, Any] | None) -> dict[str, A
         "audience_roles": roles,
         "article_strategy": strategy,
         "style_hint": style_hint,
+        "runtime_profile": runtime_profile,
+        "image_policy": image_policy,
     }
 
 

@@ -10,6 +10,8 @@ import structlog
 from langgraph.graph import END, StateGraph
 
 from workflow.article_generation import normalize_generation_config
+from workflow.skills.intake_task_brief import intake_task_brief_node
+from workflow.skills.planner_agent import planner_agent_node
 from workflow.skills.build_article_blueprint import build_article_blueprint_node
 from workflow.skills.capture_hot_topics import capture_hot_topics_node
 from workflow.skills.error_handler import error_handler
@@ -69,6 +71,8 @@ def build_graph() -> StateGraph:
     """Build and compile the workflow graph."""
     graph = StateGraph(WorkflowState)
 
+    graph.add_node("intake_task_brief", intake_task_brief_node)
+    graph.add_node("planner_agent", planner_agent_node)
     graph.add_node("initialize", initialize_node)
     graph.add_node("capture_hot_topics", capture_hot_topics_node)
     graph.add_node("interpret_user_intent", interpret_user_intent_node)
@@ -84,7 +88,9 @@ def build_graph() -> StateGraph:
     graph.add_node("ui_feedback", ui_feedback_node)
     graph.add_node("error_handler", error_handler)
 
-    graph.set_entry_point("initialize")
+    graph.set_entry_point("intake_task_brief")
+    graph.add_conditional_edges("intake_task_brief", _route_status, {"error": "error_handler", "next": "planner_agent"})
+    graph.add_conditional_edges("planner_agent", _route_status, {"error": "error_handler", "next": "initialize"})
     graph.add_edge("initialize", "capture_hot_topics")
     graph.add_conditional_edges("capture_hot_topics", _route_status, {"error": "error_handler", "next": "interpret_user_intent"})
     graph.add_conditional_edges("interpret_user_intent", _route_status, {"error": "error_handler", "next": "infer_style_profile"})
@@ -132,6 +138,12 @@ async def run_workflow(
         )
         if hotspot_capture_config is not None:
             initial_state["hotspot_capture_config"] = dict(hotspot_capture_config)
+        initial_state.setdefault("task_brief", {})
+        initial_state.setdefault("planning_state", {})
+        initial_state.setdefault("research_state", {})
+        initial_state.setdefault("writing_state", {})
+        initial_state.setdefault("visual_state", {})
+        initial_state.setdefault("quality_state", {})
         initial_state.setdefault("user_intent", {})
         initial_state.setdefault("style_profile", {})
         initial_state.setdefault("article_blueprint", {})
@@ -162,6 +174,12 @@ async def run_workflow(
             "original_keywords": keywords,
             "generation_config": normalized_generation_config,
             "hotspot_capture_config": dict(hotspot_capture_config or {}),
+            "task_brief": {},
+            "planning_state": {},
+            "research_state": {},
+            "writing_state": {},
+            "visual_state": {},
+            "quality_state": {},
             "user_intent": {},
             "style_profile": {},
             "article_blueprint": {},
