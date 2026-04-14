@@ -1,6 +1,6 @@
 # Agent 重构实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **目标：** 在保留现有生产基础设施的前提下，将文章生成工作流重构为由 Planner 驱动、包含多源热点分析、多角度研究、分阶段文章生成、按角色生成视觉资产和显式质量闸门的内容生产系统。
 
@@ -71,7 +71,7 @@
 - 修改：`api/routers/tasks.py`
 - 测试：`tests/test_graph_agent_redesign.py`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 ```python
 from workflow.state import WorkflowState
@@ -100,12 +100,12 @@ def test_workflow_state_supports_new_agent_blocks() -> None:
     assert "quality_state" in state
 ```
 
-- [ ] **步骤 2：运行测试确认失败**
+- [x] **步骤 2：运行测试确认失败**
 
 运行：`pytest tests/test_graph_agent_redesign.py::test_workflow_state_supports_new_agent_blocks -v`
 预期：FAIL，原因是 `WorkflowState` 缺少新字段或类型定义不兼容。
 
-- [ ] **步骤 3：编写最小实现**
+- [x] **步骤 3：编写最小实现**
 
 ```python
 class WorkflowState(TypedDict, total=False):
@@ -139,7 +139,7 @@ class Task(BaseModel):
     quality_state: Optional[dict] = None
 ```
 
-- [ ] **步骤 4：从任务 API 返回新字段**
+- [x] **步骤 4：从任务 API 返回新字段**
 
 ```python
 return {
@@ -153,12 +153,12 @@ return {
 }
 ```
 
-- [ ] **步骤 5：重新运行测试确认通过**
+- [x] **步骤 5：重新运行测试确认通过**
 
 运行：`pytest tests/test_graph_agent_redesign.py::test_workflow_state_supports_new_agent_blocks -v`
 预期：PASS
 
-- [ ] **步骤 6：提交**
+- [x] **步骤 6：提交**
 
 ```bash
 git add workflow/state.py api/models.py api/routers/tasks.py tests/test_graph_agent_redesign.py
@@ -173,7 +173,7 @@ git commit -m "重构工作流状态与任务模型"
 - 修改：`workflow/graph.py`
 - 测试：`tests/test_intake_task_brief.py`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 ```python
 import pytest
@@ -197,12 +197,12 @@ async def test_intake_task_brief_normalizes_generation_inputs() -> None:
     assert result["current_skill"] == "intake_task_brief"
 ```
 
-- [ ] **步骤 2：运行测试确认失败**
+- [x] **步骤 2：运行测试确认失败**
 
 运行：`pytest tests/test_intake_task_brief.py::test_intake_task_brief_normalizes_generation_inputs -v`
 预期：FAIL，原因是模块或函数不存在。
 
-- [ ] **步骤 3：编写最小实现**
+- [x] **步骤 3：编写最小实现**
 
 ```python
 async def intake_task_brief_node(state: WorkflowState) -> dict[str, Any]:
@@ -235,7 +235,7 @@ def normalize_generation_config(raw_config: dict | None) -> dict:
     return config
 ```
 
-- [ ] **步骤 4：接入 graph 入口**
+- [x] **步骤 4：接入 graph 入口**
 
 ```python
 graph.add_node("intake_task_brief", intake_task_brief_node)
@@ -243,12 +243,12 @@ graph.set_entry_point("intake_task_brief")
 graph.add_edge("intake_task_brief", "planner_agent")
 ```
 
-- [ ] **步骤 5：重新运行测试确认通过**
+- [x] **步骤 5：重新运行测试确认通过**
 
 运行：`pytest tests/test_intake_task_brief.py -v`
 预期：PASS
 
-- [ ] **步骤 6：提交**
+- [x] **步骤 6：提交**
 
 ```bash
 git add workflow/skills/intake_task_brief.py workflow/article_generation.py workflow/graph.py tests/test_intake_task_brief.py
@@ -263,7 +263,7 @@ git commit -m "新增任务brief接入阶段"
 - 测试：`tests/test_article_type_registry.py`
 - 测试：`tests/test_planner_agent.py`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 ```python
 from workflow.utils.article_type_registry import get_article_type_registry
@@ -276,7 +276,7 @@ def test_article_type_registry_includes_multiple_formal_types() -> None:
     assert registry["quick_news"]["title_style"] == "fast_and_clear"
 ```
 
-- [ ] **步骤 2：补 Planner 输出失败测试**
+- [x] **步骤 2：补 Planner 输出失败测试**
 
 ```python
 import pytest
@@ -301,12 +301,12 @@ async def test_planner_agent_creates_type_search_and_visual_plan() -> None:
     assert result["planning_state"]["visual_plan"]["asset_roles"]
 ```
 
-- [ ] **步骤 3：运行测试确认失败**
+- [x] **步骤 3：运行测试确认失败**
 
 运行：`pytest tests/test_article_type_registry.py tests/test_planner_agent.py -v`
 预期：FAIL，原因是模块或函数不存在。
 
-- [ ] **步骤 4：编写最小实现**
+- [x] **步骤 4：编写最小实现**
 
 ```python
 def get_article_type_registry() -> dict[str, dict[str, Any]]:
@@ -358,12 +358,12 @@ async def planner_agent_node(state: WorkflowState) -> dict[str, Any]:
     return {"status": "running", "current_skill": "planner_agent", "progress": 12, "planning_state": planning_state}
 ```
 
-- [ ] **步骤 5：重新运行测试确认通过**
+- [x] **步骤 5：重新运行测试确认通过**
 
 运行：`pytest tests/test_article_type_registry.py tests/test_planner_agent.py -v`
 预期：PASS
 
-- [ ] **步骤 6：提交**
+- [x] **步骤 6：提交**
 
 ```bash
 git add workflow/utils/article_type_registry.py workflow/skills/planner_agent.py tests/test_article_type_registry.py tests/test_planner_agent.py
@@ -378,7 +378,7 @@ git commit -m "新增文章类型策略注册表与规划器"
 - 新建：`workflow/skills/analyze_hotspot_opportunities.py`
 - 测试：`tests/test_analyze_hotspot_opportunities.py`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 ```python
 from workflow.utils.hotspot_scoring import score_hotspot_candidate
@@ -399,12 +399,12 @@ def test_score_hotspot_candidate_prefers_relevant_and_expandable_items() -> None
     assert score > 75
 ```
 
-- [ ] **步骤 2：运行测试确认失败**
+- [x] **步骤 2：运行测试确认失败**
 
 运行：`pytest tests/test_analyze_hotspot_opportunities.py::test_score_hotspot_candidate_prefers_relevant_and_expandable_items -v`
 预期：FAIL，原因是模块或函数不存在。
 
-- [ ] **步骤 3：编写最小实现**
+- [x] **步骤 3：编写最小实现**
 
 ```python
 def collect_hotspot_candidates(task_brief: dict, config: dict) -> list[dict[str, Any]]:
@@ -426,7 +426,7 @@ def score_hotspot_candidate(candidate: dict[str, Any]) -> float:
     return round(max(0.0, positive - risk_penalty), 2)
 ```
 
-- [ ] **步骤 4：新增热点分析节点**
+- [x] **步骤 4：新增热点分析节点**
 
 ```python
 async def analyze_hotspot_opportunities_node(state: WorkflowState) -> dict[str, Any]:
@@ -446,12 +446,12 @@ async def analyze_hotspot_opportunities_node(state: WorkflowState) -> dict[str, 
     }
 ```
 
-- [ ] **步骤 5：重新运行测试确认通过**
+- [x] **步骤 5：重新运行测试确认通过**
 
 运行：`pytest tests/test_analyze_hotspot_opportunities.py -v`
 预期：PASS
 
-- [ ] **步骤 6：提交**
+- [x] **步骤 6：提交**
 
 ```bash
 git add workflow/utils/hotspot_sources.py workflow/utils/hotspot_scoring.py workflow/skills/analyze_hotspot_opportunities.py tests/test_analyze_hotspot_opportunities.py
@@ -469,7 +469,7 @@ git commit -m "新增多源热点分析阶段"
 - 测试：`tests/test_plan_research.py`
 - 测试：`tests/test_build_evidence_pack.py`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 ```python
 import pytest
@@ -489,7 +489,7 @@ async def test_plan_research_creates_queries_for_all_research_angles() -> None:
     assert {item["angle"] for item in queries} == {"fact", "news", "opinion", "case", "data"}
 ```
 
-- [ ] **步骤 2：补证据包失败测试**
+- [x] **步骤 2：补证据包失败测试**
 
 ```python
 from workflow.utils.evidence_pack import build_evidence_pack
@@ -507,12 +507,12 @@ def test_build_evidence_pack_groups_items_by_usage() -> None:
     assert pack["usable_cases"]
 ```
 
-- [ ] **步骤 3：运行测试确认失败**
+- [x] **步骤 3：运行测试确认失败**
 
 运行：`pytest tests/test_plan_research.py tests/test_build_evidence_pack.py -v`
 预期：FAIL，原因是模块或函数不存在。
 
-- [ ] **步骤 4：编写最小实现**
+- [x] **步骤 4：编写最小实现**
 
 ```python
 def build_research_queries(topic: str, angles: list[str]) -> list[dict[str, str]]:
@@ -539,7 +539,7 @@ def build_evidence_pack(items: list[dict[str, Any]]) -> dict[str, list[dict[str,
     }
 ```
 
-- [ ] **步骤 5：新增计划与打包节点**
+- [x] **步骤 5：新增计划与打包节点**
 
 ```python
 async def plan_research_node(state: WorkflowState) -> dict[str, Any]:
@@ -558,12 +558,12 @@ async def build_evidence_pack_node(state: WorkflowState) -> dict[str, Any]:
     return {"status": "running", "current_skill": "build_evidence_pack", "progress": 34, "research_state": research_state}
 ```
 
-- [ ] **步骤 6：重新运行测试确认通过**
+- [x] **步骤 6：重新运行测试确认通过**
 
 运行：`pytest tests/test_plan_research.py tests/test_build_evidence_pack.py -v`
 预期：PASS
 
-- [ ] **步骤 7：提交**
+- [x] **步骤 7：提交**
 
 ```bash
 git add workflow/utils/research_queries.py workflow/utils/evidence_pack.py workflow/skills/plan_research.py workflow/skills/run_research.py workflow/skills/build_evidence_pack.py tests/test_plan_research.py tests/test_build_evidence_pack.py
@@ -579,7 +579,7 @@ git commit -m "新增多角度研究计划与证据包"
 - 新建：`workflow/skills/review_article_draft.py`
 - 测试：`tests/test_compose_draft.py`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 ```python
 import pytest
@@ -602,12 +602,12 @@ async def test_compose_draft_generates_article_from_blueprint_and_evidence() -> 
     assert "趋势判断" in result["writing_state"]["draft"]["content"]
 ```
 
-- [ ] **步骤 2：运行测试确认失败**
+- [x] **步骤 2：运行测试确认失败**
 
 运行：`pytest tests/test_compose_draft.py::test_compose_draft_generates_article_from_blueprint_and_evidence -v`
 预期：FAIL，原因是模块或函数不存在。
 
-- [ ] **步骤 3：编写最小实现**
+- [x] **步骤 3：编写最小实现**
 
 ```python
 async def resolve_article_type_node(state: WorkflowState) -> dict[str, Any]:
@@ -660,12 +660,12 @@ async def review_article_draft_node(state: WorkflowState) -> dict[str, Any]:
     return {"status": "running", "current_skill": "review_article_draft", "progress": 60, "writing_state": writing_state}
 ```
 
-- [ ] **步骤 4：重新运行测试确认通过**
+- [x] **步骤 4：重新运行测试确认通过**
 
 运行：`pytest tests/test_compose_draft.py -v`
 预期：PASS
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```bash
 git add workflow/skills/resolve_article_type.py workflow/skills/plan_article_angle.py workflow/skills/compose_draft.py workflow/skills/review_article_draft.py tests/test_compose_draft.py
@@ -681,7 +681,7 @@ git commit -m "重构文章生成阶段为分段式agent"
 - 新建：`workflow/skills/review_visual_assets.py`
 - 测试：`tests/test_plan_visual_assets.py`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 ```python
 import pytest
@@ -702,12 +702,12 @@ async def test_plan_visual_assets_creates_role_aware_image_briefs() -> None:
     assert briefs[1]["target_aspect_ratio"]
 ```
 
-- [ ] **步骤 2：运行测试确认失败**
+- [x] **步骤 2：运行测试确认失败**
 
 运行：`pytest tests/test_plan_visual_assets.py::test_plan_visual_assets_creates_role_aware_image_briefs -v`
 预期：FAIL，原因是模块或函数不存在。
 
-- [ ] **步骤 3：编写最小实现**
+- [x] **步骤 3：编写最小实现**
 
 ```python
 def build_visual_brief(role: str, draft: dict[str, Any], topic: str) -> dict[str, Any]:
@@ -748,12 +748,12 @@ async def review_visual_assets_node(state: WorkflowState) -> dict[str, Any]:
     return {"status": "running", "current_skill": "review_visual_assets", "progress": 78, "visual_state": visual_state}
 ```
 
-- [ ] **步骤 4：重新运行测试确认通过**
+- [x] **步骤 4：重新运行测试确认通过**
 
 运行：`pytest tests/test_plan_visual_assets.py -v`
 预期：PASS
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```bash
 git add workflow/utils/visual_briefs.py workflow/skills/plan_visual_assets.py workflow/skills/generate_visual_assets.py workflow/skills/review_visual_assets.py tests/test_plan_visual_assets.py
@@ -768,7 +768,7 @@ git commit -m "重构视觉资产规划与评审阶段"
 - 新建：`workflow/skills/targeted_revision.py`
 - 测试：`tests/test_quality_gate.py`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 ```python
 import pytest
@@ -787,12 +787,12 @@ async def test_quality_gate_routes_to_visual_revision_when_visual_review_fails()
     assert result["quality_state"]["next_action"] == "revise_visuals"
 ```
 
-- [ ] **步骤 2：运行测试确认失败**
+- [x] **步骤 2：运行测试确认失败**
 
 运行：`pytest tests/test_quality_gate.py::test_quality_gate_routes_to_visual_revision_when_visual_review_fails -v`
 预期：FAIL，原因是模块或函数不存在。
 
-- [ ] **步骤 3：编写最小实现**
+- [x] **步骤 3：编写最小实现**
 
 ```python
 def decide_quality_action(article_review: dict[str, Any], visual_review: dict[str, Any], thresholds: dict[str, int]) -> str:
@@ -833,12 +833,12 @@ async def targeted_revision_node(state: WorkflowState) -> dict[str, Any]:
     }
 ```
 
-- [ ] **步骤 4：重新运行测试确认通过**
+- [x] **步骤 4：重新运行测试确认通过**
 
 运行：`pytest tests/test_quality_gate.py -v`
 预期：PASS
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```bash
 git add workflow/utils/quality_scoring.py workflow/skills/quality_gate.py workflow/skills/targeted_revision.py tests/test_quality_gate.py
@@ -851,7 +851,7 @@ git commit -m "新增质量闸门与定向修订路由"
 - 修改：`workflow/graph.py`
 - 测试：`tests/test_graph_agent_redesign.py`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 ```python
 from workflow.graph import build_graph
@@ -862,12 +862,12 @@ def test_build_graph_contains_quality_gate_stage() -> None:
     assert graph is not None
 ```
 
-- [ ] **步骤 2：运行测试确认当前连接不完整**
+- [x] **步骤 2：运行测试确认当前连接不完整**
 
 运行：`pytest tests/test_graph_agent_redesign.py -v`
 预期：FAIL，原因是新 graph 路径尚未接好或节点缺失。
 
-- [ ] **步骤 3：编写最小实现**
+- [x] **步骤 3：编写最小实现**
 
 ```python
 graph.add_node("planner_agent", planner_agent_node)
@@ -903,12 +903,12 @@ graph.add_edge("review_visual_assets", "quality_gate")
 graph.add_conditional_edges("quality_gate", _route_quality_action, {"pass": "push_to_draft", "revise_writing": "compose_draft", "revise_visuals": "generate_visual_assets"})
 ```
 
-- [ ] **步骤 4：重新运行测试确认通过**
+- [x] **步骤 4：重新运行测试确认通过**
 
 运行：`pytest tests/test_graph_agent_redesign.py -v`
 预期：PASS
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```bash
 git add workflow/graph.py tests/test_graph_agent_redesign.py
@@ -922,7 +922,7 @@ git commit -m "重连LangGraph为新agent阶段流"
 - 修改：`api/scheduler.py`
 - 测试：`tests/test_graph_agent_redesign.py`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 ```python
 def test_task_result_persists_planning_and_quality_state() -> None:
@@ -934,12 +934,12 @@ def test_task_result_persists_planning_and_quality_state() -> None:
     assert task_result["quality_state"]["ready_to_publish"] is True
 ```
 
-- [ ] **步骤 2：运行测试确认当前持久化未保存新字段**
+- [x] **步骤 2：运行测试确认当前持久化未保存新字段**
 
 运行：`pytest tests/test_graph_agent_redesign.py::test_task_result_persists_planning_and_quality_state -v`
 预期：FAIL，原因是 router / scheduler 的持久化路径忽略了新状态块。
 
-- [ ] **步骤 3：编写最小实现**
+- [x] **步骤 3：编写最小实现**
 
 ```python
 task.task_brief = res.get("task_brief") or {}
@@ -950,12 +950,12 @@ task.visual_state = res.get("visual_state") or {}
 task.quality_state = res.get("quality_state") or {}
 ```
 
-- [ ] **步骤 4：重新运行测试确认通过**
+- [x] **步骤 4：重新运行测试确认通过**
 
 运行：`pytest tests/test_graph_agent_redesign.py -v`
 预期：PASS
 
-- [ ] **步骤 5：提交**
+- [x] **步骤 5：提交**
 
 ```bash
 git add api/routers/tasks.py api/scheduler.py tests/test_graph_agent_redesign.py
@@ -977,7 +977,7 @@ git commit -m "持久化新agent工作流产物"
 - 测试：`tests/test_quality_gate.py`
 - 测试：`tests/test_graph_agent_redesign.py`
 
-- [ ] **步骤 1：运行聚焦回归测试**
+- [x] **步骤 1：运行聚焦回归测试**
 
 运行：
 
@@ -987,7 +987,7 @@ pytest tests/test_generate_article.py tests/test_generate_images.py tests/test_i
 
 预期：新旧阶段测试全部 PASS。
 
-- [ ] **步骤 2：先修兼容性问题，再跑更广验证**
+- [x] **步骤 2：先修兼容性问题，再跑更广验证**
 
 ```python
 if "generated_article" not in result:
@@ -996,12 +996,12 @@ result["generated_article"].setdefault("title", "")
 result["generated_article"].setdefault("content", "")
 ```
 
-- [ ] **步骤 3：运行更广的后端测试**
+- [x] **步骤 3：运行更广的后端测试**
 
 运行：`pytest -v`
 预期：PASS，或仅存在已知、与本次改造无关的历史失败，并在交接说明里记录。
 
-- [ ] **步骤 4：提交**
+- [x] **步骤 4：提交**
 
 ```bash
 git add workflow api tests
@@ -1017,7 +1017,7 @@ git commit -m "完成agent重构主链路验证"
 - 修改：`docs/superpowers/plans/2026-04-14-agent-redesign-implementation.md`
 - 修改：`docs/superpowers/plans/2026-04-14-agent-redesign-implementation.zh-CN.md`
 
-- [ ] **步骤 1：在 README 记录新工作流阶段**
+- [x] **步骤 1：在 README 记录新工作流阶段**
 
 ```markdown
 ## Agent Workflow
@@ -1025,19 +1025,19 @@ git commit -m "完成agent重构主链路验证"
 The workflow now runs through task brief intake, planner, hotspot analysis, research, evidence packaging, article drafting, visual planning, quality gate, and targeted revision before draft publishing.
 ```
 
-- [ ] **步骤 2：在 spec 和 plan 中标注已实现状态**
+- [x] **步骤 2：在 spec 和 plan 中标注已实现状态**
 
 ```markdown
 - Status: Implemented in branch `<current-branch>`
 - Verified by: `pytest -v`
 ```
 
-- [ ] **步骤 3：做最终文档巡检**
+- [x] **步骤 3：做最终文档巡检**
 
 运行：`rg -n "TODO|TBD|FIXME|placeholder" README.md docs/superpowers/specs docs/superpowers/plans -S`
 预期：新增文档中不出现真正的占位内容。
 
-- [ ] **步骤 4：提交**
+- [x] **步骤 4：提交**
 
 ```bash
 git add README.md docs/superpowers/specs/2026-04-13-agent-redesign-design.zh-CN.md docs/superpowers/specs/2026-04-13-agent-redesign-design.md docs/superpowers/plans/2026-04-14-agent-redesign-implementation.md docs/superpowers/plans/2026-04-14-agent-redesign-implementation.zh-CN.md
