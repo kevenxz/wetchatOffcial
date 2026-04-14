@@ -3,18 +3,142 @@ from __future__ import annotations
 
 from typing import Any
 
+import structlog
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel, Field
+
+from api.store import get_model_config
+from workflow.model_logging import build_model_context, log_model_request, log_model_response
 from workflow.state import WorkflowState
+
+logger = structlog.get_logger(__name__)
+
+
+class ReviewOutput(BaseModel):
+    """Structured article review payload."""
+
+    passed: bool = Field(description="Whether the draft passes review")
+    score: int = Field(description="Article review score from 0 to 100")
+    findings: list[dict[str, str]] = Field(default_factory=list, description="Review findings")
+    revision_guidance: list[str] = Field(default_factory=list, description="Specific revision guidance")
+
+
+def _fallback_review(draft: dict[str, Any]) -> ReviewOutput:
+    findings: list[dict[str, str]] = []
+    content = str(draft.get("content") or "")
+    if "## 风险边界" not in content and "## 椋庨櫓杈圭晫" not in content:
+        findings.append({"type": "structure", "message": "missing risk boundary section"})
+    score = 85 if not findings else 68
+    revision_guidance = ["补充风险边界章节"] if findings else []
+    return ReviewOutput(
+        passed=not findings,
+        score=score,
+        findings=findings,
+        revision_guidance=revision_guidance,
+    )
+
+
+def _build_evidence_summary(evidence_pack: dict[str, Any]) -> str:
+    lines: list[str] = []
+    for label in ("confirmed_facts", "usable_data_points", "usable_cases", "risk_points"):
+        items = list(evidence_pack.get(label) or [])
+        if not items:
+            continue
+        claims = [str(item.get("claim") or "").strip() for item in items[:3] if str(item.get("claim") or "").strip()]
+        if claims:
+            lines.append(f"{label}: " + " | ".join(claims))
+    return "\n".join(lines)
 
 
 async def review_article_draft_node(state: WorkflowState) -> dict[str, Any]:
-    """Run a lightweight structural review over the generated draft."""
+    """Run a structured review over the generated draft."""
     writing_state = dict(state.get("writing_state") or {})
     draft = dict(writing_state.get("draft") or {})
-    findings = []
-    if "## 风险边界" not in draft.get("content", ""):
-        findings.append({"type": "structure", "message": "missing risk boundary section"})
-    writing_state["review_findings"] = findings
-    writing_state["article_review"] = {"passed": not findings, "score": 85 if not findings else 68}
+    research_state = dict(state.get("research_state") or {})
+    evidence_pack = dict(research_state.get("evidence_pack") or {})
+    planning_state = dict(state.get("planning_state") or {})
+
+    text_model_config = get_model_config().text
+    if not text_model_config.api_key:
+        review = _fallback_review(draft)
+        writing_state["review_findings"] = review.findings
+        writing_state["revision_guidance"] = review.revision_guidance
+        writing_state["article_review"] = {"passed": review.passed, "score": review.score}
+        return {
+            "status": "running",
+            "current_skill": "review_article_draft",
+            "progress": 60,
+            "writing_state": writing_state,
+        }
+
+    system_prompt = (
+        "You are a Chinese editorial reviewer. "
+        "Review the draft for structure, evidence support, and clarity. "
+        "Return concise findings and concrete revision guidance."
+    )
+    human_prompt = (
+        "topic:\n{topic}\n\n"
+        "article_type:\n{article_type}\n\n"
+        "draft_title:\n{title}\n\n"
+        "draft_content:\n{content}\n\n"
+        "evidence_pack:\n{evidence_pack}\n"
+    )
+    prompt = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", human_prompt)])
+    llm = ChatOpenAI(
+        model=text_model_config.model,
+        api_key=text_model_config.api_key,
+        base_url=text_model_config.base_url or None,
+        max_tokens=1400,
+        temperature=0.2,
+    )
+    chain = prompt | llm.with_structured_output(ReviewOutput)
+
+    payload = {
+        "topic": str(state.get("task_brief", {}).get("topic") or state.get("keywords") or ""),
+        "article_type": dict(planning_state.get("article_type") or {}),
+        "title": str(draft.get("title") or ""),
+        "content": str(draft.get("content") or ""),
+        "evidence_pack": _build_evidence_summary(evidence_pack),
+    }
+    model_context = build_model_context(
+        model=text_model_config.model,
+        base_url=text_model_config.base_url,
+        api_key=text_model_config.api_key,
+        structured_output="ReviewOutput",
+    )
+    log_model_request(
+        logger,
+        task_id=str(state.get("task_id") or ""),
+        skill="review_article_draft",
+        context=model_context,
+        request=payload,
+    )
+
+    try:
+        result = await chain.ainvoke(payload)
+        if isinstance(result, ReviewOutput):
+            review = result
+        else:
+            review = ReviewOutput(**dict(result))
+        log_model_response(
+            logger,
+            task_id=str(state.get("task_id") or ""),
+            skill="review_article_draft",
+            context=model_context,
+            response=review.model_dump(),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "review_article_draft_fallback",
+            task_id=str(state.get("task_id") or ""),
+            error=str(exc),
+        )
+        review = _fallback_review(draft)
+
+    writing_state["review_findings"] = review.findings
+    writing_state["revision_guidance"] = review.revision_guidance
+    writing_state["article_review"] = {"passed": review.passed, "score": review.score}
     return {
         "status": "running",
         "current_skill": "review_article_draft",
