@@ -52,6 +52,12 @@ async def _progress_callback(task_id: str, data: dict) -> None:
                 selected_hotspot = res.get("selected_hotspot")
                 if isinstance(selected_hotspot, dict) or selected_hotspot is None:
                     task.selected_hotspot = selected_hotspot
+                task.task_brief = res.get("task_brief")
+                task.planning_state = res.get("planning_state")
+                task.research_state = res.get("research_state")
+                task.writing_state = res.get("writing_state")
+                task.visual_state = res.get("visual_state")
+                task.quality_state = res.get("quality_state")
                 task.user_intent = res.get("user_intent")
                 task.style_profile = res.get("style_profile")
                 task.article_blueprint = res.get("article_blueprint")
@@ -145,6 +151,12 @@ async def retry_task(
         "original_keywords": task.original_keywords or task.keywords,
         "generation_config": normalize_generation_config(task.generation_config.model_dump()),
         "hotspot_capture_config": task.hotspot_capture_config or {},
+        "task_brief": task.task_brief or {},
+        "planning_state": task.planning_state or {},
+        "research_state": task.research_state or {},
+        "writing_state": task.writing_state or {},
+        "visual_state": task.visual_state or {},
+        "quality_state": task.quality_state or {},
         "hotspot_candidates": task.hotspot_candidates or [],
         "selected_hotspot": task.selected_hotspot,
         "hotspot_capture_error": None,

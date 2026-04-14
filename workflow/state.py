@@ -6,7 +6,7 @@ from typing import Optional
 from typing_extensions import TypedDict
 
 
-class WorkflowState(TypedDict):
+class WorkflowState(TypedDict, total=False):
     """Global workflow state."""
 
     task_id: str
@@ -14,6 +14,12 @@ class WorkflowState(TypedDict):
     original_keywords: str
     generation_config: dict
     hotspot_capture_config: dict
+    task_brief: dict
+    planning_state: dict
+    research_state: dict
+    writing_state: dict
+    visual_state: dict
+    quality_state: dict
 
     user_intent: dict
     style_profile: dict
