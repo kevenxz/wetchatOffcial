@@ -88,3 +88,62 @@ async def test_scheduler_run_now_updates_task_with_selected_hotspot() -> None:
         schedule_store.update(schedule_store_backup)
         task_store.clear()
         task_store.update(task_store_backup)
+
+
+@pytest.mark.asyncio
+async def test_scheduler_progress_callback_persists_agent_state_blocks() -> None:
+    schedule_store_backup = dict(schedule_store)
+    task_store_backup = dict(task_store)
+    schedule_store.clear()
+    task_store.clear()
+
+    now = datetime.now(tz=timezone.utc)
+    schedule = ScheduleConfig(
+        schedule_id="schedule-agent-1",
+        name="Agent 重构验证",
+        mode=ScheduleMode.interval,
+        interval_minutes=60,
+        enabled=True,
+        status=ScheduleStatus.running,
+        created_at=now,
+    )
+    schedule_store[schedule.schedule_id] = schedule
+    engine = SchedulerEngine()
+
+    async def fake_run_workflow(*, task_id, keywords, generation_config, hotspot_capture_config, progress_callback, skip_auto_push):  # type: ignore[no-untyped-def]
+        await progress_callback(
+            task_id,
+            {
+                "task_id": task_id,
+                "status": "done",
+                "current_skill": "",
+                "progress": 100,
+                "message": "workflow done",
+                "result": {
+                    "generation_config": generation_config,
+                    "task_brief": {"topic": keywords},
+                    "planning_state": {"article_type": {"type_id": "trend_analysis"}},
+                    "research_state": {"evidence_pack": {"confirmed_facts": [{"claim": "A"}]}},
+                    "writing_state": {"draft": {"title": "标题", "content": "正文"}},
+                    "visual_state": {"image_briefs": [{"role": "cover"}]},
+                    "quality_state": {"next_action": "pass", "ready_to_publish": True},
+                    "generated_article": {"title": "标题", "content": "正文"},
+                    "draft_info": None,
+                },
+            },
+        )
+        return {}
+
+    try:
+        with patch("api.scheduler.run_workflow", side_effect=fake_run_workflow), patch("api.scheduler.save_schedules"), patch("api.scheduler.save_tasks"):
+            task_id = await engine.run_now(schedule.schedule_id)
+
+        task = task_store[task_id]
+        assert task.task_brief == {"topic": "Agent 重构验证"}
+        assert task.planning_state == {"article_type": {"type_id": "trend_analysis"}}
+        assert task.quality_state == {"next_action": "pass", "ready_to_publish": True}
+    finally:
+        schedule_store.clear()
+        schedule_store.update(schedule_store_backup)
+        task_store.clear()
+        task_store.update(task_store_backup)

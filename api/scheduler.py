@@ -276,6 +276,12 @@ class SchedulerEngine:
                     selected_hotspot = result.get("selected_hotspot")
                     if isinstance(selected_hotspot, dict) or selected_hotspot is None:
                         task.selected_hotspot = selected_hotspot
+                    task.task_brief = result.get("task_brief")
+                    task.planning_state = result.get("planning_state")
+                    task.research_state = result.get("research_state")
+                    task.writing_state = result.get("writing_state")
+                    task.visual_state = result.get("visual_state")
+                    task.quality_state = result.get("quality_state")
                     task.user_intent = result.get("user_intent")
                     task.style_profile = result.get("style_profile")
                     task.article_blueprint = result.get("article_blueprint")
