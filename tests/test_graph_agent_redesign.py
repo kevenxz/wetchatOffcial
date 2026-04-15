@@ -1,4 +1,5 @@
 from api.models import TaskResponse
+from workflow.graph import _route_revision_target
 from workflow.state import WorkflowState
 
 
@@ -33,3 +34,12 @@ def test_task_response_exposes_new_agent_blocks() -> None:
     assert "writing_state" in TaskResponse.model_fields
     assert "visual_state" in TaskResponse.model_fields
     assert "quality_state" in TaskResponse.model_fields
+
+
+def test_route_revision_target_routes_writing_revisions_through_targeted_revision() -> None:
+    state: WorkflowState = {
+        "quality_state": {"revision_route": "revise_writing"},
+        "status": "running",
+    }
+
+    assert _route_revision_target(state) == "revise_writing"

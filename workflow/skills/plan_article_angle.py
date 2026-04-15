@@ -25,6 +25,27 @@ class BlueprintOutput(BaseModel):
     drop_points: list[str] = Field(default_factory=list, description="Points intentionally left out")
 
 
+def _normalize_sections(sections: list[dict[str, Any]]) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    for section in sections:
+        heading = str(section.get("heading") or section.get("title") or "").strip()
+        goal = str(section.get("goal") or section.get("content") or "").strip()
+        shape = str(section.get("shape") or "").strip()
+        if not heading or not goal:
+            continue
+        normalized.append({"heading": heading, "goal": goal, "shape": shape})
+    return normalized
+
+
+def _normalize_blueprint_output(result: BlueprintOutput | dict[str, Any]) -> BlueprintOutput:
+    if isinstance(result, BlueprintOutput):
+        payload = result.model_dump()
+    else:
+        payload = dict(result)
+    payload["sections"] = _normalize_sections(list(payload.get("sections") or []))
+    return BlueprintOutput(**payload)
+
+
 def _topic_profile(topic: str) -> str:
     lowered = topic.lower()
     if "融资" in topic or "funding" in lowered or "investment" in lowered:
@@ -168,7 +189,9 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
         )
         try:
             result = await chain.ainvoke(payload)
-            blueprint = result if isinstance(result, BlueprintOutput) else BlueprintOutput(**dict(result))
+            blueprint = _normalize_blueprint_output(result)
+            if len(blueprint.sections) < 4:
+                raise ValueError("insufficient dynamic sections from model blueprint")
             log_model_response(
                 logger,
                 task_id=str(state.get("task_id") or ""),

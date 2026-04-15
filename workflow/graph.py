@@ -92,6 +92,18 @@ def _route_quality_action(state: WorkflowState) -> str:
     return "pass"
 
 
+def _route_revision_target(state: WorkflowState) -> str:
+    if state.get("status") == "failed":
+        return "error"
+
+    action = state.get("quality_state", {}).get("revision_route")
+    if action == "revise_writing":
+        return "revise_writing"
+    if action == "revise_visuals":
+        return "revise_visuals"
+    return "pass"
+
+
 def build_graph() -> StateGraph:
     """Build and compile the workflow graph."""
     graph = StateGraph(WorkflowState)
@@ -143,6 +155,11 @@ def build_graph() -> StateGraph:
     graph.add_conditional_edges(
         "quality_gate",
         _route_quality_action,
+        {"error": "error_handler", "pass": "push_to_draft", "revise_writing": "targeted_revision", "revise_visuals": "targeted_revision"},
+    )
+    graph.add_conditional_edges(
+        "targeted_revision",
+        _route_revision_target,
         {"error": "error_handler", "pass": "push_to_draft", "revise_writing": "compose_draft", "revise_visuals": "generate_visual_assets"},
     )
     graph.add_conditional_edges("capture_hot_topics", _route_status, {"error": "error_handler", "next": "interpret_user_intent"})

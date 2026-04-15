@@ -56,6 +56,7 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
     blueprint = dict(planning_state.get("article_blueprint") or {})
     research_state = dict(state.get("research_state") or {})
     evidence_pack = dict(research_state.get("evidence_pack") or {})
+    revision_brief = dict((state.get("writing_state") or {}).get("revision_brief") or {})
     task_brief = dict(state.get("task_brief") or {})
     topic = str(task_brief.get("topic") or state.get("keywords") or "").strip()
 
@@ -83,13 +84,15 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
     system_prompt = (
         "You are a Chinese content drafting agent. "
         "Write a clean Markdown article draft from the provided thesis, sections, and evidence pack. "
-        "Keep all provided H2 headings, keep the language concrete, and preserve a risk section when requested."
+        "Keep all provided H2 headings, keep the language concrete, and preserve a risk section when requested. "
+        "If revision guidance is provided, revise only the weak parts instead of changing the whole structure."
     )
     human_prompt = (
         "topic:\n{topic}\n\n"
         "article_type:\n{article_type}\n\n"
         "blueprint:\n{blueprint}\n\n"
-        "evidence_pack:\n{evidence_pack}\n"
+        "evidence_pack:\n{evidence_pack}\n\n"
+        "revision_brief:\n{revision_brief}\n"
     )
 
     prompt = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", human_prompt)])
@@ -107,6 +110,7 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
         "article_type": dict(planning_state.get("article_type") or {}),
         "blueprint": blueprint,
         "evidence_pack": _build_evidence_summary(evidence_pack),
+        "revision_brief": revision_brief,
     }
     model_context = build_model_context(
         model=text_model_config.model,
@@ -150,6 +154,7 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
         "writing_state": {
             "draft": draft.model_dump(),
             "review_findings": [],
+            "revision_brief": {},
         },
         "generated_article": {"title": draft.title, "content": draft.content},
     }
