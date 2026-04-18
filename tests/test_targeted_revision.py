@@ -49,3 +49,23 @@ async def test_targeted_revision_builds_visual_revision_brief_from_visual_review
     assert result["visual_state"]["revision_brief"]["mode"] == "targeted_revision"
     assert result["visual_state"]["revision_brief"]["guidance"] == ["主体不明确", "信息图太像海报"]
     assert result["visual_state"]["revision_brief"]["target_fields"] == ["assets"]
+
+
+@pytest.mark.asyncio
+async def test_targeted_revision_adds_evidence_gap_guidance_to_writing_brief() -> None:
+    state = {
+        "quality_state": {
+            "next_action": "revise_writing",
+            "evidence_gaps": ["missing_data_evidence", "missing_high_confidence_fact"],
+        },
+        "writing_state": {
+            "review_findings": [{"type": "evidence", "message": "证据覆盖不足"}],
+            "revision_guidance": ["补充证据支撑"],
+        },
+    }
+
+    result = await targeted_revision_node(state)
+    revision_brief = result["writing_state"]["revision_brief"]
+
+    assert revision_brief["evidence_gaps"] == ["missing_data_evidence", "missing_high_confidence_fact"]
+    assert any("missing_data_evidence" in item for item in revision_brief["guidance"])

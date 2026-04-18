@@ -1084,3 +1084,5 @@ git commit -m "补充agent重构文档与交接说明"
 - 2026-04-18：深化了 `plan_article_angle`，无论走 fallback 还是模型蓝图，请求都会消费 `research_gaps`、`source_coverage` 与 `angle_coverage`；当证据偏薄时，结构里会显式加入验证段和证据边界，而不是回到泛化骨架。
 - 2026-04-18：深化了 `compose_draft`，起草模型现在不只消费证据 claim，也会同步消费 `research_gaps`、`source_coverage` 与 `angle_coverage`，避免在证据偏薄时仍按“信息充分”的方式写稿。
 - 2026-04-18：深化了 `review_article_draft`，模型评审和 fallback 评审现在都会消费研究质量信号；即使文章结构完整，只要证据覆盖明显不足，fallback 也会给出 evidence 类问题和修订建议。
+- 2026-04-18：深化了 `quality_gate`，现在会把 `evidence_gaps` 和 `evidence_quality_summary` 一并写入 `quality_state`，后续修订路由不再只看文章分和图片分。
+- 2026-04-18：深化了 `targeted_revision`，写作修订 brief 现在会保留 `evidence_gaps`，并附加显式的补证提示，让下一轮起草能区分“结构重写”和“证据修补”。
