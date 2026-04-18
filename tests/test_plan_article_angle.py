@@ -49,6 +49,33 @@ async def test_plan_article_angle_builds_different_section_shapes_for_different_
 
 
 @pytest.mark.asyncio
+async def test_plan_article_angle_avoids_fixed_wechat_headings_for_general_topics() -> None:
+    state = {
+        "planning_state": {
+            "article_type": {
+                "type_id": "trend_analysis",
+                "recommended_section_shapes": ["hook", "drivers", "evidence", "case", "risks", "next_steps"],
+            }
+        },
+        "task_brief": {"topic": "机器人创业公司为什么开始重做销售体系"},
+        "research_state": {
+            "evidence_pack": {
+                "confirmed_facts": [{"claim": "多家公司开始补销售团队"}],
+                "usable_data_points": [{"claim": "订单周期拉长"}],
+                "usable_cases": [{"claim": "头部公司调整渠道模式"}],
+            }
+        },
+    }
+
+    result = await plan_article_angle_node(state)
+    headings = [section["heading"] for section in result["planning_state"]["article_blueprint"]["sections"]]
+
+    assert "先给结论" not in headings
+    assert "发生变化的核心原因" not in headings
+    assert "哪些证据最值得看" not in headings
+
+
+@pytest.mark.asyncio
 async def test_plan_article_angle_uses_model_to_generate_structured_blueprint() -> None:
     state = {
         "task_id": "task-1",
@@ -207,3 +234,59 @@ async def test_plan_article_angle_passes_research_quality_summary_to_model() -> 
     payload = chain.ainvoke.await_args.args[0]
     assert "research_gaps: missing_data_evidence" in payload["evidence_pack"]
     assert "source_coverage" in payload["evidence_pack"]
+
+
+@pytest.mark.asyncio
+async def test_plan_article_angle_model_prompt_requests_wechat_style_structure() -> None:
+    state = {
+        "task_id": "task-5",
+        "task_brief": {"topic": "机器人公司为什么开始重做销售体系"},
+        "planning_state": {
+            "article_type": {
+                "type_id": "trend_analysis",
+                "recommended_section_shapes": ["hook", "drivers", "evidence", "case", "risks", "next_steps"],
+            }
+        },
+        "research_state": {
+            "evidence_pack": {
+                "confirmed_facts": [{"claim": "公司开始扩销售"}],
+                "usable_data_points": [{"claim": "回款周期拉长"}],
+            }
+        },
+    }
+
+    with patch("workflow.skills.plan_article_angle.get_model_config") as mock_get_model_config:
+        with patch("workflow.skills.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.skills.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+                model_config = MagicMock()
+                model_config.text.api_key = "text-key"
+                model_config.text.base_url = "https://text.example.com/v1"
+                model_config.text.model = "text-model"
+                mock_get_model_config.return_value = model_config
+
+                prompt = MagicMock()
+                chain = AsyncMock()
+                llm = MagicMock()
+                llm.with_structured_output.return_value = MagicMock(name="structured-llm")
+                mock_prompt_class.from_messages.return_value = prompt
+                prompt.__or__.return_value = chain
+                mock_chat_openai.return_value = llm
+                chain.ainvoke.return_value = {
+                    "thesis": "销售体系重做背后是商业化压力上升",
+                    "reader_value": "帮助读者判断组织调整的真实信号",
+                    "sections": [
+                        {"heading": "销售体系为什么突然变成头号问题", "goal": "定义问题", "shape": "hook"},
+                        {"heading": "订单和回款哪里开始吃紧", "goal": "解释压力来源", "shape": "drivers"},
+                        {"heading": "不同公司在怎么补这一课", "goal": "展开案例", "shape": "case"},
+                        {"heading": "风险边界在哪里", "goal": "约束结论", "shape": "risks"},
+                    ],
+                    "must_cover_points": [],
+                    "drop_points": [],
+                }
+
+                await plan_article_angle_node(state)
+
+    messages = mock_prompt_class.from_messages.call_args.args[0]
+    system_prompt = messages[0][1]
+    assert "wechat" in system_prompt.lower()
+    assert "section headings should be content-specific" in system_prompt.lower()

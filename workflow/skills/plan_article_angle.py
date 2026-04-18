@@ -42,7 +42,7 @@ def _normalize_blueprint_output(result: BlueprintOutput | dict[str, Any]) -> Blu
         payload = result.model_dump()
     else:
         payload = dict(result)
-    payload["sections"] = _normalize_sections(list(payload.get("sections") or []))
+    payload["sections"] = _normalize_sections(list(payload.get("sections") or []))[:6]
     return BlueprintOutput(**payload)
 
 
@@ -57,8 +57,18 @@ def _topic_profile(topic: str) -> str:
     return "general"
 
 
+def _topic_focus_phrase(topic: str) -> str:
+    cleaned = str(topic or "").strip("？?！!。,.， ")
+    if not cleaned:
+        return "这个变化"
+    if "为什么" in cleaned:
+        cleaned = cleaned.replace("为什么", "").strip("：:，, ")
+    return cleaned or "这个变化"
+
+
 def _build_dynamic_sections(topic: str, article_type: dict[str, Any], evidence_pack: dict[str, Any]) -> list[dict[str, str]]:
     profile = _topic_profile(topic)
+    focus_phrase = _topic_focus_phrase(topic)
     data_points = list(evidence_pack.get("usable_data_points") or [])
     cases = list(evidence_pack.get("usable_cases") or [])
     facts = list(evidence_pack.get("confirmed_facts") or [])
@@ -84,10 +94,10 @@ def _build_dynamic_sections(topic: str, article_type: dict[str, Any], evidence_p
         ]
     else:
         sections = [
-            {"heading": "先给结论", "goal": "明确这件事为什么值得关注", "shape": "hook"},
-            {"heading": "发生变化的核心原因", "goal": "解释驱动因素", "shape": "drivers"},
-            {"heading": "哪些证据最值得看", "goal": "整合事实和数据", "shape": "evidence"},
-            {"heading": "风险边界在哪里", "goal": "约束结论，说明不确定性", "shape": "risks"},
+            {"heading": f"{focus_phrase}为什么会变成一个真问题", "goal": "明确这件事为什么值得关注", "shape": "hook"},
+            {"heading": f"{focus_phrase}背后真正卡住的是哪几件事", "goal": "解释驱动因素", "shape": "drivers"},
+            {"heading": f"从哪些事实和数据能看清{focus_phrase}", "goal": "整合事实和数据", "shape": "evidence"},
+            {"heading": f"{focus_phrase}的风险边界到底在哪", "goal": "约束结论，说明不确定性", "shape": "risks"},
         ]
 
     if not data_points:
@@ -182,6 +192,8 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
         system_prompt = (
             "You are a planning agent for Chinese long-form content. "
             "Generate a dynamic article blueprint based on topic, article type, and evidence density. "
+            "The result should feel like a WeChat public account article structure planned by an experienced editor. "
+            "Section headings should be content-specific, topic-specific, and publication-ready instead of generic placeholders. "
             "Keep 4 to 6 H2 sections. Always include one risk-boundary section. "
             "Do not output a fixed template."
         )
