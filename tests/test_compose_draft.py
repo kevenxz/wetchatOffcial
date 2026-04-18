@@ -146,3 +146,66 @@ async def test_compose_draft_passes_revision_brief_to_model() -> None:
     assert seen_payload["revision_brief"]["guidance"] == ["补充数据依据", "收紧结论表述"]
     assert result["writing_state"]["draft"]["title"] == "修订后的机器人融资潮判断"
     assert result["writing_state"]["revision_brief"] == {}
+
+
+@pytest.mark.asyncio
+async def test_compose_draft_passes_research_quality_summary_to_model() -> None:
+    state = {
+        "task_id": "task-3",
+        "task_brief": {"topic": "机器人商业化"},
+        "planning_state": {
+            "article_type": {"type_id": "trend_analysis", "title_style": "insight_first"},
+            "article_blueprint": {
+                "thesis": "机器人商业化进入验证期",
+                "sections": [
+                    {"heading": "先给结论", "goal": "界定判断范围"},
+                    {"heading": "风险边界", "goal": "说明不确定性"},
+                ],
+            },
+        },
+        "research_state": {
+            "evidence_pack": {
+                "confirmed_facts": [{"claim": "头部公司融资回暖"}],
+                "research_gaps": ["missing_data_evidence"],
+                "quality_summary": {
+                    "source_coverage": {"official": 1, "community": 1},
+                    "angle_coverage": {"fact": 1, "opinion": 1},
+                },
+            }
+        },
+        "writing_state": {},
+    }
+
+    with patch("workflow.skills.compose_draft.get_model_config") as mock_get_model_config:
+        with patch("workflow.skills.compose_draft.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.skills.compose_draft.ChatOpenAI") as mock_chat_openai:
+                model_config = MagicMock()
+                model_config.text.api_key = "text-key"
+                model_config.text.base_url = "https://text.example.com/v1"
+                model_config.text.model = "text-model"
+                mock_get_model_config.return_value = model_config
+
+                prompt = MagicMock()
+                chain = AsyncMock()
+                llm = MagicMock()
+                llm.with_structured_output.return_value = MagicMock(name="structured-llm")
+                mock_prompt_class.from_messages.return_value = prompt
+                prompt.__or__.return_value = chain
+                mock_chat_openai.return_value = llm
+
+                seen_payload: dict = {}
+
+                async def fake_ainvoke(payload: dict) -> dict:
+                    seen_payload.update(payload)
+                    return {
+                        "title": "机器人商业化进入验证期",
+                        "content": "## 先给结论\n内容\n\n## 风险边界\n内容",
+                        "summary": "摘要",
+                    }
+
+                chain.ainvoke.side_effect = fake_ainvoke
+
+                await compose_draft_node(state)
+
+    assert "research_gaps: missing_data_evidence" in seen_payload["evidence_pack"]
+    assert "source_coverage" in seen_payload["evidence_pack"]

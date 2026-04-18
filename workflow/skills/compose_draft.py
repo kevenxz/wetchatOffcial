@@ -36,6 +36,16 @@ def _build_evidence_summary(evidence_pack: dict[str, Any]) -> str:
         claims = [str(item.get("claim") or "").strip() for item in items[:3] if str(item.get("claim") or "").strip()]
         if claims:
             lines.append(f"{label}: " + " | ".join(claims))
+    research_gaps = list(evidence_pack.get("research_gaps") or [])
+    if research_gaps:
+        lines.append("research_gaps: " + " | ".join(str(item).strip() for item in research_gaps if str(item).strip()))
+    quality_summary = dict(evidence_pack.get("quality_summary") or {})
+    if quality_summary:
+        for key in ("high_confidence_items", "caution_items", "source_coverage", "angle_coverage"):
+            value = quality_summary.get(key)
+            if value in (None, "", [], {}):
+                continue
+            lines.append(f"{key}: {value}")
     return "\n".join(lines)
 
 

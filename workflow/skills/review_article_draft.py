@@ -24,13 +24,24 @@ class ReviewOutput(BaseModel):
     revision_guidance: list[str] = Field(default_factory=list, description="Specific revision guidance")
 
 
-def _fallback_review(draft: dict[str, Any]) -> ReviewOutput:
+def _fallback_review(draft: dict[str, Any], evidence_pack: dict[str, Any] | None = None) -> ReviewOutput:
     findings: list[dict[str, str]] = []
     content = str(draft.get("content") or "")
+    pack = dict(evidence_pack or {})
+    research_gaps = list(pack.get("research_gaps") or [])
+    quality_summary = dict(pack.get("quality_summary") or {})
     if "## 风险边界" not in content and "## 椋庨櫓杈圭晫" not in content:
         findings.append({"type": "structure", "message": "missing risk boundary section"})
+    if "missing_data_evidence" in research_gaps or "missing_high_confidence_fact" in research_gaps:
+        findings.append({"type": "evidence", "message": "insufficient evidence coverage for key conclusions"})
+    if int(quality_summary.get("high_confidence_items") or 0) <= 0 and research_gaps:
+        findings.append({"type": "evidence", "message": "high-confidence evidence is still missing"})
     score = 85 if not findings else 68
-    revision_guidance = ["补充风险边界章节"] if findings else []
+    revision_guidance: list[str] = []
+    if any(item["type"] == "structure" for item in findings):
+        revision_guidance.append("补充风险边界章节")
+    if any(item["type"] == "evidence" for item in findings):
+        revision_guidance.append("补充官方或数据证据，并交代当前证据边界")
     return ReviewOutput(
         passed=not findings,
         score=score,
@@ -48,6 +59,16 @@ def _build_evidence_summary(evidence_pack: dict[str, Any]) -> str:
         claims = [str(item.get("claim") or "").strip() for item in items[:3] if str(item.get("claim") or "").strip()]
         if claims:
             lines.append(f"{label}: " + " | ".join(claims))
+    research_gaps = list(evidence_pack.get("research_gaps") or [])
+    if research_gaps:
+        lines.append("research_gaps: " + " | ".join(str(item).strip() for item in research_gaps if str(item).strip()))
+    quality_summary = dict(evidence_pack.get("quality_summary") or {})
+    if quality_summary:
+        for key in ("high_confidence_items", "caution_items", "source_coverage", "angle_coverage"):
+            value = quality_summary.get(key)
+            if value in (None, "", [], {}):
+                continue
+            lines.append(f"{key}: {value}")
     return "\n".join(lines)
 
 
@@ -61,7 +82,7 @@ async def review_article_draft_node(state: WorkflowState) -> dict[str, Any]:
 
     text_model_config = get_model_config().text
     if not text_model_config.api_key:
-        review = _fallback_review(draft)
+        review = _fallback_review(draft, evidence_pack)
         writing_state["review_findings"] = review.findings
         writing_state["revision_guidance"] = review.revision_guidance
         writing_state["article_review"] = {"passed": review.passed, "score": review.score}
@@ -134,7 +155,7 @@ async def review_article_draft_node(state: WorkflowState) -> dict[str, Any]:
             task_id=str(state.get("task_id") or ""),
             error=str(exc),
         )
-        review = _fallback_review(draft)
+        review = _fallback_review(draft, evidence_pack)
 
     writing_state["review_findings"] = review.findings
     writing_state["revision_guidance"] = review.revision_guidance

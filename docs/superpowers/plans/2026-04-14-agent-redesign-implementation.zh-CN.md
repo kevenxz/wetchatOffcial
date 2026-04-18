@@ -1082,3 +1082,5 @@ git commit -m "补充agent重构文档与交接说明"
 - 2026-04-18：再次深化了 `build_evidence_pack`，`quality_summary` 现在还会输出 `source_coverage` 和 `angle_coverage`，后续规划器与评审器可以直接感知研究覆盖面的广度。
 - 2026-04-18：深化了 `planner_agent`，已有研究缺口现在会直接重排 `search_plan.angles`，并产出 `coverage_targets`，让重新规划时优先补官方事实和数据型证据。
 - 2026-04-18：深化了 `plan_article_angle`，无论走 fallback 还是模型蓝图，请求都会消费 `research_gaps`、`source_coverage` 与 `angle_coverage`；当证据偏薄时，结构里会显式加入验证段和证据边界，而不是回到泛化骨架。
+- 2026-04-18：深化了 `compose_draft`，起草模型现在不只消费证据 claim，也会同步消费 `research_gaps`、`source_coverage` 与 `angle_coverage`，避免在证据偏薄时仍按“信息充分”的方式写稿。
+- 2026-04-18：深化了 `review_article_draft`，模型评审和 fallback 评审现在都会消费研究质量信号；即使文章结构完整，只要证据覆盖明显不足，fallback 也会给出 evidence 类问题和修订建议。
