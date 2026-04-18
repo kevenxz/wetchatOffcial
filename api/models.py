@@ -182,6 +182,7 @@ class TaskResponse(BaseModel):
     writing_state: Optional[dict] = Field(default=None, description="Draft and review state")
     visual_state: Optional[dict] = Field(default=None, description="Visual briefs and generated assets")
     quality_state: Optional[dict] = Field(default=None, description="Quality reviews and next action")
+    quality_report: Optional[dict] = Field(default=None, description="Unified quality summary report")
     user_intent: Optional[dict] = Field(default=None, description="Resolved user intent from LangGraph")
     style_profile: Optional[dict] = Field(default=None, description="Auto-generated writing style profile")
     article_blueprint: Optional[dict] = Field(default=None, description="Resolved article blueprint")

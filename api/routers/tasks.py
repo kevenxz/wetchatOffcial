@@ -58,6 +58,11 @@ async def _progress_callback(task_id: str, data: dict) -> None:
                 task.writing_state = res.get("writing_state")
                 task.visual_state = res.get("visual_state")
                 task.quality_state = res.get("quality_state")
+                task.quality_report = (
+                    res.get("quality_report")
+                    or dict(task.quality_state or {}).get("quality_report")
+                    or None
+                )
                 task.user_intent = res.get("user_intent")
                 task.style_profile = res.get("style_profile")
                 task.article_blueprint = res.get("article_blueprint")

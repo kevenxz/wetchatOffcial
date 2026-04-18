@@ -282,6 +282,11 @@ class SchedulerEngine:
                     task.writing_state = result.get("writing_state")
                     task.visual_state = result.get("visual_state")
                     task.quality_state = result.get("quality_state")
+                    task.quality_report = (
+                        result.get("quality_report")
+                        or dict(task.quality_state or {}).get("quality_report")
+                        or None
+                    )
                     task.user_intent = result.get("user_intent")
                     task.style_profile = result.get("style_profile")
                     task.article_blueprint = result.get("article_blueprint")

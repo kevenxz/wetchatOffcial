@@ -126,7 +126,16 @@ async def test_scheduler_progress_callback_persists_agent_state_blocks() -> None
                     "research_state": {"evidence_pack": {"confirmed_facts": [{"claim": "A"}]}},
                     "writing_state": {"draft": {"title": "标题", "content": "正文"}},
                     "visual_state": {"image_briefs": [{"role": "cover"}]},
-                    "quality_state": {"next_action": "pass", "ready_to_publish": True},
+                    "quality_state": {
+                        "next_action": "pass",
+                        "ready_to_publish": True,
+                        "quality_report": {
+                            "article_score": 84,
+                            "visual_score": 82,
+                            "ready_to_publish": True,
+                            "blocking_reasons": [],
+                        },
+                    },
                     "generated_article": {"title": "标题", "content": "正文"},
                     "draft_info": None,
                 },
@@ -141,7 +150,9 @@ async def test_scheduler_progress_callback_persists_agent_state_blocks() -> None
         task = task_store[task_id]
         assert task.task_brief == {"topic": "Agent 重构验证"}
         assert task.planning_state == {"article_type": {"type_id": "trend_analysis"}}
-        assert task.quality_state == {"next_action": "pass", "ready_to_publish": True}
+        assert task.quality_state["next_action"] == "pass"
+        assert task.quality_report["article_score"] == 84
+        assert task.quality_report["ready_to_publish"] is True
     finally:
         schedule_store.clear()
         schedule_store.update(schedule_store_backup)
