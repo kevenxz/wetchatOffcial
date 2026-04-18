@@ -1086,3 +1086,5 @@ git commit -m "补充agent重构文档与交接说明"
 - 2026-04-18：深化了 `review_article_draft`，模型评审和 fallback 评审现在都会消费研究质量信号；即使文章结构完整，只要证据覆盖明显不足，fallback 也会给出 evidence 类问题和修订建议。
 - 2026-04-18：深化了 `quality_gate`，现在会把 `evidence_gaps` 和 `evidence_quality_summary` 一并写入 `quality_state`，后续修订路由不再只看文章分和图片分。
 - 2026-04-18：深化了 `targeted_revision`，写作修订 brief 现在会保留 `evidence_gaps`，并附加显式的补证提示，让下一轮起草能区分“结构重写”和“证据修补”。
+- 2026-04-18：深化了 `review_visual_assets`，视觉评审现在也会感知研究缺口；当仍缺少数据型证据时，信息图资产会被直接判为不通过，避免图像先于证据成立。
+- 2026-04-18：再次深化了 `quality_gate`，现在会额外输出统一的 `quality_report`，包含文章分、视觉分、是否可发布以及阻塞原因，后续系统只需要读取一个稳定摘要对象。

@@ -1085,3 +1085,5 @@ No spec gap remains unassigned.
 - 2026-04-18: Deepened `review_article_draft` so both model review and fallback review now consume research quality signals; fallback review can fail for thin evidence coverage even when the draft structure itself looks complete.
 - 2026-04-18: Deepened `quality_gate` so it now carries `evidence_gaps` and `evidence_quality_summary` forward into `quality_state`, making downstream revision routing aware of the current research deficit instead of only article/visual scores.
 - 2026-04-18: Deepened `targeted_revision` so writing revision briefs now preserve `evidence_gaps` and append explicit evidence-gap guidance, allowing the next drafting pass to distinguish structural rewrites from evidence-repair work.
+- 2026-04-18: Deepened `review_visual_assets` so visual QA now also reacts to research deficits; infographic assets fail review when the workflow still lacks data evidence to support them.
+- 2026-04-18: Deepened `quality_gate` again so it now emits a unified `quality_report` with article score, visual score, publish readiness, and blocking reasons, giving downstream systems one stable summary object to inspect.

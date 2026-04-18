@@ -60,3 +60,26 @@ async def test_quality_gate_retains_evidence_quality_summary() -> None:
     assert result["quality_state"]["ready_to_publish"] is True
     assert result["quality_state"]["evidence_quality_summary"]["high_confidence_items"] == 2
     assert result["quality_state"]["evidence_quality_summary"]["source_coverage"]["dataset"] == 1
+
+
+@pytest.mark.asyncio
+async def test_quality_gate_builds_unified_quality_report() -> None:
+    state = {
+        "writing_state": {"article_review": {"passed": False, "score": 72}},
+        "visual_state": {"visual_review": {"passed": True, "score": 82, "findings": []}},
+        "research_state": {
+            "evidence_pack": {
+                "research_gaps": ["missing_high_confidence_fact"],
+                "quality_summary": {"high_confidence_items": 0},
+            }
+        },
+        "planning_state": {"quality_thresholds": {"article": 80, "visual": 75, "evidence": 80, "hotspot": 70}},
+    }
+
+    result = await quality_gate_node(state)
+    report = result["quality_state"]["quality_report"]
+
+    assert report["article_score"] == 72
+    assert report["visual_score"] == 82
+    assert report["ready_to_publish"] is False
+    assert "missing_high_confidence_fact" in report["blocking_reasons"]
