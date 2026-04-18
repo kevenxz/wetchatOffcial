@@ -1078,3 +1078,4 @@ No spec gap remains unassigned.
 - 2026-04-18: Deepened `run_research` so evidence items now carry `authority_score`, `final_score`, `evidence_score`, and `needs_caution`.
 - 2026-04-18: Deepened `run_research` again so planned queries now execute in per-query batches, aggregate search and extraction results across batches, and retain partial `research_gaps` instead of failing the whole stage on a single batch miss.
 - 2026-04-18: Deepened `build_evidence_pack` so it now outputs `quality_summary` and `research_gaps`, allowing downstream planning and review to reason about evidence strength instead of only evidence presence.
+- 2026-04-18: Deepened `build_evidence_pack` again so `quality_summary` now includes `source_coverage` and `angle_coverage`, giving downstream planners and reviewers a direct view of research breadth.
