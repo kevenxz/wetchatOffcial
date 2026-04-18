@@ -62,6 +62,9 @@ def _build_dynamic_sections(topic: str, article_type: dict[str, Any], evidence_p
     data_points = list(evidence_pack.get("usable_data_points") or [])
     cases = list(evidence_pack.get("usable_cases") or [])
     facts = list(evidence_pack.get("confirmed_facts") or [])
+    research_gaps = list(evidence_pack.get("research_gaps") or [])
+    quality_summary = dict(evidence_pack.get("quality_summary") or {})
+    source_coverage = dict(quality_summary.get("source_coverage") or {})
 
     if profile == "funding":
         sections = [
@@ -95,12 +98,25 @@ def _build_dynamic_sections(topic: str, article_type: dict[str, Any], evidence_p
         sections = [section for section in sections if section["shape"] != "case"]
     if not facts and len(sections) < 4:
         sections.insert(1, {"heading": "背景里真正发生了什么", "goal": "补齐必要事实背景", "shape": "context"})
+    if "missing_high_confidence_fact" in research_gaps or (
+        source_coverage and set(source_coverage).issubset({"community", "aggregator", "unknown"})
+    ):
+        sections.append(
+            {
+                "heading": "还哪些核心判断需要验证",
+                "goal": "明确哪些结论还缺少官方或数据证据支撑",
+                "shape": "validation",
+            }
+        )
 
     return sections[:6]
 
 
 def _build_fallback_blueprint(topic: str, article_type: dict[str, Any], evidence_pack: dict[str, Any]) -> BlueprintOutput:
     profile = _topic_profile(topic)
+    research_gaps = list(evidence_pack.get("research_gaps") or [])
+    quality_summary = dict(evidence_pack.get("quality_summary") or {})
+    source_coverage = dict(quality_summary.get("source_coverage") or {})
     thesis_map = {
         "funding": f"{topic}正在从热度走向分化判断",
         "expansion": f"{topic}的关键不在热闹，而在能否完成本地化落地",
@@ -115,6 +131,10 @@ def _build_fallback_blueprint(topic: str, article_type: dict[str, Any], evidence
     }
     sections = _build_dynamic_sections(topic, article_type, evidence_pack)
     must_cover_points = [section["heading"] for section in sections[:3]]
+    if "missing_high_confidence_fact" in research_gaps or "missing_data_evidence" in research_gaps:
+        must_cover_points.append("补齐官方或数据证据")
+    if source_coverage and set(source_coverage).issubset({"community", "aggregator", "unknown"}):
+        must_cover_points.append("交代当前证据边界")
     drop_points = ["泛泛背景复述"] if profile in {"funding", "expansion"} else []
     return BlueprintOutput(
         thesis=thesis_map[profile],
@@ -134,6 +154,16 @@ def _build_evidence_summary(evidence_pack: dict[str, Any]) -> str:
         claims = [str(item.get("claim") or "").strip() for item in items[:4] if str(item.get("claim") or "").strip()]
         if claims:
             lines.append(f"{label}: " + " | ".join(claims))
+    research_gaps = list(evidence_pack.get("research_gaps") or [])
+    if research_gaps:
+        lines.append("research_gaps: " + " | ".join(str(item).strip() for item in research_gaps if str(item).strip()))
+    quality_summary = dict(evidence_pack.get("quality_summary") or {})
+    if quality_summary:
+        for key in ("high_confidence_items", "caution_items", "source_coverage", "angle_coverage"):
+            value = quality_summary.get(key)
+            if value in (None, "", [], {}):
+                continue
+            lines.append(f"{key}: {value}")
     return "\n".join(lines)
 
 

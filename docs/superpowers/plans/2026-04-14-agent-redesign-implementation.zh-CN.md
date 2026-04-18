@@ -1080,3 +1080,5 @@ git commit -m "补充agent重构文档与交接说明"
 - 2026-04-18：再次深化了 `run_research`，规划出的查询现在会按单 query 批次执行，并把各批次的搜索结果、抽取结果统一归并；单批次失败时会保留 `research_gaps`，而不是让整个研究阶段直接失败。
 - 2026-04-18：深化了 `build_evidence_pack`，现在会输出 `quality_summary` 和 `research_gaps`，后续规划和评审不再只看“有没有证据”，还会看“证据质量是否足够”。
 - 2026-04-18：再次深化了 `build_evidence_pack`，`quality_summary` 现在还会输出 `source_coverage` 和 `angle_coverage`，后续规划器与评审器可以直接感知研究覆盖面的广度。
+- 2026-04-18：深化了 `planner_agent`，已有研究缺口现在会直接重排 `search_plan.angles`，并产出 `coverage_targets`，让重新规划时优先补官方事实和数据型证据。
+- 2026-04-18：深化了 `plan_article_angle`，无论走 fallback 还是模型蓝图，请求都会消费 `research_gaps`、`source_coverage` 与 `angle_coverage`；当证据偏薄时，结构里会显式加入验证段和证据边界，而不是回到泛化骨架。
