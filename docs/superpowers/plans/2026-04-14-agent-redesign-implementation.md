@@ -1072,3 +1072,8 @@ No spec gap remains unassigned.
 
 - Status: Core planner-led workflow stages implemented in branch `feature/agent-redesign-spec`
 - Verified by: `pytest -v`
+
+## Implementation Record
+
+- 2026-04-18: Deepened `run_research` so evidence items now carry `authority_score`, `final_score`, `evidence_score`, and `needs_caution`.
+- 2026-04-18: Deepened `build_evidence_pack` so it now outputs `quality_summary` and `research_gaps`, allowing downstream planning and review to reason about evidence strength instead of only evidence presence.

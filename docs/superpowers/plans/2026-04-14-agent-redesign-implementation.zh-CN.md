@@ -1073,3 +1073,8 @@ git commit -m "补充agent重构文档与交接说明"
 
 - Status: Core planner-led workflow stages implemented in branch `feature/agent-redesign-spec`
 - Verified by: `pytest -v`
+ 
+## 实施记录
+ 
+- 2026-04-18：深化了 `run_research`，证据项现在带有 `authority_score`、`final_score`、`evidence_score` 和 `needs_caution`，后续阶段可以直接感知证据强弱。
+- 2026-04-18：深化了 `build_evidence_pack`，现在会输出 `quality_summary` 和 `research_gaps`，后续规划和评审不再只看“有没有证据”，还会看“证据质量是否足够”。

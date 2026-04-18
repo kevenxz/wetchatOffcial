@@ -39,6 +39,10 @@ def _build_evidence_items(extracted_contents: list[dict[str, Any]], angle_by_que
             str(item.get("text") or ""),
             str(source_meta.get("snippet") or ""),
         )
+        authority_score = float(source_meta.get("authority_score") or 0)
+        final_score = float(source_meta.get("final_score") or 0)
+        evidence_score = round((authority_score * 0.6) + (final_score * 0.4), 4)
+        needs_caution = evidence_score < 0.6 or str(source_meta.get("source_type") or "") in {"community", "aggregator"}
         evidence_items.append(
             {
                 "angle": angle,
@@ -49,8 +53,10 @@ def _build_evidence_items(extracted_contents: list[dict[str, Any]], angle_by_que
                 "source_type": str(source_meta.get("source_type") or "unknown").strip(),
                 "domain": str(source_meta.get("domain") or "").strip(),
                 "provider": str(source_meta.get("provider") or "").strip(),
-                "authority_score": source_meta.get("authority_score"),
-                "final_score": source_meta.get("final_score"),
+                "authority_score": authority_score,
+                "final_score": final_score,
+                "evidence_score": evidence_score,
+                "needs_caution": needs_caution,
                 "snippet": str(source_meta.get("snippet") or "").strip(),
             }
         )
