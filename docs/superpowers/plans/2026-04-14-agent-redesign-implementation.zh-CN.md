@@ -1089,3 +1089,5 @@ git commit -m "补充agent重构文档与交接说明"
 - 2026-04-18：深化了 `review_visual_assets`，视觉评审现在也会感知研究缺口；当仍缺少数据型证据时，信息图资产会被直接判为不通过，避免图像先于证据成立。
 - 2026-04-18：再次深化了 `quality_gate`，现在会额外输出统一的 `quality_report`，包含文章分、视觉分、是否可发布以及阻塞原因，后续系统只需要读取一个稳定摘要对象。
 - 2026-04-18：已将 `quality_report` 接入任务路由进度回调和调度器进度回调，并作为 `TaskResponse` 顶层字段暴露；前后端读取最终质量摘要时不再需要从嵌套 `quality_state` 里自行解析。
+- 2026-04-18：已将新视觉链路生成的资产回写到 `generated_article`，补齐 `cover_image`、`illustrations` 和 `visual_assets`，恢复和旧微信推送逻辑的兼容。
+- 2026-04-18：已在 `push_to_draft` 和 `wechat_draft_service` 增加图片兜底；当旧字段缺失时，推送阶段会回退读取 `visual_state.assets` 或 `article.visual_assets`，避免微信侧判定“文中无图”。

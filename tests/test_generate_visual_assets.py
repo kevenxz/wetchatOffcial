@@ -128,3 +128,51 @@ async def test_generate_visual_assets_passes_visual_revision_brief_to_regenerati
     assert "主体不明确" in seen_brief["compressed_prompt"]
     assert result["visual_state"]["assets"][0]["url"] == "https://img.example.com/cover-v2.png"
     assert result["visual_state"]["revision_brief"] == {}
+
+
+@pytest.mark.asyncio
+async def test_generate_visual_assets_maps_assets_back_to_generated_article() -> None:
+    state = {
+        "task_id": "task-4",
+        "generated_article": {
+            "title": "机器人商业化进入验证期",
+            "content": "正文",
+        },
+        "visual_state": {
+            "image_briefs": [
+                {
+                    "role": "cover",
+                    "compressed_prompt": "cover for robotics",
+                    "provider_size": "1536x1024",
+                    "target_aspect_ratio": "2.35:1",
+                },
+                {
+                    "role": "infographic",
+                    "compressed_prompt": "infographic for robotics",
+                    "provider_size": "1024x1024",
+                    "target_aspect_ratio": "4:5",
+                },
+            ]
+        },
+    }
+
+    with patch("workflow.skills.generate_visual_assets.get_model_config") as mock_get_model_config:
+        with patch("workflow.skills.generate_visual_assets._generate_image_asset") as mock_generate_image_asset:
+            model_config = MagicMock()
+            model_config.image.enabled = True
+            model_config.image.api_key = "image-key"
+            model_config.image.base_url = "https://image.example.com/v1"
+            model_config.image.model = "gpt-image-1"
+            mock_get_model_config.return_value = model_config
+
+            mock_generate_image_asset.side_effect = [
+                {"url": "https://img.example.com/cover.png", "path": "", "mime_type": "image/png"},
+                {"url": "https://img.example.com/info.png", "path": "", "mime_type": "image/png"},
+            ]
+
+            result = await generate_visual_assets_node(state)
+
+    article = result["generated_article"]
+    assert article["cover_image"] == "https://img.example.com/cover.png"
+    assert article["illustrations"] == ["https://img.example.com/info.png"]
+    assert len(article["visual_assets"]) == 2

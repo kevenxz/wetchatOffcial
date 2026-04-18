@@ -11,6 +11,34 @@ from workflow.utils.wechat_api import upload_article_image, upload_cover_materia
 _access_token_cache: dict[str, dict[str, float | str]] = {}
 
 
+def _resolve_visual_asset_refs(article: dict) -> tuple[list[str], list[str]]:
+    cover_candidates: list[str] = []
+    illustration_refs: list[str] = [str(item).strip() for item in list(article.get("illustrations", [])) if str(item).strip()]
+
+    cover_image_ref = str(article.get("cover_image", "")).strip()
+    if cover_image_ref:
+        cover_candidates.append(cover_image_ref)
+
+    visual_assets = list(article.get("visual_assets", []))
+    for asset in visual_assets:
+        if not isinstance(asset, dict):
+            continue
+        image_ref = str(asset.get("url") or asset.get("path") or "").strip()
+        if not image_ref:
+            continue
+        role = str(asset.get("role") or "").strip()
+        if role == "cover" and image_ref not in cover_candidates:
+            cover_candidates.append(image_ref)
+            continue
+        if image_ref not in illustration_refs:
+            illustration_refs.append(image_ref)
+
+    for image_ref in illustration_refs:
+        if image_ref not in cover_candidates:
+            cover_candidates.append(image_ref)
+    return cover_candidates, illustration_refs
+
+
 async def _get_access_token(app_id: str, app_secret: str, client: httpx.AsyncClient) -> str:
     now = time.time()
     cache = _access_token_cache.get(app_id, {"token": "", "expires_at": 0.0})
@@ -55,14 +83,21 @@ async def push_article_to_wechat_draft(
     async with httpx.AsyncClient(timeout=15.0) as client:
         token = await _get_access_token(app_id, app_secret, client)
 
+        cover_candidates, illustration_refs = _resolve_visual_asset_refs(article)
+
         thumb_media_id = ""
-        if article.get("cover_image"):
-            thumb_media_id = await upload_cover_material(client, str(article["cover_image"]), token)
+        for image_ref in cover_candidates:
+            thumb_media_id = await upload_cover_material(client, image_ref, token)
+            if thumb_media_id:
+                break
+
+        if not thumb_media_id:
+            raise ValueError("failed to upload a valid cover image; draft/add requires thumb_media_id")
 
         wechat_illustrations: list[str] = []
-        for image_url in list(article.get("illustrations", [])):
+        for image_url in illustration_refs:
             wechat_illustrations.append(
-                await upload_article_image(client, str(image_url), token)
+                await upload_article_image(client, image_url, token)
             )
 
         html_content = markdown_to_wechat_html(
@@ -96,6 +131,8 @@ async def push_article_to_wechat_draft(
                     if errcode in (40001, 40014, 42001, 42002):
                         _access_token_cache.pop(app_id, None)
                         raise ValueError(f"access token expired: {payload}")
+                    if errcode == 40007:
+                        raise ValueError(f"invalid thumb_media_id for wechat draft add: {payload}")
                     raise ValueError(f"wechat draft add failed: {payload}")
 
                 media_id = payload.get("media_id")

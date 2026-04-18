@@ -1088,3 +1088,5 @@ No spec gap remains unassigned.
 - 2026-04-18: Deepened `review_visual_assets` so visual QA now also reacts to research deficits; infographic assets fail review when the workflow still lacks data evidence to support them.
 - 2026-04-18: Deepened `quality_gate` again so it now emits a unified `quality_report` with article score, visual score, publish readiness, and blocking reasons, giving downstream systems one stable summary object to inspect.
 - 2026-04-18: Persisted `quality_report` through API task progress handling and scheduler progress handling, and exposed it as a top-level `TaskResponse` field so clients no longer need to parse nested `quality_state` just to read the final summary.
+- 2026-04-18: Mapped new visual assets back into `generated_article` as `cover_image`, `illustrations`, and `visual_assets`, restoring compatibility with legacy push logic that determines WeChat media uploads from the article payload.
+- 2026-04-18: Added push-time fallbacks in `push_to_draft` and `wechat_draft_service` so WeChat draft publishing can still resolve images from `visual_state.assets` or `article.visual_assets` when older image fields are absent.

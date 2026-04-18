@@ -66,6 +66,38 @@ def _placeholder_asset(brief: dict[str, Any]) -> dict[str, str]:
     }
 
 
+def _asset_ref(asset: dict[str, Any]) -> str:
+    return str(asset.get("url") or asset.get("path") or "").strip()
+
+
+def _merge_assets_into_article(article: dict[str, Any], assets: list[dict[str, str]]) -> dict[str, Any]:
+    merged_article = dict(article)
+    cover_image = ""
+    illustrations: list[str] = []
+    for asset in assets:
+        image_ref = _asset_ref(asset)
+        if not image_ref:
+            continue
+        role = str(asset.get("role") or "").strip()
+        if not cover_image and role == "cover":
+            cover_image = image_ref
+            continue
+        illustrations.append(image_ref)
+
+    if cover_image:
+        merged_article["cover_image"] = cover_image
+    elif illustrations:
+        merged_article["cover_image"] = illustrations[0]
+
+    if illustrations:
+        merged_article["illustrations"] = illustrations
+    else:
+        merged_article.setdefault("illustrations", [])
+
+    merged_article["visual_assets"] = assets
+    return merged_article
+
+
 async def generate_visual_assets_node(state: WorkflowState) -> dict[str, Any]:
     """Generate or fall back visual assets from image briefs."""
     visual_state = dict(state.get("visual_state") or {})
@@ -111,9 +143,11 @@ async def generate_visual_assets_node(state: WorkflowState) -> dict[str, Any]:
 
     visual_state["assets"] = assets
     visual_state["revision_brief"] = {}
+    generated_article = _merge_assets_into_article(dict(state.get("generated_article") or {}), assets)
     return {
         "status": "running",
         "current_skill": "generate_visual_assets",
         "progress": 74,
         "visual_state": visual_state,
+        "generated_article": generated_article,
     }
