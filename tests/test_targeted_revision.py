@@ -25,3 +25,27 @@ async def test_targeted_revision_builds_writing_revision_brief_from_review_feedb
     assert result["writing_state"]["revision_brief"]["mode"] == "targeted_revision"
     assert result["writing_state"]["revision_brief"]["guidance"] == ["补充数据依据", "收紧结论表述"]
     assert result["writing_state"]["revision_brief"]["findings"][0]["message"] == "结论支撑不足"
+
+
+@pytest.mark.asyncio
+async def test_targeted_revision_builds_visual_revision_brief_from_visual_review() -> None:
+    state = {
+        "quality_state": {"next_action": "revise_visuals"},
+        "visual_state": {
+            "visual_review": {
+                "passed": False,
+                "score": 60,
+                "findings": [
+                    {"role": "cover", "message": "主体不明确"},
+                    {"role": "infographic", "message": "信息图太像海报"},
+                ],
+            }
+        },
+    }
+
+    result = await targeted_revision_node(state)
+
+    assert result["quality_state"]["revision_route"] == "revise_visuals"
+    assert result["visual_state"]["revision_brief"]["mode"] == "targeted_revision"
+    assert result["visual_state"]["revision_brief"]["guidance"] == ["主体不明确", "信息图太像海报"]
+    assert result["visual_state"]["revision_brief"]["target_fields"] == ["assets"]

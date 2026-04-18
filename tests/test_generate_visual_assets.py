@@ -83,3 +83,48 @@ async def test_generate_visual_assets_falls_back_to_placeholder_assets_when_imag
     asset = result["visual_state"]["assets"][0]
     assert asset["role"] == "cover"
     assert asset["path"] == "generated://cover"
+
+
+@pytest.mark.asyncio
+async def test_generate_visual_assets_passes_visual_revision_brief_to_regeneration() -> None:
+    state = {
+        "task_id": "task-3",
+        "visual_state": {
+            "image_briefs": [
+                {
+                    "role": "cover",
+                    "compressed_prompt": "cover for robotics funding",
+                    "provider_size": "1536x1024",
+                    "target_aspect_ratio": "2.35:1",
+                }
+            ],
+            "revision_brief": {
+                "mode": "targeted_revision",
+                "guidance": ["主体不明确", "增加中心对象"],
+                "findings": [{"role": "cover", "message": "主体不明确"}],
+            },
+        },
+    }
+
+    with patch("workflow.skills.generate_visual_assets.get_model_config") as mock_get_model_config:
+        with patch("workflow.skills.generate_visual_assets._generate_image_asset") as mock_generate_image_asset:
+            model_config = MagicMock()
+            model_config.image.enabled = True
+            model_config.image.api_key = "image-key"
+            model_config.image.base_url = "https://image.example.com/v1"
+            model_config.image.model = "gpt-image-1"
+            mock_get_model_config.return_value = model_config
+
+            seen_brief: dict = {}
+
+            async def fake_generate_image_asset(task_id: str, brief: dict, **_: str) -> dict[str, str]:
+                seen_brief.update(brief)
+                return {"url": "https://img.example.com/cover-v2.png", "path": "", "mime_type": "image/png"}
+
+            mock_generate_image_asset.side_effect = fake_generate_image_asset
+
+            result = await generate_visual_assets_node(state)
+
+    assert "主体不明确" in seen_brief["compressed_prompt"]
+    assert result["visual_state"]["assets"][0]["url"] == "https://img.example.com/cover-v2.png"
+    assert result["visual_state"]["revision_brief"] == {}
