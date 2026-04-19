@@ -14,6 +14,14 @@ from workflow.state import WorkflowState
 
 logger = structlog.get_logger(__name__)
 
+_GENERIC_OPENER_PREFIXES = (
+    "本文将",
+    "接下来将",
+    "这篇文章将",
+    "我们将从",
+    "本文从",
+)
+
 
 class ReviewOutput(BaseModel):
     """Structured article review payload."""
@@ -30,8 +38,11 @@ def _fallback_review(draft: dict[str, Any], evidence_pack: dict[str, Any] | None
     pack = dict(evidence_pack or {})
     research_gaps = list(pack.get("research_gaps") or [])
     quality_summary = dict(pack.get("quality_summary") or {})
+    opener = content.split("\n\n## ", 1)[0].strip()
     if "## 风险边界" not in content and "## 椋庨櫓杈圭晫" not in content:
         findings.append({"type": "structure", "message": "missing risk boundary section"})
+    if opener and any(opener.startswith(prefix) for prefix in _GENERIC_OPENER_PREFIXES):
+        findings.append({"type": "opener", "message": "opening hook is generic and reads like a roadmap"})
     if "missing_data_evidence" in research_gaps or "missing_high_confidence_fact" in research_gaps:
         findings.append({"type": "evidence", "message": "insufficient evidence coverage for key conclusions"})
     if int(quality_summary.get("high_confidence_items") or 0) <= 0 and research_gaps:
@@ -40,6 +51,8 @@ def _fallback_review(draft: dict[str, Any], evidence_pack: dict[str, Any] | None
     revision_guidance: list[str] = []
     if any(item["type"] == "structure" for item in findings):
         revision_guidance.append("补充风险边界章节")
+    if any(item["type"] == "opener" for item in findings):
+        revision_guidance.append("重写开头钩子，先给判断或冲突点，不要用本文将从这类空话开场")
     if any(item["type"] == "evidence" for item in findings):
         revision_guidance.append("补充官方或数据证据，并交代当前证据边界")
     return ReviewOutput(

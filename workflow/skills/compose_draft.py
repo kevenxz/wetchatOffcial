@@ -19,6 +19,7 @@ class DraftOutput(BaseModel):
     """Structured article draft payload."""
 
     title: str = Field(description="Draft title")
+    alt_titles: list[str] = Field(default_factory=list, description="Alternative title candidates")
     content: str = Field(description="Markdown draft content")
     summary: str = Field(default="", description="Short draft summary")
 
@@ -52,12 +53,20 @@ def _build_evidence_summary(evidence_pack: dict[str, Any]) -> str:
 def _build_fallback_draft(topic: str, blueprint: dict[str, Any]) -> DraftOutput:
     sections = list(blueprint.get("sections") or [])
     title = str(blueprint.get("thesis") or topic or "未命名主题").strip()
+    alt_titles = [
+        candidate
+        for candidate in (
+            f"{title}，真正要看的是什么",
+            f"{title}背后，哪些变化最值得注意",
+        )
+        if candidate and candidate != title
+    ][:2]
     content = "\n\n".join(
         f"## {section['heading']}\n{section['goal']}"
         for section in sections
         if section.get("heading") and section.get("goal")
     )
-    return DraftOutput(title=title, content=content, summary="")
+    return DraftOutput(title=title, alt_titles=alt_titles, content=content, summary="")
 
 
 async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
@@ -77,7 +86,12 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
             "current_skill": "compose_draft",
             "progress": 54,
             "writing_state": {"draft": fallback.model_dump(), "review_findings": []},
-            "generated_article": {"title": fallback.title, "content": fallback.content},
+            "generated_article": {
+                "title": fallback.title,
+                "alt_titles": fallback.alt_titles,
+                "summary": fallback.summary,
+                "content": fallback.content,
+            },
         }
 
     text_model_config = get_model_config().text
@@ -88,14 +102,20 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
             "current_skill": "compose_draft",
             "progress": 54,
             "writing_state": {"draft": fallback.model_dump(), "review_findings": []},
-            "generated_article": {"title": fallback.title, "content": fallback.content},
+            "generated_article": {
+                "title": fallback.title,
+                "alt_titles": fallback.alt_titles,
+                "summary": fallback.summary,
+                "content": fallback.content,
+            },
         }
 
     system_prompt = (
         "You are a Chinese content drafting agent. "
         "Write a clean Markdown article draft from the provided thesis, sections, and evidence pack. "
         "The result should read like a polished WeChat public account article. "
-        "Produce a publication-ready title, a concise summary, and a strong opening hook paragraph before the first H2 section. "
+        "Produce a publication-ready title, two alternative title candidates, a concise summary, and a strong opening hook paragraph before the first H2 section. "
+        "Avoid generic opener language such as '本文将从...展开' or other empty roadmap sentences. "
         "Keep the section intent and order from the blueprint, but you may refine section headings for readability and stronger publication quality. "
         "Keep the language concrete, and preserve a risk section when requested. "
         "If revision guidance is provided, revise only the weak parts instead of changing the whole structure."
@@ -169,5 +189,10 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
             "review_findings": [],
             "revision_brief": {},
         },
-        "generated_article": {"title": draft.title, "content": draft.content},
+        "generated_article": {
+            "title": draft.title,
+            "alt_titles": draft.alt_titles,
+            "summary": draft.summary,
+            "content": draft.content,
+        },
     }
