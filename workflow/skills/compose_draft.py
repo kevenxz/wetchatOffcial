@@ -94,7 +94,9 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
     system_prompt = (
         "You are a Chinese content drafting agent. "
         "Write a clean Markdown article draft from the provided thesis, sections, and evidence pack. "
-        "Keep all provided H2 headings, keep the language concrete, and preserve a risk section when requested. "
+        "The result should read like a polished WeChat public account article. "
+        "Keep the section intent and order from the blueprint, but you may refine section headings for readability and stronger publication quality. "
+        "Keep the language concrete, and preserve a risk section when requested. "
         "If revision guidance is provided, revise only the weak parts instead of changing the whole structure."
     )
     human_prompt = (

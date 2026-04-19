@@ -1092,3 +1092,4 @@ No spec gap remains unassigned.
 - 2026-04-18: Added push-time fallbacks in `push_to_draft` and `wechat_draft_service` so WeChat draft publishing can still resolve images from `visual_state.assets` or `article.visual_assets` when older image fields are absent.
 - 2026-04-19: Reworked `plan_article_angle` so general-topic fallback blueprints no longer default to fixed headings like “先给结论 / 发生变化的核心原因”; section titles are now generated as content-specific WeChat-style headings derived from the topic itself.
 - 2026-04-19: Tightened model-side blueprint planning so prompts explicitly request WeChat public-account style structure, and normalized model output to a hard 4-6 section range before drafting.
+- 2026-04-19: Relaxed `compose_draft` from hard-preserving blueprint H2 wording; drafting prompts now keep section intent and order but allow heading refinement toward publication-ready WeChat wording.
