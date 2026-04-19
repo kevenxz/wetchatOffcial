@@ -10,6 +10,37 @@ from workflow.state import WorkflowState
 
 logger = structlog.get_logger(__name__)
 
+_EVIDENCE_HEADING_KEYWORDS = (
+    "数据",
+    "证据",
+    "事实",
+    "指标",
+    "图",
+    "趋势",
+    "数字",
+    "信号",
+    "验证",
+)
+_CASE_HEADING_KEYWORDS = (
+    "案例",
+    "公司",
+    "玩家",
+    "场景",
+    "做法",
+    "产品",
+    "落地",
+    "怎么做",
+    "谁在",
+)
+_RISK_HEADING_KEYWORDS = (
+    "风险",
+    "边界",
+    "挑战",
+    "不确定",
+    "变量",
+    "误判",
+)
+
 
 def _apply_visual_revision_brief(brief: dict[str, Any], revision_brief: dict[str, Any]) -> dict[str, Any]:
     guidance = [str(item).strip() for item in revision_brief.get("guidance", []) if str(item).strip()]
@@ -70,20 +101,98 @@ def _asset_ref(asset: dict[str, Any]) -> str:
     return str(asset.get("url") or asset.get("path") or "").strip()
 
 
-def _insert_illustration_placeholders(content: str, illustration_count: int) -> str:
-    if illustration_count <= 0:
+def _extract_h2_headings(lines: list[str]) -> list[tuple[int, str]]:
+    return [
+        (index, line[3:].strip())
+        for index, line in enumerate(lines)
+        if line.startswith("## ")
+    ]
+
+
+def _detect_heading_kind(heading: str) -> str:
+    normalized = heading.strip()
+    if any(keyword in normalized for keyword in _EVIDENCE_HEADING_KEYWORDS):
+        return "evidence"
+    if any(keyword in normalized for keyword in _CASE_HEADING_KEYWORDS):
+        return "case"
+    if any(keyword in normalized for keyword in _RISK_HEADING_KEYWORDS):
+        return "risk"
+    return "general"
+
+
+def _target_kind_for_asset(asset: dict[str, Any]) -> str:
+    role = str(asset.get("role") or "").strip().lower()
+    prompt = str(asset.get("prompt") or "").strip().lower()
+    if role in {"infographic", "comparison_graphic", "data_chart"}:
+        return "evidence"
+    if role in {"contextual_illustration", "scene_illustration", "case_illustration"}:
+        return "case"
+    if any(keyword in prompt for keyword in ("data", "evidence", "metric", "chart", "infographic")):
+        return "evidence"
+    if any(keyword in prompt for keyword in ("scene", "case", "company", "product")):
+        return "case"
+    return "general"
+
+
+def _select_heading_slot(
+    headings: list[tuple[int, str]],
+    target_kind: str,
+    assigned_counts: dict[int, int],
+    fallback_cursor: int,
+) -> int:
+    if not headings:
+        return -1
+
+    matching_indexes = [
+        index
+        for index, (_, heading) in enumerate(headings)
+        if _detect_heading_kind(heading) == target_kind
+    ]
+    if matching_indexes:
+        return min(matching_indexes, key=lambda index: (assigned_counts.get(index, 0), index))
+    return min(fallback_cursor, len(headings) - 1)
+
+
+def _plan_illustration_assets(
+    content: str,
+    illustration_assets: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[int]]:
+    if not illustration_assets:
+        return [], []
+
+    headings = _extract_h2_headings(content.splitlines())
+    if not headings:
+        return list(illustration_assets), [-1] * len(illustration_assets)
+
+    planned: list[tuple[int, int, dict[str, Any]]] = []
+    assigned_counts: dict[int, int] = {}
+    fallback_cursor = 0
+    for original_index, asset in enumerate(illustration_assets):
+        slot = _select_heading_slot(headings, _target_kind_for_asset(asset), assigned_counts, fallback_cursor)
+        if slot >= 0:
+            assigned_counts[slot] = assigned_counts.get(slot, 0) + 1
+            fallback_cursor = min(slot + 1, len(headings) - 1)
+        planned.append((slot, original_index, asset))
+
+    planned.sort(key=lambda item: ((item[0] if item[0] >= 0 else 10**6), item[1]))
+    return [asset for _, _, asset in planned], [slot for slot, _, _ in planned]
+
+
+def _insert_illustration_placeholders(content: str, illustration_assets: list[dict[str, Any]]) -> str:
+    if not illustration_assets:
         return content
 
     lines = content.splitlines()
-    heading_indexes = [index for index, line in enumerate(lines) if line.startswith("## ")]
-    if not heading_indexes:
+    ordered_assets, slots = _plan_illustration_assets(content, illustration_assets)
+    headings = _extract_h2_headings(lines)
+    if not headings:
         suffix = "\n\n" if content.strip() else ""
-        placeholders = "\n\n".join(f"[插图{index}]" for index in range(1, illustration_count + 1))
+        placeholders = "\n\n".join(f"[插图{index}]" for index in range(1, len(ordered_assets) + 1))
         return f"{content}{suffix}{placeholders}".strip()
 
     inserts: list[tuple[int, str]] = []
-    for idx in range(illustration_count):
-        heading_index = heading_indexes[min(idx, len(heading_indexes) - 1)]
+    for idx, slot in enumerate(slots):
+        heading_index = headings[slot][0] if slot >= 0 else headings[min(idx, len(headings) - 1)][0]
         insert_at = heading_index + 2 if heading_index + 1 < len(lines) else heading_index + 1
         inserts.append((insert_at, f"[插图{idx + 1}]"))
 
@@ -99,7 +208,7 @@ def _insert_illustration_placeholders(content: str, illustration_count: int) -> 
 def _merge_assets_into_article(article: dict[str, Any], assets: list[dict[str, str]]) -> dict[str, Any]:
     merged_article = dict(article)
     cover_image = ""
-    illustrations: list[str] = []
+    illustration_assets: list[dict[str, Any]] = []
     for asset in assets:
         image_ref = _asset_ref(asset)
         if not image_ref:
@@ -108,7 +217,13 @@ def _merge_assets_into_article(article: dict[str, Any], assets: list[dict[str, s
         if not cover_image and role == "cover":
             cover_image = image_ref
             continue
-        illustrations.append(image_ref)
+        illustration_assets.append(dict(asset))
+
+    ordered_illustration_assets, _ = _plan_illustration_assets(
+        str(merged_article.get("content") or ""),
+        illustration_assets,
+    )
+    illustrations = [_asset_ref(asset) for asset in ordered_illustration_assets if _asset_ref(asset)]
 
     if cover_image:
         merged_article["cover_image"] = cover_image
@@ -122,7 +237,7 @@ def _merge_assets_into_article(article: dict[str, Any], assets: list[dict[str, s
 
     merged_article["content"] = _insert_illustration_placeholders(
         str(merged_article.get("content") or ""),
-        len(illustrations),
+        ordered_illustration_assets,
     )
     merged_article["visual_assets"] = assets
     return merged_article
