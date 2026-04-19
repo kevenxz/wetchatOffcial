@@ -1094,3 +1094,5 @@ No spec gap remains unassigned.
 - 2026-04-19: Tightened model-side blueprint planning so prompts explicitly request WeChat public-account style structure, and normalized model output to a hard 4-6 section range before drafting.
 - 2026-04-19: Relaxed `compose_draft` from hard-preserving blueprint H2 wording; drafting prompts now keep section intent and order but allow heading refinement toward publication-ready WeChat wording.
 - 2026-04-19: Tightened `compose_draft` again around finished-article quality; prompts now explicitly require a publication-ready title, concise summary, and an opening hook paragraph before the first H2 section.
+- 2026-04-19: Added body-illustration placement in `generate_visual_assets`; non-cover images now insert Markdown placeholders like `[插图1]` into article content so the article itself carries image placement, not just image references.
+- 2026-04-19: Verified WeChat draft publishing now uploads body illustrations and replaces `[插图N]` placeholders with WeChat-hosted image URLs before `draft/add`, closing the loop from visual planning to in-body image rendering.

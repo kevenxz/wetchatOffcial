@@ -70,6 +70,32 @@ def _asset_ref(asset: dict[str, Any]) -> str:
     return str(asset.get("url") or asset.get("path") or "").strip()
 
 
+def _insert_illustration_placeholders(content: str, illustration_count: int) -> str:
+    if illustration_count <= 0:
+        return content
+
+    lines = content.splitlines()
+    heading_indexes = [index for index, line in enumerate(lines) if line.startswith("## ")]
+    if not heading_indexes:
+        suffix = "\n\n" if content.strip() else ""
+        placeholders = "\n\n".join(f"[插图{index}]" for index in range(1, illustration_count + 1))
+        return f"{content}{suffix}{placeholders}".strip()
+
+    inserts: list[tuple[int, str]] = []
+    for idx in range(illustration_count):
+        heading_index = heading_indexes[min(idx, len(heading_indexes) - 1)]
+        insert_at = heading_index + 2 if heading_index + 1 < len(lines) else heading_index + 1
+        inserts.append((insert_at, f"[插图{idx + 1}]"))
+
+    offset = 0
+    next_lines = list(lines)
+    for insert_at, placeholder in inserts:
+        next_lines.insert(insert_at + offset, "")
+        next_lines.insert(insert_at + offset + 1, placeholder)
+        offset += 2
+    return "\n".join(next_lines)
+
+
 def _merge_assets_into_article(article: dict[str, Any], assets: list[dict[str, str]]) -> dict[str, Any]:
     merged_article = dict(article)
     cover_image = ""
@@ -94,6 +120,10 @@ def _merge_assets_into_article(article: dict[str, Any], assets: list[dict[str, s
     else:
         merged_article.setdefault("illustrations", [])
 
+    merged_article["content"] = _insert_illustration_placeholders(
+        str(merged_article.get("content") or ""),
+        len(illustrations),
+    )
     merged_article["visual_assets"] = assets
     return merged_article
 

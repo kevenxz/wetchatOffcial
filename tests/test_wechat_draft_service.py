@@ -183,3 +183,35 @@ async def test_push_article_to_wechat_draft_falls_back_to_visual_assets() -> Non
     assert result["media_id"] == "draft_media_ok"
     assert mock_upload_cover.await_args.args[1] == "https://example.com/cover-from-assets.png"
     assert mock_upload_article.await_args.args[1] == "https://example.com/infographic-from-assets.png"
+
+
+@pytest.mark.asyncio
+async def test_push_article_to_wechat_draft_replaces_illustration_placeholders_with_uploaded_urls() -> None:
+    article = {
+        "title": "title",
+        "content": "开头\n\n## 第一部分\n内容\n\n[插图1]",
+        "cover_image": "https://example.com/cover.png",
+        "illustrations": ["https://example.com/illustration-1.png"],
+    }
+
+    with patch("workflow.utils.wechat_draft_service.httpx.AsyncClient", new=_FakeAsyncClient):
+        with patch(
+            "workflow.utils.wechat_draft_service.upload_cover_material",
+            new_callable=AsyncMock,
+            return_value="cover_media",
+        ):
+            with patch(
+                "workflow.utils.wechat_draft_service.upload_article_image",
+                new_callable=AsyncMock,
+                return_value="https://mmbiz.qpic.cn/real-uploaded.png",
+            ):
+                result = await push_article_to_wechat_draft(
+                    article=article,
+                    app_id="appid",
+                    app_secret="secret",
+                )
+
+    assert result["media_id"] == "draft_media_ok"
+    client = _FakeAsyncClient.instances[0]
+    draft_payload = client.post_calls[-1]["json"]
+    assert "https://mmbiz.qpic.cn/real-uploaded.png" in draft_payload["articles"][0]["content"]
