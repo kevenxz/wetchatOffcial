@@ -259,3 +259,53 @@ async def test_compose_draft_model_prompt_allows_heading_refinement_for_wechat()
     assert "wechat" in system_prompt.lower()
     assert "refine section headings" in system_prompt.lower()
     assert "keep all provided h2 headings" not in system_prompt.lower()
+
+
+@pytest.mark.asyncio
+async def test_compose_draft_model_prompt_requests_wechat_ready_title_summary_and_hook() -> None:
+    state = {
+        "task_id": "task-5",
+        "task_brief": {"topic": "机器人公司为什么开始重做销售体系"},
+        "planning_state": {
+            "article_type": {"type_id": "trend_analysis", "title_style": "insight_first"},
+            "article_blueprint": {
+                "thesis": "销售体系重做背后是商业化压力上升",
+                "sections": [
+                    {"heading": "销售体系为什么突然变成头号问题", "goal": "定义问题"},
+                    {"heading": "风险边界在哪里", "goal": "约束结论"},
+                ],
+            },
+        },
+        "research_state": {"evidence_pack": {"confirmed_facts": [{"claim": "公司开始扩销售"}]}},
+        "writing_state": {},
+    }
+
+    with patch("workflow.skills.compose_draft.get_model_config") as mock_get_model_config:
+        with patch("workflow.skills.compose_draft.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.skills.compose_draft.ChatOpenAI") as mock_chat_openai:
+                model_config = MagicMock()
+                model_config.text.api_key = "text-key"
+                model_config.text.base_url = "https://text.example.com/v1"
+                model_config.text.model = "text-model"
+                mock_get_model_config.return_value = model_config
+
+                prompt = MagicMock()
+                chain = AsyncMock()
+                llm = MagicMock()
+                llm.with_structured_output.return_value = MagicMock(name="structured-llm")
+                mock_prompt_class.from_messages.return_value = prompt
+                prompt.__or__.return_value = chain
+                mock_chat_openai.return_value = llm
+                chain.ainvoke.return_value = {
+                    "title": "机器人公司开始重做销售，不只是组织调整",
+                    "content": "开头段\n\n## 销售为什么突然成了头号问题\n内容\n\n## 风险边界在哪里\n内容",
+                    "summary": "摘要",
+                }
+
+                await compose_draft_node(state)
+
+    messages = mock_prompt_class.from_messages.call_args.args[0]
+    system_prompt = messages[0][1].lower()
+    assert "title" in system_prompt
+    assert "summary" in system_prompt
+    assert "opening hook" in system_prompt
