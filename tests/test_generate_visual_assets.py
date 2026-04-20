@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import base64
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from workflow.skills.generate_visual_assets import generate_visual_assets_node
+from workflow.skills.generate_visual_assets import _generate_image_asset, generate_visual_assets_node
 
 
 @pytest.mark.asyncio
@@ -283,3 +285,87 @@ async def test_generate_visual_assets_places_infographic_near_evidence_section_a
     assert content.index("[插图1]") > content.index("## 哪些数据最值得看")
     assert content.index("[插图1]") < content.index("## 典型公司在怎么做")
     assert content.index("[插图2]") > content.index("## 典型公司在怎么做")
+
+
+@pytest.mark.asyncio
+async def test_generate_visual_assets_saves_b64_image_payloads_to_files(tmp_path: Path) -> None:
+    image_bytes = b"\x89PNG\r\n\x1a\nabc"
+    state = {
+        "task_id": "task-7",
+        "generated_article": {
+            "title": "机器人商业化进入验证期",
+            "content": "开头段\n\n## 第一部分\n内容A",
+        },
+        "visual_state": {
+            "image_briefs": [
+                {
+                    "role": "cover",
+                    "compressed_prompt": "cover for robotics",
+                    "provider_size": "1536x1024",
+                    "target_aspect_ratio": "2.35:1",
+                }
+            ]
+        },
+    }
+
+    with patch("workflow.skills.generate_visual_assets.get_model_config") as mock_get_model_config:
+        with patch("workflow.skills.generate_visual_assets._generate_image_asset") as mock_generate_image_asset:
+            model_config = MagicMock()
+            model_config.image.enabled = True
+            model_config.image.api_key = "image-key"
+            model_config.image.base_url = "https://image.example.com/v1"
+            model_config.image.model = "gpt-image-1"
+            mock_get_model_config.return_value = model_config
+
+            mock_generate_image_asset.return_value = {
+                "url": "",
+                "path": "",
+                "mime_type": "image/png",
+                "b64_json": base64.b64encode(image_bytes).decode("ascii"),
+                "output_format": "png",
+            }
+
+            with patch("workflow.skills.generate_visual_assets.GENERATED_IMAGES_DIR", tmp_path, create=True):
+                result = await generate_visual_assets_node(state)
+
+    article = result["generated_article"]
+    cover_path = Path(article["cover_image"])
+    assert cover_path.is_file()
+    assert cover_path.read_bytes() == image_bytes
+
+
+@pytest.mark.asyncio
+async def test_generate_image_asset_preserves_b64_payload_from_provider_response() -> None:
+    image_bytes = b"\x89PNG\r\n\x1a\nabc"
+
+    class _FakeImages:
+        async def generate(self, **_: str) -> object:
+            return type(
+                "Response",
+                (),
+                {
+                    "data": [
+                        type(
+                            "ImageData",
+                            (),
+                            {"url": None, "b64_json": base64.b64encode(image_bytes).decode("ascii")},
+                        )()
+                    ]
+                },
+            )()
+
+    class _FakeAsyncOpenAI:
+        def __init__(self, *_: object, **__: object) -> None:
+            self.images = _FakeImages()
+
+    with patch("openai.AsyncOpenAI", _FakeAsyncOpenAI):
+        asset = await _generate_image_asset(
+            "task-8",
+            {"compressed_prompt": "test", "provider_size": "1024x1024"},
+            model="test-model",
+            api_key="test-key",
+            base_url="https://image.example.com/v1",
+        )
+
+    assert asset["url"] == ""
+    assert asset["b64_json"] == base64.b64encode(image_bytes).decode("ascii")

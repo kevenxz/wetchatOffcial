@@ -1,6 +1,9 @@
 """Generate visual assets from planned briefs."""
 from __future__ import annotations
 
+import base64
+import time
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -9,6 +12,7 @@ from api.store import get_model_config
 from workflow.state import WorkflowState
 
 logger = structlog.get_logger(__name__)
+GENERATED_IMAGES_DIR = Path("artifacts/generated_images")
 
 _EVIDENCE_HEADING_KEYWORDS = (
     "数据",
@@ -79,9 +83,17 @@ async def _generate_image_asset(
     first = data[0]
     if isinstance(first, dict):
         image_url = str(first.get("url") or "")
+        b64_json = str(first.get("b64_json") or first.get("image_base64") or "")
     else:
         image_url = str(getattr(first, "url", "") or "")
-    return {"url": image_url, "path": "", "mime_type": "image/png" if image_url else ""}
+        b64_json = str(getattr(first, "b64_json", "") or getattr(first, "image_base64", "") or "")
+    return {
+        "url": image_url,
+        "path": "",
+        "mime_type": "image/png" if image_url or b64_json else "",
+        "b64_json": b64_json,
+        "output_format": str(getattr(response, "output_format", "") or (response.get("output_format", "") if isinstance(response, dict) else "") or ""),
+    }
 
 
 def _placeholder_asset(brief: dict[str, Any]) -> dict[str, str]:
@@ -94,6 +106,58 @@ def _placeholder_asset(brief: dict[str, Any]) -> dict[str, str]:
         "mime_type": "",
         "target_aspect_ratio": str(brief.get("target_aspect_ratio") or ""),
         "provider_size": str(brief.get("provider_size") or ""),
+    }
+
+
+def _decode_base64_image(encoded: str) -> bytes:
+    try:
+        return base64.b64decode(encoded)
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError("image response contains invalid base64 content") from exc
+
+
+def _sanitize_output_format(output_format: str | None) -> str:
+    cleaned = "".join(ch for ch in str(output_format or "png").lower() if ch.isalnum())
+    if cleaned == "jpeg":
+        return "jpg"
+    return cleaned or "png"
+
+
+def _save_generated_image_bytes(
+    image_bytes: bytes,
+    *,
+    task_id: str,
+    image_kind: str,
+    output_format: str | None = None,
+) -> str:
+    suffix = _sanitize_output_format(output_format)
+    GENERATED_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    file_name = f"{task_id}_{image_kind}_{int(time.time() * 1000)}.{suffix}"
+    path = (GENERATED_IMAGES_DIR / file_name).resolve()
+    path.write_bytes(image_bytes)
+    return str(path)
+
+
+def _normalize_generated_asset_payload(
+    generated: dict[str, Any],
+    *,
+    task_id: str,
+    role: str,
+) -> dict[str, str]:
+    image_url = str(generated.get("url") or "").strip()
+    image_path = str(generated.get("path") or "").strip()
+    b64_json = str(generated.get("b64_json") or generated.get("image_base64") or "").strip()
+    if not image_url and not image_path and b64_json:
+        image_path = _save_generated_image_bytes(
+            _decode_base64_image(b64_json),
+            task_id=task_id,
+            image_kind=role or "visual",
+            output_format=str(generated.get("output_format") or "png"),
+        )
+    return {
+        "url": image_url,
+        "path": image_path,
+        "mime_type": str(generated.get("mime_type") or ("image/png" if image_url or image_path else "")).strip(),
     }
 
 
@@ -266,13 +330,18 @@ async def generate_visual_assets_node(state: WorkflowState) -> dict[str, Any]:
                 api_key=image_model_config.api_key,
                 base_url=image_model_config.base_url,
             )
+            normalized = _normalize_generated_asset_payload(
+                generated,
+                task_id=str(state.get("task_id") or ""),
+                role=str(effective_brief.get("role") or ""),
+            )
             assets.append(
                 {
                     "role": str(effective_brief.get("role") or ""),
                     "prompt": str(effective_brief.get("compressed_prompt") or ""),
-                    "url": generated.get("url", ""),
-                    "path": generated.get("path", ""),
-                    "mime_type": generated.get("mime_type", ""),
+                    "url": normalized.get("url", ""),
+                    "path": normalized.get("path", ""),
+                    "mime_type": normalized.get("mime_type", ""),
                     "target_aspect_ratio": str(effective_brief.get("target_aspect_ratio") or ""),
                     "provider_size": str(effective_brief.get("provider_size") or ""),
                 }
