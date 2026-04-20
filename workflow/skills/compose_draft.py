@@ -116,6 +116,8 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
         "The result should read like a polished WeChat public account article. "
         "Produce a publication-ready title, two alternative title candidates, a concise summary, and a strong opening hook paragraph before the first H2 section. "
         "Avoid generic opener language such as '本文将从...展开' or other empty roadmap sentences. "
+        "Use natural transitions between the opener and the first section, and between sections when the argument turns. "
+        "Each H2 section should usually contain 2-3 paragraphs instead of a single thin paragraph. "
         "Keep the section intent and order from the blueprint, but you may refine section headings for readability and stronger publication quality. "
         "Keep the language concrete, and preserve a risk section when requested. "
         "If revision guidance is provided, revise only the weak parts instead of changing the whole structure."

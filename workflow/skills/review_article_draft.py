@@ -23,6 +23,24 @@ _GENERIC_OPENER_PREFIXES = (
 )
 
 
+def _extract_section_bodies(content: str) -> list[str]:
+    sections: list[str] = []
+    current_body: list[str] = []
+    in_section = False
+    for line in content.splitlines():
+        if line.startswith("## "):
+            if in_section and current_body:
+                sections.append("\n".join(current_body).strip())
+            current_body = []
+            in_section = True
+            continue
+        if in_section:
+            current_body.append(line)
+    if in_section and current_body:
+        sections.append("\n".join(current_body).strip())
+    return sections
+
+
 class ReviewOutput(BaseModel):
     """Structured article review payload."""
 
@@ -39,10 +57,13 @@ def _fallback_review(draft: dict[str, Any], evidence_pack: dict[str, Any] | None
     research_gaps = list(pack.get("research_gaps") or [])
     quality_summary = dict(pack.get("quality_summary") or {})
     opener = content.split("\n\n## ", 1)[0].strip()
+    section_bodies = _extract_section_bodies(content)
     if "## 风险边界" not in content and "## 椋庨櫓杈圭晫" not in content:
         findings.append({"type": "structure", "message": "missing risk boundary section"})
     if opener and any(opener.startswith(prefix) for prefix in _GENERIC_OPENER_PREFIXES):
         findings.append({"type": "opener", "message": "opening hook is generic and reads like a roadmap"})
+    if section_bodies and any(len([line for line in body.splitlines() if line.strip()]) <= 1 for body in section_bodies):
+        findings.append({"type": "density", "message": "section body is too thin and lacks paragraph development"})
     if "missing_data_evidence" in research_gaps or "missing_high_confidence_fact" in research_gaps:
         findings.append({"type": "evidence", "message": "insufficient evidence coverage for key conclusions"})
     if int(quality_summary.get("high_confidence_items") or 0) <= 0 and research_gaps:
@@ -53,6 +74,8 @@ def _fallback_review(draft: dict[str, Any], evidence_pack: dict[str, Any] | None
         revision_guidance.append("补充风险边界章节")
     if any(item["type"] == "opener" for item in findings):
         revision_guidance.append("重写开头钩子，先给判断或冲突点，不要用本文将从这类空话开场")
+    if any(item["type"] == "density" for item in findings):
+        revision_guidance.append("把每个小节扩成至少两段有信息量的短段落，并补上章节之间的过渡")
     if any(item["type"] == "evidence" for item in findings):
         revision_guidance.append("补充官方或数据证据，并交代当前证据边界")
     return ReviewOutput(

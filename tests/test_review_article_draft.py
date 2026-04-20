@@ -211,3 +211,29 @@ async def test_review_article_draft_fallback_flags_generic_opener() -> None:
     assert result["writing_state"]["article_review"]["passed"] is False
     assert any(item["type"] == "opener" for item in result["writing_state"]["review_findings"])
     assert any("开头" in item for item in result["writing_state"]["revision_guidance"])
+
+
+@pytest.mark.asyncio
+async def test_review_article_draft_fallback_flags_thin_sections_without_transition_density() -> None:
+    state = {
+        "task_id": "task-6",
+        "writing_state": {
+            "draft": {
+                "title": "机器人商业化判断",
+                "content": "一个开头。\n\n## 为什么订单开始变慢\n一句话。\n\n## 风险边界在哪里\n一句话。",
+            }
+        },
+    }
+
+    with patch("workflow.skills.review_article_draft.get_model_config") as mock_get_model_config:
+        model_config = MagicMock()
+        model_config.text.api_key = ""
+        model_config.text.base_url = None
+        model_config.text.model = "text-model"
+        mock_get_model_config.return_value = model_config
+
+        result = await review_article_draft_node(state)
+
+    assert result["writing_state"]["article_review"]["passed"] is False
+    assert any(item["type"] == "density" for item in result["writing_state"]["review_findings"])
+    assert any("段落" in item for item in result["writing_state"]["revision_guidance"])
