@@ -5,7 +5,15 @@ import json
 import os
 from pathlib import Path
 
-from api.models import AccountConfig, ImageModelConfig, ModelConfig, ScheduleConfig, TaskResponse, TextModelConfig
+from api.models import (
+    AccountConfig,
+    ImageModelConfig,
+    ModelConfig,
+    ScheduleConfig,
+    TaskResponse,
+    TextModelConfig,
+    UserAccount,
+)
 
 DATA_DIR = Path("data")
 TASKS_FILE = DATA_DIR / "tasks.json"
@@ -13,6 +21,7 @@ STYLE_CONFIG_FILE = DATA_DIR / "style_config.json"
 CUSTOM_THEMES_FILE = DATA_DIR / "custom_themes.json"
 MODEL_CONFIG_FILE = DATA_DIR / "model_config.json"
 ACCOUNTS_FILE = DATA_DIR / "accounts.json"
+USERS_FILE = DATA_DIR / "users.json"
 SCHEDULES_FILE = DATA_DIR / "schedules.json"
 
 task_store: dict[str, TaskResponse] = {}
@@ -301,6 +310,7 @@ def save_model_config(new_config: ModelConfig) -> ModelConfig:
 
 
 _account_store: dict[str, AccountConfig] = {}
+_user_store: dict[str, UserAccount] = {}
 schedule_store: dict[str, ScheduleConfig] = {}
 
 
@@ -317,10 +327,28 @@ def load_accounts() -> None:
         return
 
 
+def load_users() -> None:
+    """Load system users from JSON file."""
+    if not USERS_FILE.exists():
+        return
+    try:
+        with open(USERS_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        for user_id, payload in data.items():
+            _user_store[user_id] = UserAccount(**payload)
+    except Exception:
+        return
+
+
 def _save_accounts() -> None:
     """原子写入账号配置到 JSON 文件。"""
     payload = {aid: acc.model_dump(mode="json") for aid, acc in _account_store.items()}
     _write_json(ACCOUNTS_FILE, payload)
+
+
+def _save_users() -> None:
+    payload = {uid: user.model_dump(mode="json") for uid, user in _user_store.items()}
+    _write_json(USERS_FILE, payload)
 
 
 def load_schedules() -> None:
@@ -347,9 +375,25 @@ def list_accounts() -> list[AccountConfig]:
     return sorted(_account_store.values(), key=lambda a: a.created_at, reverse=True)
 
 
+def list_users() -> list[UserAccount]:
+    return sorted(_user_store.values(), key=lambda u: u.created_at, reverse=True)
+
+
 def get_account(account_id: str) -> AccountConfig | None:
     """按 ID 查询账号。"""
     return _account_store.get(account_id)
+
+
+def get_user(user_id: str) -> UserAccount | None:
+    return _user_store.get(user_id)
+
+
+def get_user_by_username(username: str) -> UserAccount | None:
+    lowered = username.strip().lower()
+    for user in _user_store.values():
+        if user.username == lowered:
+            return user
+    return None
 
 
 def create_account(account: AccountConfig) -> AccountConfig:
@@ -357,6 +401,15 @@ def create_account(account: AccountConfig) -> AccountConfig:
     _account_store[account.account_id] = account
     _save_accounts()
     return account
+
+
+def create_user(user: UserAccount) -> UserAccount:
+    existing = get_user_by_username(user.username)
+    if existing is not None and existing.user_id != user.user_id:
+        raise ValueError(f"用户 {user.username!r} 已存在")
+    _user_store[user.user_id] = user
+    _save_users()
+    return user
 
 
 def update_account(account_id: str, patch: dict) -> AccountConfig:
@@ -370,6 +423,19 @@ def update_account(account_id: str, patch: dict) -> AccountConfig:
     return updated
 
 
+def update_user(user_id: str, patch: dict) -> UserAccount:
+    user = _user_store.get(user_id)
+    if user is None:
+        raise ValueError(f"用户 {user_id!r} 不存在")
+    updated = user.model_copy(update=patch)
+    duplicate = get_user_by_username(updated.username)
+    if duplicate is not None and duplicate.user_id != user_id:
+        raise ValueError(f"用户 {updated.username!r} 已存在")
+    _user_store[user_id] = updated
+    _save_users()
+    return updated
+
+
 def delete_account(account_id: str) -> None:
     """删除账号并持久化。"""
     if account_id not in _account_store:
@@ -378,6 +444,14 @@ def delete_account(account_id: str) -> None:
     _save_accounts()
 
 
+def delete_user(user_id: str) -> None:
+    if user_id not in _user_store:
+        raise ValueError(f"用户 {user_id!r} 不存在")
+    del _user_store[user_id]
+    _save_users()
+
+
 load_tasks()
 load_accounts()
+load_users()
 load_schedules()

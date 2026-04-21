@@ -5,6 +5,7 @@ import {
   HistoryOutlined,
   PlusCircleOutlined,
   SettingOutlined,
+  TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { matchPath } from 'react-router-dom'
@@ -26,7 +27,7 @@ export const routeMetadata: RouteMeta[] = [
     navLabel: '创作台',
     contextTitle: '任务创建',
     contextEyebrow: 'Brand Studio',
-    contextDescription: '配置选题、受众和生成策略，然后在当前工作台继续推进内容生产。',
+    contextDescription: '配置主题、受众和生成策略，然后启动完整创作流程。',
     icon: <PlusCircleOutlined />,
   },
   {
@@ -35,7 +36,7 @@ export const routeMetadata: RouteMeta[] = [
     navLabel: '创作台',
     contextTitle: '任务详情',
     contextEyebrow: 'Brand Studio',
-    contextDescription: '查看生成进度、草稿状态与后续动作。',
+    contextDescription: '查看生成进度、草稿状态与后续操作。',
     icon: <PlusCircleOutlined />,
     nav: false,
   },
@@ -44,7 +45,7 @@ export const routeMetadata: RouteMeta[] = [
     navLabel: '任务档案',
     contextTitle: '历史任务',
     contextEyebrow: 'Archive',
-    contextDescription: '回看过往生成记录，筛选和复用已完成的创作任务。',
+    contextDescription: '回看历史生成记录，快速复用已完成任务。',
     icon: <HistoryOutlined />,
   },
   {
@@ -52,7 +53,7 @@ export const routeMetadata: RouteMeta[] = [
     navLabel: '文章库',
     contextTitle: '文章管理',
     contextEyebrow: 'Publishing',
-    contextDescription: '集中查看文章成稿、预览内容并准备发布。',
+    contextDescription: '集中查看文章成果、预览内容并准备发布。',
     icon: <FileTextOutlined />,
   },
   {
@@ -68,7 +69,7 @@ export const routeMetadata: RouteMeta[] = [
     navLabel: '风格设定',
     contextTitle: '系统设置',
     contextEyebrow: 'System',
-    contextDescription: '维护品牌风格、文案偏好与系统级配置。',
+    contextDescription: '维护品牌风格、文案偏好与系统配置。',
     icon: <SettingOutlined />,
   },
   {
@@ -76,16 +77,24 @@ export const routeMetadata: RouteMeta[] = [
     navLabel: '模型配置',
     contextTitle: '模型配置',
     contextEyebrow: 'Models',
-    contextDescription: '管理模型接入和生成能力选项。',
+    contextDescription: '管理模型接入与生成能力参数。',
     icon: <SettingOutlined />,
   },
   {
     path: '/accounts',
-    navLabel: '账号中心',
-    contextTitle: '账号配置',
+    navLabel: '渠道账号',
+    contextTitle: '渠道账号配置',
     contextEyebrow: 'Accounts',
-    contextDescription: '维护发布账号与渠道关联信息。',
+    contextDescription: '维护微信公众号等发布渠道的接入凭据。',
     icon: <UserOutlined />,
+  },
+  {
+    path: '/users',
+    navLabel: '系统账号',
+    contextTitle: '系统账号管理',
+    contextEyebrow: 'Security',
+    contextDescription: '管理登录账号、角色与启用状态。',
+    icon: <TeamOutlined />,
   },
 ]
 

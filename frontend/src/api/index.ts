@@ -24,14 +24,29 @@ export const GENERATION_ROLE_PRESETS = [
 
 export const ARTICLE_STRATEGY_LABELS: Record<ArticleStrategy, string> = {
   auto: '自动判断',
-  tech_breakdown: '技术揭秘式',
-  application_review: '应用评测式',
-  trend_outlook: '趋势展望式',
+  tech_breakdown: '技术拆解',
+  application_review: '应用评测',
+  trend_outlook: '趋势展望',
 }
 
 export interface CreateTaskRequest {
   keywords: string
   generation_config: GenerationConfig
+}
+
+export type PushStatus = 'success' | 'failed'
+
+export type PlatformType = 'wechat_mp' | 'toutiao'
+
+export interface PushRecord {
+  push_id: string
+  account_id: string
+  account_name: string
+  platform: PlatformType
+  pushed_at: string
+  status: PushStatus
+  draft_info?: Record<string, any> | null
+  error?: string | null
 }
 
 export interface TaskResponse {
@@ -71,12 +86,39 @@ const http = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// 响应拦截器：统一提取 data，处理错误
+const ACCESS_TOKEN_KEY = 'wechat_project_access_token'
+
+export const getStoredAccessToken = (): string => {
+  if (typeof window === 'undefined') return ''
+  return window.localStorage.getItem(ACCESS_TOKEN_KEY) ?? ''
+}
+
+export const setStoredAccessToken = (token: string): void => {
+  if (typeof window === 'undefined') return
+  if (token) {
+    window.localStorage.setItem(ACCESS_TOKEN_KEY, token)
+    return
+  }
+  window.localStorage.removeItem(ACCESS_TOKEN_KEY)
+}
+
+export const clearStoredAccessToken = (): void => {
+  if (typeof window === 'undefined') return
+  window.localStorage.removeItem(ACCESS_TOKEN_KEY)
+}
+
+http.interceptors.request.use((config) => {
+  const token = getStoredAccessToken()
+  if (!token) return config
+  config.headers = config.headers ?? {}
+  config.headers.Authorization = `Bearer ${token}`
+  return config
+})
+
 http.interceptors.response.use(
   (res) => res.data,
   (err) => {
-    const msg: string =
-      err.response?.data?.detail ?? err.message ?? '请求失败，请稍后重试'
+    const msg: string = err.response?.data?.detail ?? err.message ?? '请求失败，请稍后重试'
     return Promise.reject(new Error(msg))
   },
 )
@@ -95,22 +137,38 @@ export const deleteTask = (taskId: string): Promise<void> =>
 export const retryTask = (taskId: string): Promise<TaskResponse> =>
   http.post(`/tasks/${taskId}/retry`)
 
-/**
- * 创建到指定任务的 WebSocket 连接。
- * 调用方负责监听 onmessage / onclose 事件。
- */
 export function createTaskWs(taskId: string): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
   return new WebSocket(`${protocol}://${window.location.host}/ws/tasks/${taskId}`)
 }
 
 export type StyleConfig = Record<string, string>
+export type PresetThemes = Record<string, StyleConfig>
+export type CustomThemes = Record<string, StyleConfig>
 
 export const getStyleConfig = (): Promise<StyleConfig> =>
   http.get('/config/style')
 
 export const updateStyleConfig = (config: StyleConfig): Promise<StyleConfig> =>
   http.put('/config/style', config)
+
+export const getPresetThemes = (): Promise<PresetThemes> =>
+  http.get('/config/themes')
+
+export const getCustomThemes = (): Promise<CustomThemes> =>
+  http.get('/config/themes/custom')
+
+export const createCustomTheme = (name: string, config: StyleConfig): Promise<CustomThemes> =>
+  http.post('/config/themes/custom', { name, config })
+
+export const updateCustomTheme = (themeName: string, name: string, config: StyleConfig): Promise<CustomThemes> =>
+  http.put(`/config/themes/custom/${encodeURIComponent(themeName)}`, { name, config })
+
+export const deleteCustomTheme = (themeName: string): Promise<CustomThemes> =>
+  http.delete(`/config/themes/custom/${encodeURIComponent(themeName)}`)
+
+export const importCustomThemes = (themes: CustomThemes): Promise<CustomThemes> =>
+  http.post('/config/themes/custom/import', themes)
 
 export interface TextModelConfig {
   api_key: string
@@ -135,32 +193,6 @@ export const getModelConfig = (): Promise<ModelConfig> =>
 
 export const updateModelConfig = (config: ModelConfig): Promise<ModelConfig> =>
   http.put('/config/model', config)
-
-export type PresetThemes = Record<string, StyleConfig>
-
-export const getPresetThemes = (): Promise<PresetThemes> =>
-  http.get('/config/themes')
-
-export type CustomThemes = Record<string, StyleConfig>
-
-export const getCustomThemes = (): Promise<CustomThemes> =>
-  http.get('/config/themes/custom')
-
-export const createCustomTheme = (name: string, config: StyleConfig): Promise<CustomThemes> =>
-  http.post('/config/themes/custom', { name, config })
-
-export const updateCustomTheme = (themeName: string, name: string, config: StyleConfig): Promise<CustomThemes> =>
-  http.put(`/config/themes/custom/${encodeURIComponent(themeName)}`, { name, config })
-
-export const deleteCustomTheme = (themeName: string): Promise<CustomThemes> =>
-  http.delete(`/config/themes/custom/${encodeURIComponent(themeName)}`)
-
-export const importCustomThemes = (themes: CustomThemes): Promise<CustomThemes> =>
-  http.post('/config/themes/custom/import', themes)
-
-// -------- 账号配置相关 --------
-
-export type PlatformType = 'wechat_mp' | 'toutiao'
 
 export interface AccountConfig {
   account_id: string
@@ -209,21 +241,6 @@ export const deleteAccount = (accountId: string): Promise<void> =>
 export const testAccountConnection = (accountId: string): Promise<TestConnectionResponse> =>
   http.post(`/accounts/${accountId}/test`)
 
-// -------- 鏂囩珷绠＄悊 / 鎺ㄩ€佺浉鍏? --------
-
-export type PushStatus = 'success' | 'failed'
-
-export interface PushRecord {
-  push_id: string
-  account_id: string
-  account_name: string
-  platform: PlatformType
-  pushed_at: string
-  status: PushStatus
-  draft_info?: Record<string, any> | null
-  error?: string | null
-}
-
 export interface BatchPushResponse {
   total: number
   success: number
@@ -261,11 +278,8 @@ export const updateArticleTheme = (
 ): Promise<TaskResponse> =>
   http.put(`/articles/${taskId}/theme`, { theme_name: themeName })
 
-// -------- 瀹氭椂浠诲姟 --------
-
 export type ScheduleMode = 'once' | 'interval'
 export type ScheduleStatus = 'running' | 'stopped'
-
 export type HotspotSource = 'tophub'
 
 export interface HotspotFilters {
@@ -378,3 +392,61 @@ export const stopSchedule = (scheduleId: string): Promise<ScheduleConfig> =>
 
 export const runScheduleNow = (scheduleId: string): Promise<ScheduleExecuteResponse> =>
   http.post(`/schedules/${scheduleId}/run-now`)
+
+export type UserRole = 'admin' | 'operator'
+
+export interface UserProfile {
+  user_id: string
+  username: string
+  display_name: string
+  role: UserRole
+  enabled: boolean
+  created_at: string
+  updated_at?: string | null
+  last_login_at?: string | null
+}
+
+export interface LoginRequest {
+  username: string
+  password: string
+}
+
+export interface LoginResponse {
+  access_token: string
+  token_type: 'bearer'
+  expires_in: number
+  user: UserProfile
+}
+
+export interface CreateUserRequest {
+  username: string
+  password: string
+  display_name: string
+  role: UserRole
+  enabled: boolean
+}
+
+export interface UpdateUserRequest {
+  display_name?: string
+  role?: UserRole
+  enabled?: boolean
+  password?: string
+}
+
+export const login = (data: LoginRequest): Promise<LoginResponse> =>
+  http.post('/auth/login', data)
+
+export const getCurrentUser = (): Promise<UserProfile> =>
+  http.get('/auth/me')
+
+export const listUsers = (): Promise<UserProfile[]> =>
+  http.get('/users')
+
+export const createUser = (data: CreateUserRequest): Promise<UserProfile> =>
+  http.post('/users', data)
+
+export const updateUser = (userId: string, data: UpdateUserRequest): Promise<UserProfile> =>
+  http.put(`/users/${userId}`, data)
+
+export const deleteUser = (userId: string): Promise<void> =>
+  http.delete(`/users/${userId}`)

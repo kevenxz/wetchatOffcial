@@ -167,6 +167,137 @@ class PushRecord(BaseModel):
     error: Optional[str] = Field(default=None, description="Failure reason")
 
 
+class UserRole(str, Enum):
+    admin = "admin"
+    operator = "operator"
+
+
+class UserAccount(BaseModel):
+    user_id: str = Field(..., description="User id")
+    username: str = Field(..., min_length=3, max_length=50, description="Username")
+    password_hash: str = Field(..., min_length=1, max_length=500, description="Password hash")
+    display_name: str = Field(..., min_length=1, max_length=100, description="Display name")
+    role: UserRole = Field(default=UserRole.operator, description="Role")
+    enabled: bool = Field(default=True, description="Whether enabled")
+    created_at: datetime = Field(..., description="Created at")
+    updated_at: Optional[datetime] = Field(default=None, description="Updated at")
+    last_login_at: Optional[datetime] = Field(default=None, description="Last login at")
+
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if not cleaned:
+            raise ValueError("username cannot be blank")
+        return cleaned
+
+    @field_validator("display_name")
+    @classmethod
+    def normalize_display_name(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("display_name cannot be blank")
+        return cleaned
+
+
+class UserPublic(BaseModel):
+    user_id: str
+    username: str
+    display_name: str
+    role: UserRole
+    enabled: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    last_login_at: Optional[datetime] = None
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(..., min_length=1, max_length=50)
+    password: str = Field(..., min_length=1, max_length=200)
+
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if not cleaned:
+            raise ValueError("username cannot be blank")
+        return cleaned
+
+    @field_validator("password")
+    @classmethod
+    def normalize_password(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("password cannot be blank")
+        return cleaned
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: Literal["bearer"] = "bearer"
+    expires_in: int = Field(..., ge=1)
+    user: UserPublic
+
+
+class CreateUserRequest(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=8, max_length=200)
+    display_name: str = Field(..., min_length=1, max_length=100)
+    role: UserRole = Field(default=UserRole.operator)
+    enabled: bool = Field(default=True)
+
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if not cleaned:
+            raise ValueError("username cannot be blank")
+        return cleaned
+
+    @field_validator("password")
+    @classmethod
+    def normalize_password(cls, value: str) -> str:
+        cleaned = value.strip()
+        if len(cleaned) < 8:
+            raise ValueError("password must be at least 8 characters")
+        return cleaned
+
+    @field_validator("display_name")
+    @classmethod
+    def normalize_display_name(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("display_name cannot be blank")
+        return cleaned
+
+
+class UpdateUserRequest(BaseModel):
+    display_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    role: Optional[UserRole] = None
+    enabled: Optional[bool] = None
+    password: Optional[str] = Field(default=None, min_length=8, max_length=200)
+
+    @field_validator("display_name")
+    @classmethod
+    def normalize_display_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("display_name cannot be blank")
+        return cleaned
+
+    @field_validator("password")
+    @classmethod
+    def normalize_password(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if len(cleaned) < 8:
+            raise ValueError("password must be at least 8 characters")
+        return cleaned
+
+
 class TaskResponse(BaseModel):
     task_id: str = Field(..., description="Task id")
     keywords: str = Field(..., description="Search keywords")

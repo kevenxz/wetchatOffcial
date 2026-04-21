@@ -1,6 +1,8 @@
-import { WechatOutlined } from '@ant-design/icons'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { LogoutOutlined, WechatOutlined } from '@ant-design/icons'
+import { Button } from 'antd'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { navigationItems, resolveRouteMeta } from '@/config/navigation'
+import useAuthStore from '@/store/authStore'
 import HeroPanel from './HeroPanel'
 import ThemeModeSwitch from './ThemeModeSwitch'
 import SectionBlock from './SectionBlock'
@@ -8,7 +10,15 @@ import styles from './WorkbenchShell.module.css'
 
 export default function WorkbenchShell() {
   const location = useLocation()
+  const navigate = useNavigate()
   const routeMeta = resolveRouteMeta(location.pathname)
+  const user = useAuthStore((state) => state.user)
+  const clearSession = useAuthStore((state) => state.clearSession)
+
+  const handleLogout = () => {
+    clearSession()
+    navigate('/login', { replace: true })
+  }
 
   return (
     <div className={styles.shell}>
@@ -45,6 +55,9 @@ export default function WorkbenchShell() {
         <div className={styles.frame}>
           <div className={styles.toolbar}>
             <ThemeModeSwitch />
+            <Button icon={<LogoutOutlined />} size="small" onClick={handleLogout}>
+              {user?.display_name ?? user?.username ?? '退出登录'}
+            </Button>
           </div>
 
           <HeroPanel
