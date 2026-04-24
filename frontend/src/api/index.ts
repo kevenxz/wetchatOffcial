@@ -32,6 +32,7 @@ export const ARTICLE_STRATEGY_LABELS: Record<ArticleStrategy, string> = {
 export interface CreateTaskRequest {
   keywords: string
   generation_config: GenerationConfig
+  hotspot_capture_config?: HotspotCaptureConfig | null
 }
 
 export type PushStatus = 'success' | 'failed'
@@ -61,6 +62,15 @@ export interface TaskResponse {
   hotspot_capture_config?: HotspotCaptureConfig | null
   hotspot_candidates?: TopHubHotItem[]
   selected_hotspot?: TopHubHotItem | null
+  hotspot_capture_error?: string | null
+  human_review_required?: boolean
+  task_brief?: Record<string, any> | null
+  planning_state?: Record<string, any> | null
+  research_state?: Record<string, any> | null
+  writing_state?: Record<string, any> | null
+  visual_state?: Record<string, any> | null
+  quality_state?: Record<string, any> | null
+  quality_report?: Record<string, any> | null
   user_intent?: Record<string, any> | null
   style_profile?: Record<string, any> | null
   article_blueprint?: Record<string, any> | null
@@ -372,6 +382,20 @@ export interface ScheduleExecuteResponse {
   task_id?: string | null
 }
 
+export interface HotspotPreviewRequest {
+  keywords: string
+  hotspot_capture: HotspotCaptureConfig
+}
+
+export interface HotspotPreviewResponse {
+  keywords: string
+  original_keywords: string
+  hotspot_capture_config: HotspotCaptureConfig
+  hotspot_candidates: TopHubHotItem[]
+  selected_hotspot?: TopHubHotItem | null
+  hotspot_capture_error?: string | null
+}
+
 export const listSchedules = (): Promise<ScheduleConfig[]> =>
   http.get('/schedules')
 
@@ -392,6 +416,9 @@ export const stopSchedule = (scheduleId: string): Promise<ScheduleConfig> =>
 
 export const runScheduleNow = (scheduleId: string): Promise<ScheduleExecuteResponse> =>
   http.post(`/schedules/${scheduleId}/run-now`)
+
+export const previewHotspots = (data: HotspotPreviewRequest): Promise<HotspotPreviewResponse> =>
+  http.post('/hotspots/preview', data)
 
 export type UserRole = 'admin' | 'operator'
 

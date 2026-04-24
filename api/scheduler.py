@@ -28,6 +28,7 @@ from api.store import (
     schedule_store,
     task_store,
 )
+from api.workflow_sync import sync_task_from_workflow_event
 from api.ws_manager import manager
 from workflow.article_generation import normalize_generation_config
 from workflow.graph import run_workflow
@@ -250,49 +251,7 @@ class SchedulerEngine:
         """Sync workflow progress payload to task_store and websocket clients."""
         task = task_store.get(task_id)
         if task:
-            new_status = data.get("status", task.status)
-            task.status = TaskStatus(new_status)
-            task.updated_at = _utc_now()
-            if new_status == "failed":
-                task.error = data.get("message")
-            if new_status in ("done", "failed") and data.get("result"):
-                result = data["result"]
-                if isinstance(result, dict):
-                    next_generation_config = result.get("generation_config")
-                    if isinstance(next_generation_config, dict):
-                        task.generation_config = task.generation_config.model_copy(update=next_generation_config)
-                    next_keywords = result.get("keywords")
-                    if isinstance(next_keywords, str) and next_keywords.strip():
-                        task.keywords = next_keywords.strip()
-                    next_original_keywords = result.get("original_keywords")
-                    if isinstance(next_original_keywords, str) and next_original_keywords.strip():
-                        task.original_keywords = next_original_keywords.strip()
-                    hotspot_capture_config = result.get("hotspot_capture_config")
-                    if isinstance(hotspot_capture_config, dict):
-                        task.hotspot_capture_config = hotspot_capture_config
-                    hotspot_candidates = result.get("hotspot_candidates")
-                    if isinstance(hotspot_candidates, list):
-                        task.hotspot_candidates = hotspot_candidates
-                    selected_hotspot = result.get("selected_hotspot")
-                    if isinstance(selected_hotspot, dict) or selected_hotspot is None:
-                        task.selected_hotspot = selected_hotspot
-                    task.task_brief = result.get("task_brief")
-                    task.planning_state = result.get("planning_state")
-                    task.research_state = result.get("research_state")
-                    task.writing_state = result.get("writing_state")
-                    task.visual_state = result.get("visual_state")
-                    task.quality_state = result.get("quality_state")
-                    task.quality_report = (
-                        result.get("quality_report")
-                        or dict(task.quality_state or {}).get("quality_report")
-                        or None
-                    )
-                    task.user_intent = result.get("user_intent")
-                    task.style_profile = result.get("style_profile")
-                    task.article_blueprint = result.get("article_blueprint")
-                    task.article_plan = result.get("article_plan")
-                    task.generated_article = result.get("generated_article")
-                    task.draft_info = result.get("draft_info")
+            sync_task_from_workflow_event(task, data)
             save_tasks()
         await manager.broadcast(task_id, data)
 

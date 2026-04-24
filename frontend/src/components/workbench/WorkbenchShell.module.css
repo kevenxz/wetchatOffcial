@@ -3,7 +3,7 @@
   display: grid;
   grid-template-columns: 216px minmax(0, 1fr);
   background-color: var(--app-bg);
-  background-image: none;
+  background-image: var(--app-bg-gradient);
 }
 
 .sidebar {
@@ -21,7 +21,7 @@
   padding: 12px 14px;
   border: 1px solid var(--app-border);
   border-radius: 18px;
-  background: var(--app-surface);
+  background: var(--app-surface-strong);
 }
 
 .brandMark {
@@ -77,7 +77,7 @@
 .navLinkActive {
   color: var(--app-text);
   border-left-color: var(--app-primary);
-  background: linear-gradient(90deg, var(--app-primary-bg) 0%, transparent 92%);
+  background: linear-gradient(90deg, var(--app-primary-bg) 0%, var(--app-surface-strong) 92%);
   font-weight: 600;
 }
 

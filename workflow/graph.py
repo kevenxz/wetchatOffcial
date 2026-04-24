@@ -25,24 +25,45 @@ from workflow.skills.review_article_draft import review_article_draft_node
 from workflow.skills.review_visual_assets import review_visual_assets_node
 from workflow.skills.run_research import run_research_node
 from workflow.skills.targeted_revision import targeted_revision_node
-from workflow.skills.build_article_blueprint import build_article_blueprint_node
 from workflow.skills.capture_hot_topics import capture_hot_topics_node
 from workflow.skills.error_handler import error_handler
-from workflow.skills.fetch_extract import fetch_extract_node
-from workflow.skills.generate_article import generate_article_node
-from workflow.skills.generate_images import generate_images_node
-from workflow.skills.infer_style_profile import infer_style_profile_node
-from workflow.skills.interpret_user_intent import interpret_user_intent_node
-from workflow.skills.plan_search_queries import plan_search_queries_node
 from workflow.skills.push_to_draft import push_to_draft_node
-from workflow.skills.rank_sources import rank_sources_node
-from workflow.skills.search_web import search_web_node
 from workflow.skills.ui_feedback import ui_feedback_node
 from workflow.state import WorkflowState
 
 logger = structlog.get_logger(__name__)
 
 ProgressCallback = Callable[[str, dict], Coroutine[Any, Any, None]]
+
+
+def _build_result_payload(final_state: dict | None) -> dict:
+    """Build the task result payload persisted by API callbacks."""
+    state = final_state or {}
+    quality_state = state.get("quality_state") if isinstance(state.get("quality_state"), dict) else {}
+    quality_report = state.get("quality_report") or quality_state.get("quality_report")
+    return {
+        "generation_config": state.get("generation_config"),
+        "keywords": state.get("keywords"),
+        "original_keywords": state.get("original_keywords"),
+        "hotspot_capture_config": state.get("hotspot_capture_config"),
+        "hotspot_candidates": state.get("hotspot_candidates"),
+        "selected_hotspot": state.get("selected_hotspot"),
+        "hotspot_capture_error": state.get("hotspot_capture_error"),
+        "task_brief": state.get("task_brief"),
+        "planning_state": state.get("planning_state"),
+        "research_state": state.get("research_state"),
+        "writing_state": state.get("writing_state"),
+        "visual_state": state.get("visual_state"),
+        "quality_state": state.get("quality_state"),
+        "quality_report": quality_report,
+        "human_review_required": bool(quality_report and not quality_report.get("ready_to_publish")),
+        "user_intent": state.get("user_intent"),
+        "style_profile": state.get("style_profile"),
+        "article_blueprint": state.get("article_blueprint"),
+        "article_plan": state.get("article_plan"),
+        "generated_article": state.get("generated_article"),
+        "draft_info": state.get("draft_info"),
+    }
 
 
 async def initialize_node(state: WorkflowState) -> dict:
@@ -72,14 +93,6 @@ def _route_status(state: WorkflowState) -> str:
     return "error" if state.get("status") == "failed" else "next"
 
 
-def _route_after_generate_images(state: WorkflowState) -> str:
-    if state.get("status") == "failed":
-        return "error"
-    if state.get("skip_auto_push"):
-        return "skip_push"
-    return "next"
-
-
 def _route_quality_action(state: WorkflowState) -> str:
     if state.get("status") == "failed":
         return "error"
@@ -89,6 +102,8 @@ def _route_quality_action(state: WorkflowState) -> str:
         return "revise_writing"
     if action == "revise_visuals":
         return "revise_visuals"
+    if state.get("skip_auto_push"):
+        return "skip_push"
     return "pass"
 
 
@@ -101,6 +116,8 @@ def _route_revision_target(state: WorkflowState) -> str:
         return "revise_writing"
     if action == "revise_visuals":
         return "revise_visuals"
+    if state.get("skip_auto_push"):
+        return "skip_push"
     return "pass"
 
 
@@ -123,22 +140,13 @@ def build_graph() -> StateGraph:
     graph.add_node("review_visual_assets", review_visual_assets_node)
     graph.add_node("quality_gate", quality_gate_node)
     graph.add_node("targeted_revision", targeted_revision_node)
-    graph.add_node("initialize", initialize_node)
     graph.add_node("capture_hot_topics", capture_hot_topics_node)
-    graph.add_node("interpret_user_intent", interpret_user_intent_node)
-    graph.add_node("infer_style_profile", infer_style_profile_node)
-    graph.add_node("build_article_blueprint", build_article_blueprint_node)
-    graph.add_node("plan_search_queries", plan_search_queries_node)
-    graph.add_node("search_web", search_web_node)
-    graph.add_node("rank_sources", rank_sources_node)
-    graph.add_node("fetch_extract", fetch_extract_node)
-    graph.add_node("generate_article", generate_article_node)
-    graph.add_node("generate_images", generate_images_node)
     graph.add_node("push_to_draft", push_to_draft_node)
     graph.add_node("ui_feedback", ui_feedback_node)
     graph.add_node("error_handler", error_handler)
 
-    graph.set_entry_point("intake_task_brief")
+    graph.set_entry_point("capture_hot_topics")
+    graph.add_conditional_edges("capture_hot_topics", _route_status, {"error": "error_handler", "next": "intake_task_brief"})
     graph.add_conditional_edges("intake_task_brief", _route_status, {"error": "error_handler", "next": "planner_agent"})
     graph.add_conditional_edges("planner_agent", _route_status, {"error": "error_handler", "next": "analyze_hotspot_opportunities"})
     graph.add_conditional_edges("analyze_hotspot_opportunities", _route_status, {"error": "error_handler", "next": "plan_research"})
@@ -155,26 +163,24 @@ def build_graph() -> StateGraph:
     graph.add_conditional_edges(
         "quality_gate",
         _route_quality_action,
-        {"error": "error_handler", "pass": "push_to_draft", "revise_writing": "targeted_revision", "revise_visuals": "targeted_revision"},
+        {
+            "error": "error_handler",
+            "pass": "push_to_draft",
+            "skip_push": "ui_feedback",
+            "revise_writing": "targeted_revision",
+            "revise_visuals": "targeted_revision",
+        },
     )
     graph.add_conditional_edges(
         "targeted_revision",
         _route_revision_target,
-        {"error": "error_handler", "pass": "push_to_draft", "revise_writing": "compose_draft", "revise_visuals": "generate_visual_assets"},
-    )
-    graph.add_conditional_edges("capture_hot_topics", _route_status, {"error": "error_handler", "next": "interpret_user_intent"})
-    graph.add_conditional_edges("interpret_user_intent", _route_status, {"error": "error_handler", "next": "infer_style_profile"})
-    graph.add_conditional_edges("infer_style_profile", _route_status, {"error": "error_handler", "next": "build_article_blueprint"})
-    graph.add_conditional_edges("build_article_blueprint", _route_status, {"error": "error_handler", "next": "plan_search_queries"})
-    graph.add_conditional_edges("plan_search_queries", _route_status, {"error": "error_handler", "next": "search_web"})
-    graph.add_conditional_edges("search_web", _route_status, {"error": "error_handler", "next": "rank_sources"})
-    graph.add_conditional_edges("rank_sources", _route_status, {"error": "error_handler", "next": "fetch_extract"})
-    graph.add_conditional_edges("fetch_extract", _route_status, {"error": "error_handler", "next": "generate_article"})
-    graph.add_conditional_edges("generate_article", _route_status, {"error": "error_handler", "next": "generate_images"})
-    graph.add_conditional_edges(
-        "generate_images",
-        _route_after_generate_images,
-        {"error": "error_handler", "next": "push_to_draft", "skip_push": "ui_feedback"},
+        {
+            "error": "error_handler",
+            "pass": "push_to_draft",
+            "skip_push": "ui_feedback",
+            "revise_writing": "compose_draft",
+            "revise_visuals": "generate_visual_assets",
+        },
     )
     graph.add_conditional_edges("push_to_draft", _route_status, {"error": "error_handler", "next": "ui_feedback"})
     graph.add_edge("ui_feedback", END)
@@ -335,21 +341,7 @@ async def run_workflow(
                     "current_skill": "",
                     "progress": 100 if not is_failed else int(final_state.get("progress", 0) if final_state else 0),
                     "message": final_message,
-                    "result": {
-                        "generation_config": final_state.get("generation_config") if final_state else None,
-                        "keywords": final_state.get("keywords") if final_state else None,
-                        "original_keywords": final_state.get("original_keywords") if final_state else None,
-                        "hotspot_capture_config": final_state.get("hotspot_capture_config") if final_state else None,
-                        "hotspot_candidates": final_state.get("hotspot_candidates") if final_state else None,
-                        "selected_hotspot": final_state.get("selected_hotspot") if final_state else None,
-                        "hotspot_capture_error": final_state.get("hotspot_capture_error") if final_state else None,
-                        "user_intent": final_state.get("user_intent") if final_state else None,
-                        "style_profile": final_state.get("style_profile") if final_state else None,
-                        "article_blueprint": final_state.get("article_blueprint") if final_state else None,
-                        "article_plan": final_state.get("article_plan") if final_state else None,
-                        "generated_article": final_state.get("generated_article") if final_state else None,
-                        "draft_info": final_state.get("draft_info") if final_state else None,
-                    },
+                    "result": _build_result_payload(final_state),
                 },
             )
     except Exception as exc:  # noqa: BLE001

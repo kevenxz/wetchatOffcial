@@ -21,7 +21,7 @@ export default function WorkbenchShell() {
   }
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} style={{ backgroundImage: 'none' }}>
       <aside className={styles.sidebar}>
         <div className={styles.brand}>
           <span className={styles.brandMark} aria-hidden="true">

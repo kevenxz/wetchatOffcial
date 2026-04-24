@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth import ensure_default_admin_user
 from api.logging_config import setup_logging
-from api.routers import tasks, ws, config, accounts, articles, schedules, auth, users
+from api.routers import tasks, ws, config, accounts, articles, schedules, auth, users, hotspots
 from api.scheduler import scheduler_engine
 
 # 加载 .env 环境变量
@@ -40,6 +40,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(articles.router, prefix="/api")
 app.include_router(schedules.router, prefix="/api")
+app.include_router(hotspots.router, prefix="/api")
 app.include_router(ws.router)
 
 

@@ -32,6 +32,7 @@ import {
   getPresetThemes,
   listAccounts,
   listSchedules,
+  previewHotspots,
   runScheduleNow,
   startSchedule,
   stopSchedule,
@@ -47,7 +48,14 @@ import { HeroPanel, SectionBlock } from '@/components/workbench'
 
 const { Text } = Typography
 const CURRENT_THEME_KEY = '__current__'
-const HOTSPOT_CATEGORY_PRESETS = ['finance', 'ai', 'news', 'tech', 'community']
+const HOTSPOT_CATEGORY_PRESETS = [
+  { label: 'AI', value: 'ai' },
+  { label: '科技', value: 'tech' },
+  { label: '财经', value: 'finance' },
+  { label: '社会', value: 'news' },
+  { label: '消费', value: 'consumer' },
+  { label: '行业', value: 'industry' },
+]
 const PAGE_STACK_STYLE = {
   display: 'grid',
   gap: 24,
@@ -188,6 +196,7 @@ const summarizeHotspotCapture = (record: ScheduleConfig): ReactNode => {
 export default function ScheduleManage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
   const [schedules, setSchedules] = useState<ScheduleConfig[]>([])
   const [accounts, setAccounts] = useState<AccountConfig[]>([])
   const [themeNames, setThemeNames] = useState<string[]>([CURRENT_THEME_KEY])
@@ -326,6 +335,31 @@ export default function ScheduleManage() {
     await deleteSchedule(scheduleId)
     message.success('已删除')
     await fetchData()
+  }
+
+  const handlePreviewHotspots = async () => {
+    const values = form.getFieldsValue()
+    const hotspotCapture = normalizeHotspotCapture(values.hotspot_capture)
+    if (!hotspotCapture.enabled) {
+      message.info('请先启用热点捕获')
+      return
+    }
+    setPreviewing(true)
+    try {
+      const result = await previewHotspots({
+        keywords: values.name || '热点预览',
+        hotspot_capture: hotspotCapture,
+      })
+      if (result.selected_hotspot?.title) {
+        message.success(`预览命中：${result.selected_hotspot.title}`)
+      } else {
+        message.warning(result.hotspot_capture_error || '未命中可用热点')
+      }
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '热点预览失败')
+    } finally {
+      setPreviewing(false)
+    }
   }
 
   const columns: TableProps<ScheduleConfig>['columns'] = [
@@ -570,8 +604,8 @@ export default function ScheduleManage() {
                             <Select
                               mode="tags"
                               tokenSeparators={[',', '，', ';', '；']}
-                              options={HOTSPOT_CATEGORY_PRESETS.map((category) => ({ label: category, value: category }))}
-                              placeholder="例如：finance、ai、news"
+                              options={HOTSPOT_CATEGORY_PRESETS}
+                              placeholder="例如：AI、财经、科技"
                             />
                           </Form.Item>
                         </Col>
@@ -682,6 +716,10 @@ export default function ScheduleManage() {
                           />
                         </Form.Item>
                       </Card>
+
+                      <Button loading={previewing} onClick={handlePreviewHotspots}>
+                        预览热点命中
+                      </Button>
                     </Space>
                   )
                 }}

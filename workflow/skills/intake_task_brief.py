@@ -18,6 +18,10 @@ async def intake_task_brief_node(state: WorkflowState) -> dict[str, Any]:
         "runtime_profile": str(config.get("runtime_profile") or "quality_first"),
         "image_policy": dict(config.get("image_policy") or {}),
         "hotspot_policy": dict(state.get("hotspot_capture_config") or {}),
+        "selected_hotspot": state.get("selected_hotspot"),
+        "hotspot_candidates_count": len(list(state.get("hotspot_candidates") or [])),
+        "hotspot_capture_error": state.get("hotspot_capture_error"),
+        "fallback_used": bool(state.get("hotspot_capture_error")),
     }
     return {
         "status": "running",

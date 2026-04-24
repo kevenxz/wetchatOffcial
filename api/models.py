@@ -137,6 +137,7 @@ class ModelConfig(BaseModel):
 class CreateTaskRequest(BaseModel):
     keywords: str = Field(..., min_length=1, max_length=200, description="Search keywords")
     generation_config: GenerationConfig = Field(default_factory=lambda: GenerationConfig())
+    hotspot_capture_config: Optional[dict] = Field(default=None, description="Optional per-task hotspot capture config")
 
     @field_validator("keywords")
     @classmethod
@@ -323,6 +324,8 @@ class TaskResponse(BaseModel):
     hotspot_capture_config: Optional[dict] = Field(default=None, description="Resolved hotspot capture config")
     hotspot_candidates: list[dict] = Field(default_factory=list, description="Scored hotspot candidates")
     selected_hotspot: Optional[dict] = Field(default=None, description="Selected hotspot item")
+    hotspot_capture_error: Optional[str] = Field(default=None, description="Hotspot capture fallback or error reason")
+    human_review_required: bool = Field(default=False, description="Whether manual review is required before publish")
     article_theme: Optional[str] = Field(default=None, description="Theme name for this article push")
     push_records: list[PushRecord] = Field(default_factory=list, description="All push records")
 
@@ -468,6 +471,28 @@ class HotspotCaptureConfig(BaseModel):
     @classmethod
     def normalize_string_lists(cls, value: list[str]) -> list[str]:
         return _normalize_unique_strings(value)
+
+
+class HotspotPreviewRequest(BaseModel):
+    keywords: str = Field(default="热点预览", min_length=1, max_length=200)
+    hotspot_capture: HotspotCaptureConfig = Field(default_factory=HotspotCaptureConfig)
+
+    @field_validator("keywords")
+    @classmethod
+    def keywords_not_blank(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("keywords cannot be blank")
+        return cleaned
+
+
+class HotspotPreviewResponse(BaseModel):
+    keywords: str
+    original_keywords: str
+    hotspot_capture_config: dict
+    hotspot_candidates: list[dict] = Field(default_factory=list)
+    selected_hotspot: Optional[dict] = None
+    hotspot_capture_error: Optional[str] = None
 
 
 class ScheduleConfig(BaseModel):

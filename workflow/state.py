@@ -20,6 +20,8 @@ class WorkflowState(TypedDict, total=False):
     writing_state: dict
     visual_state: dict
     quality_state: dict
+    quality_report: dict
+    human_review_required: bool
 
     user_intent: dict
     style_profile: dict

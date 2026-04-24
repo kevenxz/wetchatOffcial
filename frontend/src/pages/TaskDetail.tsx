@@ -12,17 +12,20 @@ import { HeroPanel, SectionBlock, StatusRail, type StatusRailStep } from '@/comp
 import styles from './TaskDetail.module.css'
 
 const SKILL_STEPS: StatusRailStep[] = [
-  { key: 'initialize', title: '任务初始化', description: '验证参数并准备执行环境。' },
-  { key: 'capture_hot_topics', title: '热点捕获', description: '抓取并筛选高分热点候选。' },
-  { key: 'interpret_user_intent', title: '解析意图', description: '识别主题、读者和文章目标。' },
-  { key: 'infer_style_profile', title: '推断风格', description: '自动生成公众号风格画像。' },
-  { key: 'build_article_blueprint', title: '生成蓝图', description: '先产出结构化文章蓝图。' },
-  { key: 'plan_search_queries', title: '规划搜索', description: '根据蓝图规划搜索词和信息需求。' },
-  { key: 'search_web', title: '搜索网页', description: '优先搜索官网和高可信来源。' },
-  { key: 'rank_sources', title: '排序来源', description: '按可信度和相关度筛选结果。' },
-  { key: 'fetch_and_extract', title: '提取内容', description: '抓取网页并清洗正文。' },
-  { key: 'generate_article', title: '生成文章', description: '调用模型按蓝图输出公众号文章。' },
-  { key: 'generate_images', title: '处理图片', description: '生成或提取封面与插图。' },
+  { key: 'capture_hot_topics', title: '热点捕获', description: '抓取、打分并选择热点；关闭时透传主题。' },
+  { key: 'intake_task_brief', title: '任务简报', description: '归一化主题、受众、热点和生成配置。' },
+  { key: 'planner_agent', title: '流程规划', description: '确定文章类型、研究计划、图片策略和质量阈值。' },
+  { key: 'analyze_hotspot_opportunities', title: '选题评估', description: '把热点候选转为可写选题。' },
+  { key: 'plan_research', title: '研究规划', description: '拆解检索角度和证据覆盖目标。' },
+  { key: 'run_research', title: '资料研究', description: '搜索、抓取并整理可信来源。' },
+  { key: 'build_evidence_pack', title: '证据包', description: '提炼事实、数据、案例和风险边界。' },
+  { key: 'plan_article_angle', title: '文章角度', description: '生成论点、结构和段落目标。' },
+  { key: 'compose_draft', title: '写作成稿', description: '输出标题、摘要和公众号正文。' },
+  { key: 'review_article_draft', title: '文章审核', description: '检查结构、事实支撑和表达风险。' },
+  { key: 'plan_visual_assets', title: '图片规划', description: '决定封面和文内配图需求。' },
+  { key: 'generate_visual_assets', title: '图片生成', description: '生成图片资产并合入文章。' },
+  { key: 'review_visual_assets', title: '图片审核', description: '检查图片完整性和内容适配度。' },
+  { key: 'quality_gate', title: '质量门禁', description: '决定发布、修订或人工处理。' },
   { key: 'push_to_draft', title: '推送草稿', description: '推送至微信公众号草稿箱。' },
 ]
 
@@ -123,6 +126,20 @@ export default function TaskDetail() {
           if (data.result && typeof data.result === 'object') {
             const result = data.result as Record<string, any>
             if (result.generation_config) nextTask.generation_config = result.generation_config
+            if (result.keywords) nextTask.keywords = result.keywords
+            if (result.original_keywords) nextTask.original_keywords = result.original_keywords
+            if (result.hotspot_capture_config) nextTask.hotspot_capture_config = result.hotspot_capture_config
+            if (Array.isArray(result.hotspot_candidates)) nextTask.hotspot_candidates = result.hotspot_candidates
+            if ('selected_hotspot' in result) nextTask.selected_hotspot = result.selected_hotspot
+            if ('hotspot_capture_error' in result) nextTask.hotspot_capture_error = result.hotspot_capture_error
+            if (result.task_brief) nextTask.task_brief = result.task_brief
+            if (result.planning_state) nextTask.planning_state = result.planning_state
+            if (result.research_state) nextTask.research_state = result.research_state
+            if (result.writing_state) nextTask.writing_state = result.writing_state
+            if (result.visual_state) nextTask.visual_state = result.visual_state
+            if (result.quality_state) nextTask.quality_state = result.quality_state
+            if (result.quality_report) nextTask.quality_report = result.quality_report
+            if ('human_review_required' in result) nextTask.human_review_required = Boolean(result.human_review_required)
             if (result.user_intent) nextTask.user_intent = result.user_intent
             if (result.style_profile) nextTask.style_profile = result.style_profile
             if (result.article_blueprint) nextTask.article_blueprint = result.article_blueprint
@@ -153,8 +170,10 @@ export default function TaskDetail() {
 
   const isLoading = !task
   const generatedArticle = task?.generated_article as
-    | { title?: string; alt_titles?: string[]; content?: string }
+    | { title?: string; alt_titles?: string[]; content?: string; summary?: string; cover_image?: string }
     | undefined
+  const qualityReport = task?.quality_report || task?.quality_state?.quality_report
+  const hotspotCandidates = task?.hotspot_candidates || []
   const metaItems = task
     ? [
         { label: '任务 ID', value: task.task_id },
@@ -165,6 +184,10 @@ export default function TaskDetail() {
           value: task.selected_hotspot?.title
             ? `${task.selected_hotspot.title} / ${task.selected_hotspot.platform_name || '未知平台'}`
             : '未命中 / 未启用',
+        },
+        {
+          label: '复核状态',
+          value: task.human_review_required ? '需要人工复核' : '未要求人工复核',
         },
         { label: '创建时间', value: formatDate(task.created_at) },
         {
@@ -224,15 +247,15 @@ export default function TaskDetail() {
                 {wsStatus === 'done' ? (
                   <div className={styles.successStack}>
                     <Result
-                      status="success"
-                      title="文章生成完毕并已推送到草稿箱"
+                      status={task?.human_review_required ? 'warning' : 'success'}
+                      title={task?.human_review_required ? '文章已生成，但需要人工复核' : '文章生成完毕'}
                       subTitle={
                         task?.draft_info?.url ? (
                           <a href={String(task.draft_info.url)} target="_blank" rel="noreferrer">
                             查看微信草稿预览链接
                           </a>
                         ) : (
-                          '草稿链接可在任务完成后查看。'
+                          '如为定时任务，草稿推送结果会记录在文章管理页和推送记录中。'
                         )
                       }
                     />
@@ -297,20 +320,38 @@ export default function TaskDetail() {
             <SectionBlock title="结构信号">
               <div className={styles.signalStack}>
                 <div className={styles.signalCard}>
+                  <span>热点候选</span>
+                  <pre>
+                    {hotspotCandidates.length
+                      ? renderValue(
+                          hotspotCandidates.slice(0, 5).map((item) => ({
+                            title: item.title,
+                            platform: item.platform_name,
+                            score: item.selection_score,
+                          })),
+                        )
+                      : task?.hotspot_capture_error || '未启用热点捕获或暂无候选。'}
+                  </pre>
+                </div>
+                <div className={styles.signalCard}>
+                  <span>质量报告</span>
+                  <pre>{renderValue(qualityReport)}</pre>
+                </div>
+                <div className={styles.signalCard}>
                   <span>读者角色</span>
                   <strong>{renderValue(task?.generation_config?.audience_roles)}</strong>
                 </div>
                 <div className={styles.signalCard}>
-                  <span>意图摘要</span>
-                  <pre>{renderValue(task?.user_intent)}</pre>
+                  <span>任务简报</span>
+                  <pre>{renderValue(task?.task_brief)}</pre>
                 </div>
                 <div className={styles.signalCard}>
-                  <span>风格画像</span>
-                  <pre>{renderValue(task?.style_profile)}</pre>
+                  <span>研究状态</span>
+                  <pre>{renderValue(task?.research_state)}</pre>
                 </div>
                 <div className={styles.signalCard}>
-                  <span>文章蓝图</span>
-                  <pre>{renderValue(task?.article_blueprint)}</pre>
+                  <span>写作审核</span>
+                  <pre>{renderValue(task?.writing_state?.article_review || task?.writing_state)}</pre>
                 </div>
               </div>
             </SectionBlock>
