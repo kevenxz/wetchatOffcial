@@ -10,9 +10,11 @@ class WorkflowState(TypedDict, total=False):
     """Global workflow state."""
 
     task_id: str
+    mode: str
     keywords: str
     original_keywords: str
     generation_config: dict
+    config_snapshot: dict
     hotspot_capture_config: dict
     task_brief: dict
     planning_state: dict
@@ -31,10 +33,12 @@ class WorkflowState(TypedDict, total=False):
     extracted_contents: list[dict]
     hotspot_candidates: list[dict]
     selected_hotspot: Optional[dict]
+    selected_topic: Optional[dict]
     hotspot_capture_error: Optional[str]
 
     article_plan: dict
     generated_article: dict
+    final_article: dict
     draft_info: Optional[dict]
 
     retry_count: int
@@ -43,3 +47,4 @@ class WorkflowState(TypedDict, total=False):
     current_skill: str
     progress: int
     skip_auto_push: bool
+    revision_count: int

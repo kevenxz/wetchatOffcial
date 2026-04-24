@@ -2,16 +2,92 @@ import axios from 'axios'
 
 export type ArticleStrategy = 'auto' | 'tech_breakdown' | 'application_review' | 'trend_outlook'
 
+export interface AccountProfileConfig {
+  positioning: string
+  target_readers: string[]
+  fit_tags: string[]
+  avoid_topics: string[]
+}
+
+export interface ContentTemplateConfig {
+  template_id: string
+  name: string
+  preferred_framework: string
+  article_length: 'short' | 'medium' | 'long'
+  tone: string
+}
+
+export interface ReviewPolicyConfig {
+  strictness: 'lenient' | 'standard' | 'strict'
+  auto_rewrite: boolean
+  require_human_review: boolean
+  block_high_risk: boolean
+  max_revision_rounds: number
+}
+
+export interface WorkflowImagePolicyConfig {
+  enabled: boolean
+  cover_enabled: boolean
+  inline_enabled: boolean
+  inline_count: number
+  style: string
+  brand_colors: string[]
+  title_safe_area: boolean
+}
+
+export interface PublishPolicyConfig {
+  auto_publish_to_draft: boolean
+  require_manual_confirmation: boolean
+}
+
 export interface GenerationConfig {
   audience_roles: string[]
   article_strategy: ArticleStrategy
   style_hint: string
+  account_profile?: AccountProfileConfig
+  content_template?: ContentTemplateConfig
+  review_policy?: ReviewPolicyConfig
+  image_policy?: WorkflowImagePolicyConfig
+  publish_policy?: PublishPolicyConfig
 }
 
 export const DEFAULT_GENERATION_CONFIG: GenerationConfig = {
   audience_roles: ['泛科技读者'],
   article_strategy: 'auto',
   style_hint: '',
+  account_profile: {
+    positioning: '',
+    target_readers: [],
+    fit_tags: [],
+    avoid_topics: [],
+  },
+  content_template: {
+    template_id: 'auto',
+    name: '自动选择',
+    preferred_framework: '',
+    article_length: 'medium',
+    tone: '',
+  },
+  review_policy: {
+    strictness: 'standard',
+    auto_rewrite: true,
+    require_human_review: false,
+    block_high_risk: true,
+    max_revision_rounds: 1,
+  },
+  image_policy: {
+    enabled: true,
+    cover_enabled: true,
+    inline_enabled: true,
+    inline_count: 1,
+    style: '',
+    brand_colors: [],
+    title_safe_area: true,
+  },
+  publish_policy: {
+    auto_publish_to_draft: true,
+    require_manual_confirmation: false,
+  },
 }
 
 export const GENERATION_ROLE_PRESETS = [
@@ -52,6 +128,7 @@ export interface PushRecord {
 
 export interface TaskResponse {
   task_id: string
+  mode?: string | null
   keywords: string
   original_keywords?: string | null
   generation_config: GenerationConfig
@@ -60,8 +137,10 @@ export interface TaskResponse {
   updated_at: string | null
   error: string | null
   hotspot_capture_config?: HotspotCaptureConfig | null
+  config_snapshot?: Record<string, any> | null
   hotspot_candidates?: TopHubHotItem[]
   selected_hotspot?: TopHubHotItem | null
+  selected_topic?: Record<string, any> | null
   hotspot_capture_error?: string | null
   human_review_required?: boolean
   task_brief?: Record<string, any> | null
@@ -76,6 +155,7 @@ export interface TaskResponse {
   article_blueprint?: Record<string, any> | null
   article_plan?: Record<string, any> | null
   generated_article?: Record<string, any> | null
+  final_article?: Record<string, any> | null
   draft_info?: Record<string, any> | null
   article_theme?: string | null
   push_records?: PushRecord[]

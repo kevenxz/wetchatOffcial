@@ -13,7 +13,6 @@ from api.models import CreateTaskRequest, TaskResponse, TaskStatus
 from api.store import save_tasks, task_store
 from api.workflow_sync import sync_task_from_workflow_event
 from api.ws_manager import manager
-from workflow.article_generation import normalize_generation_config
 from workflow.graph import run_workflow
 
 logger = structlog.get_logger(__name__)
@@ -69,7 +68,7 @@ async def create_task(body: CreateTaskRequest) -> TaskResponse:
         _run_task(
             task.task_id,
             task.keywords,
-            normalize_generation_config(task.generation_config.model_dump()),
+            task.generation_config.model_dump(),
             task.hotspot_capture_config,
         )
     )
@@ -112,9 +111,11 @@ async def retry_task(
 
     memory_state = {
         "task_id": task.task_id,
+        "mode": task.mode or "manual",
         "keywords": task.keywords,
         "original_keywords": task.original_keywords or task.keywords,
-        "generation_config": normalize_generation_config(task.generation_config.model_dump()),
+        "generation_config": task.generation_config.model_dump(),
+        "config_snapshot": task.config_snapshot or {},
         "hotspot_capture_config": task.hotspot_capture_config or {},
         "task_brief": task.task_brief or {},
         "planning_state": task.planning_state or {},
@@ -124,6 +125,7 @@ async def retry_task(
         "quality_state": task.quality_state or {},
         "hotspot_candidates": task.hotspot_candidates or [],
         "selected_hotspot": task.selected_hotspot,
+        "selected_topic": task.selected_topic,
         "hotspot_capture_error": task.hotspot_capture_error,
         "user_intent": task.user_intent or {},
         "style_profile": task.style_profile or {},
@@ -133,6 +135,7 @@ async def retry_task(
         "extracted_contents": [],
         "article_plan": task.article_plan or {},
         "generated_article": task.generated_article or {},
+        "final_article": task.final_article or {},
         "draft_info": task.draft_info,
         "retry_count": 0,
         "error": None,
@@ -147,7 +150,7 @@ async def retry_task(
             task.task_id,
             task.keywords,
             memory_state,
-            normalize_generation_config(task.generation_config.model_dump()),
+            task.generation_config.model_dump(),
         )
     )
 

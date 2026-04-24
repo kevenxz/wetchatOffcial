@@ -47,6 +47,54 @@ class TaskStatus(str, Enum):
     failed = "failed"
 
 
+class AccountProfileConfig(BaseModel):
+    positioning: str = Field(default="", max_length=300)
+    target_readers: list[str] = Field(default_factory=list)
+    fit_tags: list[str] = Field(default_factory=list)
+    avoid_topics: list[str] = Field(default_factory=list)
+
+    @field_validator("target_readers", "fit_tags", "avoid_topics")
+    @classmethod
+    def normalize_lists(cls, value: list[str]) -> list[str]:
+        return _normalize_unique_strings(value)
+
+
+class ContentTemplateConfig(BaseModel):
+    template_id: str = Field(default="auto", max_length=100)
+    name: str = Field(default="自动选择", max_length=100)
+    preferred_framework: str = Field(default="", max_length=200)
+    article_length: Literal["short", "medium", "long"] = "medium"
+    tone: str = Field(default="", max_length=200)
+
+
+class ReviewPolicyConfig(BaseModel):
+    strictness: Literal["lenient", "standard", "strict"] = "standard"
+    auto_rewrite: bool = True
+    require_human_review: bool = False
+    block_high_risk: bool = True
+    max_revision_rounds: int = Field(default=1, ge=0, le=3)
+
+
+class WorkflowImagePolicyConfig(BaseModel):
+    enabled: bool = True
+    cover_enabled: bool = True
+    inline_enabled: bool = True
+    inline_count: int = Field(default=1, ge=0, le=4)
+    style: str = Field(default="", max_length=200)
+    brand_colors: list[str] = Field(default_factory=list)
+    title_safe_area: bool = True
+
+    @field_validator("brand_colors")
+    @classmethod
+    def normalize_brand_colors(cls, value: list[str]) -> list[str]:
+        return _normalize_unique_strings(value)
+
+
+class PublishPolicyConfig(BaseModel):
+    auto_publish_to_draft: bool = True
+    require_manual_confirmation: bool = False
+
+
 class GenerationConfig(BaseModel):
     audience_roles: list[str] = Field(
         default_factory=lambda: list(DEFAULT_AUDIENCE_ROLES),
@@ -57,6 +105,11 @@ class GenerationConfig(BaseModel):
         description="Article writing strategy",
     )
     style_hint: str = Field(default="", max_length=500, description="Optional user-provided style hint")
+    account_profile: AccountProfileConfig = Field(default_factory=AccountProfileConfig)
+    content_template: ContentTemplateConfig = Field(default_factory=ContentTemplateConfig)
+    review_policy: ReviewPolicyConfig = Field(default_factory=ReviewPolicyConfig)
+    image_policy: WorkflowImagePolicyConfig = Field(default_factory=WorkflowImagePolicyConfig)
+    publish_policy: PublishPolicyConfig = Field(default_factory=PublishPolicyConfig)
 
     @field_validator("audience_roles")
     @classmethod
@@ -301,6 +354,7 @@ class UpdateUserRequest(BaseModel):
 
 class TaskResponse(BaseModel):
     task_id: str = Field(..., description="Task id")
+    mode: Optional[str] = Field(default=None, description="Workflow mode")
     keywords: str = Field(..., description="Search keywords")
     original_keywords: Optional[str] = Field(default=None, description="Original keywords before hotspot capture")
     generation_config: GenerationConfig = Field(default_factory=lambda: GenerationConfig(), description="Generation config")
@@ -309,6 +363,7 @@ class TaskResponse(BaseModel):
     updated_at: Optional[datetime] = Field(default=None, description="Updated at")
     error: Optional[str] = Field(default=None, description="Error message")
     task_brief: Optional[dict] = Field(default=None, description="Normalized task brief")
+    config_snapshot: Optional[dict] = Field(default=None, description="Workflow config snapshot")
     planning_state: Optional[dict] = Field(default=None, description="Planner output and thresholds")
     research_state: Optional[dict] = Field(default=None, description="Research artifacts and evidence pack")
     writing_state: Optional[dict] = Field(default=None, description="Draft and review state")
@@ -324,9 +379,11 @@ class TaskResponse(BaseModel):
     hotspot_capture_config: Optional[dict] = Field(default=None, description="Resolved hotspot capture config")
     hotspot_candidates: list[dict] = Field(default_factory=list, description="Scored hotspot candidates")
     selected_hotspot: Optional[dict] = Field(default=None, description="Selected hotspot item")
+    selected_topic: Optional[dict] = Field(default=None, description="Selected article topic")
     hotspot_capture_error: Optional[str] = Field(default=None, description="Hotspot capture fallback or error reason")
     human_review_required: bool = Field(default=False, description="Whether manual review is required before publish")
     article_theme: Optional[str] = Field(default=None, description="Theme name for this article push")
+    final_article: Optional[dict] = Field(default=None, description="Final assembled article package")
     push_records: list[PushRecord] = Field(default_factory=list, description="All push records")
 
 

@@ -11,10 +11,19 @@ async def plan_research_node(state: WorkflowState) -> dict[str, Any]:
     """Generate research queries for each configured evidence angle."""
     planning_state = dict(state.get("planning_state") or {})
     search_plan = dict(planning_state.get("search_plan") or {})
+    selected_topic = dict(state.get("selected_topic") or {})
+    topic = str(selected_topic.get("title") or state.get("task_brief", {}).get("topic", ""))
     queries = build_research_queries(
-        str(state.get("task_brief", {}).get("topic", "")),
+        topic,
         list(search_plan.get("angles") or []),
     )
+    if selected_topic.get("category"):
+        queries.append(
+            {
+                "query": f"{topic} {selected_topic['category']} 背景 影响",
+                "angle": "hotspot_context",
+            }
+        )
     search_plan["queries"] = queries
     planning_state["search_plan"] = search_plan
     return {

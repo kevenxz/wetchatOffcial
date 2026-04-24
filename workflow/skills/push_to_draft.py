@@ -54,7 +54,7 @@ def _merge_visual_assets(article: dict, visual_state: dict) -> dict:
 async def push_to_draft_node(state: WorkflowState) -> dict:
     task_id = state["task_id"]
     article = _merge_visual_assets(
-        dict(state.get("generated_article") or {}),
+        dict(state.get("final_article") or state.get("generated_article") or {}),
         dict(state.get("visual_state") or {}),
     )
     start_time = time.monotonic()

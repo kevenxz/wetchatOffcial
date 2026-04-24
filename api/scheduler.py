@@ -30,7 +30,6 @@ from api.store import (
 )
 from api.workflow_sync import sync_task_from_workflow_event
 from api.ws_manager import manager
-from workflow.article_generation import normalize_generation_config
 from workflow.graph import run_workflow
 from workflow.utils.wechat_draft_service import push_article_to_wechat_draft
 
@@ -208,7 +207,7 @@ class SchedulerEngine:
             await run_workflow(
                 task_id=task.task_id,
                 keywords=task.keywords,
-                generation_config=normalize_generation_config(task.generation_config.model_dump()),
+                generation_config=task.generation_config.model_dump(),
                 hotspot_capture_config=hotspot_capture_config,
                 progress_callback=self._progress_callback,
                 skip_auto_push=True,

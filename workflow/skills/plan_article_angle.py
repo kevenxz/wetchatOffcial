@@ -181,7 +181,8 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
     """Create a dynamic section plan for the current article."""
     planning_state = dict(state.get("planning_state") or {})
     article_type = dict(planning_state.get("article_type") or {})
-    topic = str(state.get("task_brief", {}).get("topic", "")).strip()
+    selected_topic = dict(state.get("selected_topic") or {})
+    topic = str(selected_topic.get("title") or state.get("task_brief", {}).get("topic", "")).strip()
     research_state = dict(state.get("research_state") or {})
     evidence_pack = dict(research_state.get("evidence_pack") or {})
 
@@ -213,7 +214,12 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
         chain = prompt | llm.with_structured_output(BlueprintOutput)
         payload = {
             "topic": topic,
-            "article_type": article_type,
+            "article_type": {
+                **article_type,
+                "selected_topic": selected_topic,
+                "account_profile": planning_state.get("account_profile") or {},
+                "content_template": planning_state.get("content_template") or {},
+            },
             "evidence_pack": _build_evidence_summary(evidence_pack),
         }
         model_context = build_model_context(

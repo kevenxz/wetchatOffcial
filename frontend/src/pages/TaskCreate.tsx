@@ -34,6 +34,16 @@ interface TaskCreateFormValues {
   hotspot_min_selection_score?: number
   hotspot_prefer_keywords?: string[]
   hotspot_exclude_keywords?: string[]
+  account_positioning?: string
+  account_fit_tags?: string[]
+  template_id?: string
+  article_length?: 'short' | 'medium' | 'long'
+  review_strictness?: 'lenient' | 'standard' | 'strict'
+  require_human_review?: boolean
+  image_enabled?: boolean
+  image_style?: string
+  inline_count?: number
+  auto_publish_to_draft?: boolean
 }
 
 const buildHotspotConfig = (values: TaskCreateFormValues): HotspotCaptureConfig | null => {
@@ -100,6 +110,39 @@ export default function TaskCreate() {
             : DEFAULT_GENERATION_CONFIG.audience_roles,
           article_strategy: values.article_strategy || DEFAULT_GENERATION_CONFIG.article_strategy,
           style_hint: values.style_hint?.trim() || DEFAULT_GENERATION_CONFIG.style_hint,
+          account_profile: {
+            positioning: values.account_positioning?.trim() || '',
+            target_readers: values.audience_roles || [],
+            fit_tags: values.account_fit_tags || [],
+            avoid_topics: [],
+          },
+          content_template: {
+            template_id: values.template_id || 'auto',
+            name: values.template_id === 'hotspot_analysis_v1' ? '热点解读模板' : '自动选择',
+            preferred_framework: values.template_id || '',
+            article_length: values.article_length || 'medium',
+            tone: values.style_hint?.trim() || '',
+          },
+          review_policy: {
+            strictness: values.review_strictness || 'standard',
+            auto_rewrite: true,
+            require_human_review: Boolean(values.require_human_review),
+            block_high_risk: true,
+            max_revision_rounds: 1,
+          },
+          image_policy: {
+            enabled: values.image_enabled !== false,
+            cover_enabled: values.image_enabled !== false,
+            inline_enabled: values.image_enabled !== false,
+            inline_count: Number(values.inline_count ?? 1),
+            style: values.image_style?.trim() || '',
+            brand_colors: [],
+            title_safe_area: true,
+          },
+          publish_policy: {
+            auto_publish_to_draft: values.auto_publish_to_draft !== false,
+            require_manual_confirmation: Boolean(values.require_human_review),
+          },
         },
         hotspot_capture_config: buildHotspotConfig(values),
       })
@@ -168,6 +211,16 @@ export default function TaskCreate() {
             hotspot_platforms: [],
             hotspot_prefer_keywords: [],
             hotspot_exclude_keywords: [],
+            account_positioning: '',
+            account_fit_tags: [],
+            template_id: 'auto',
+            article_length: 'medium',
+            review_strictness: 'standard',
+            require_human_review: false,
+            image_enabled: true,
+            image_style: '',
+            inline_count: 1,
+            auto_publish_to_draft: true,
           }}
         >
           <div style={formGroupsStyle}>
@@ -272,6 +325,68 @@ export default function TaskCreate() {
                   />
                 </Form.Item>
               </div>
+            </section>
+
+            <section style={formGroupStyle}>
+              <h3 style={groupTitleStyle}>流程策略</h3>
+              <Card size="small">
+                <div style={twoColumnStyle}>
+                  <Form.Item name="account_positioning" label="账号定位">
+                    <Input placeholder="例如：面向科技商业读者，偏深度解读" />
+                  </Form.Item>
+                  <Form.Item name="account_fit_tags" label="账号匹配标签">
+                    <Select mode="tags" tokenSeparators={[',', '，', ';', '；']} />
+                  </Form.Item>
+                </div>
+                <div style={twoColumnStyle}>
+                  <Form.Item name="template_id" label="内容模板">
+                    <Select
+                      options={[
+                        { label: '自动选择', value: 'auto' },
+                        { label: '热点解读模板', value: 'hotspot_analysis_v1' },
+                        { label: '趋势分析模板', value: 'trend_analysis_v1' },
+                      ]}
+                    />
+                  </Form.Item>
+                  <Form.Item name="article_length" label="文章长度">
+                    <Select
+                      options={[
+                        { label: '短篇', value: 'short' },
+                        { label: '中篇', value: 'medium' },
+                        { label: '长篇', value: 'long' },
+                      ]}
+                    />
+                  </Form.Item>
+                </div>
+                <div style={twoColumnStyle}>
+                  <Form.Item name="review_strictness" label="审核严格度">
+                    <Select
+                      options={[
+                        { label: '宽松', value: 'lenient' },
+                        { label: '标准', value: 'standard' },
+                        { label: '严格', value: 'strict' },
+                      ]}
+                    />
+                  </Form.Item>
+                  <Form.Item name="require_human_review" label="必须人工复核" valuePropName="checked">
+                    <Switch checkedChildren="需要" unCheckedChildren="不需要" />
+                  </Form.Item>
+                </div>
+                <div style={twoColumnStyle}>
+                  <Form.Item name="image_enabled" label="自动出图" valuePropName="checked">
+                    <Switch checkedChildren="启用" unCheckedChildren="关闭" />
+                  </Form.Item>
+                  <Form.Item name="inline_count" label="文内配图数量">
+                    <InputNumber min={0} max={4} style={{ width: '100%' }} />
+                  </Form.Item>
+                </div>
+                <Form.Item name="image_style" label="图片风格">
+                  <Input placeholder="例如：科技感、克制、留出标题安全区" />
+                </Form.Item>
+                <Form.Item name="auto_publish_to_draft" label="自动入公众号草稿箱" valuePropName="checked">
+                  <Switch checkedChildren="自动" unCheckedChildren="手动" />
+                </Form.Item>
+              </Card>
             </section>
 
             <section style={formGroupStyle}>

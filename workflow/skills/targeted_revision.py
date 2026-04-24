@@ -13,6 +13,7 @@ async def targeted_revision_node(state: WorkflowState) -> dict[str, Any]:
     writing_state = dict(state.get("writing_state") or {})
     visual_state = dict(state.get("visual_state") or {})
     evidence_gaps = list(quality_state.get("evidence_gaps") or [])
+    revision_count = int(state.get("revision_count") or 0) + 1
 
     if action == "revise_writing":
         guidance = list(writing_state.get("revision_guidance") or [])
@@ -44,4 +45,5 @@ async def targeted_revision_node(state: WorkflowState) -> dict[str, Any]:
             **quality_state,
             "revision_route": action,
         },
+        "revision_count": revision_count,
     }

@@ -77,7 +77,9 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
     evidence_pack = dict(research_state.get("evidence_pack") or {})
     revision_brief = dict((state.get("writing_state") or {}).get("revision_brief") or {})
     task_brief = dict(state.get("task_brief") or {})
-    topic = str(task_brief.get("topic") or state.get("keywords") or "").strip()
+    selected_topic = dict(state.get("selected_topic") or {})
+    config_snapshot = dict(state.get("config_snapshot") or {})
+    topic = str(selected_topic.get("title") or task_brief.get("topic") or state.get("keywords") or "").strip()
 
     if not blueprint.get("sections"):
         fallback = _build_fallback_draft(topic, blueprint)
@@ -127,6 +129,8 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
         "article_type:\n{article_type}\n\n"
         "blueprint:\n{blueprint}\n\n"
         "evidence_pack:\n{evidence_pack}\n\n"
+        "account_profile:\n{account_profile}\n\n"
+        "content_template:\n{content_template}\n\n"
         "revision_brief:\n{revision_brief}\n"
     )
 
@@ -146,6 +150,8 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
         "blueprint": blueprint,
         "evidence_pack": _build_evidence_summary(evidence_pack),
         "revision_brief": revision_brief,
+        "account_profile": dict(config_snapshot.get("account_profile") or {}),
+        "content_template": dict(config_snapshot.get("content_template") or {}),
     }
     model_context = build_model_context(
         model=text_model_config.model,

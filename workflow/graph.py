@@ -10,7 +10,9 @@ import structlog
 from langgraph.graph import END, StateGraph
 
 from workflow.article_generation import normalize_generation_config
+from workflow.config import build_config_snapshot
 from workflow.skills.analyze_hotspot_opportunities import analyze_hotspot_opportunities_node
+from workflow.skills.assemble_article import assemble_article_node
 from workflow.skills.build_evidence_pack import build_evidence_pack_node
 from workflow.skills.compose_draft import compose_draft_node
 from workflow.skills.intake_task_brief import intake_task_brief_node
@@ -43,11 +45,14 @@ def _build_result_payload(final_state: dict | None) -> dict:
     quality_report = state.get("quality_report") or quality_state.get("quality_report")
     return {
         "generation_config": state.get("generation_config"),
+        "mode": state.get("mode"),
+        "config_snapshot": state.get("config_snapshot"),
         "keywords": state.get("keywords"),
         "original_keywords": state.get("original_keywords"),
         "hotspot_capture_config": state.get("hotspot_capture_config"),
         "hotspot_candidates": state.get("hotspot_candidates"),
         "selected_hotspot": state.get("selected_hotspot"),
+        "selected_topic": state.get("selected_topic"),
         "hotspot_capture_error": state.get("hotspot_capture_error"),
         "task_brief": state.get("task_brief"),
         "planning_state": state.get("planning_state"),
@@ -62,6 +67,7 @@ def _build_result_payload(final_state: dict | None) -> dict:
         "article_blueprint": state.get("article_blueprint"),
         "article_plan": state.get("article_plan"),
         "generated_article": state.get("generated_article"),
+        "final_article": state.get("final_article"),
         "draft_info": state.get("draft_info"),
     }
 
@@ -102,6 +108,8 @@ def _route_quality_action(state: WorkflowState) -> str:
         return "revise_writing"
     if action == "revise_visuals":
         return "revise_visuals"
+    if action == "human_review":
+        return "human_review"
     if state.get("skip_auto_push"):
         return "skip_push"
     return "pass"
@@ -121,6 +129,17 @@ def _route_revision_target(state: WorkflowState) -> str:
     return "pass"
 
 
+def _route_after_assemble(state: WorkflowState) -> str:
+    if state.get("status") == "failed":
+        return "error"
+    publish_policy = dict(state.get("config_snapshot", {}).get("publish_policy") or {})
+    if state.get("skip_auto_push") or state.get("human_review_required"):
+        return "skip_push"
+    if not publish_policy.get("auto_publish_to_draft", True):
+        return "skip_push"
+    return "next"
+
+
 def build_graph() -> StateGraph:
     """Build and compile the workflow graph."""
     graph = StateGraph(WorkflowState)
@@ -128,6 +147,7 @@ def build_graph() -> StateGraph:
     graph.add_node("intake_task_brief", intake_task_brief_node)
     graph.add_node("planner_agent", planner_agent_node)
     graph.add_node("analyze_hotspot_opportunities", analyze_hotspot_opportunities_node)
+    graph.add_node("assemble_article", assemble_article_node)
     graph.add_node("plan_research", plan_research_node)
     graph.add_node("run_research", run_research_node)
     graph.add_node("build_evidence_pack", build_evidence_pack_node)
@@ -165,8 +185,9 @@ def build_graph() -> StateGraph:
         _route_quality_action,
         {
             "error": "error_handler",
-            "pass": "push_to_draft",
-            "skip_push": "ui_feedback",
+            "pass": "assemble_article",
+            "skip_push": "assemble_article",
+            "human_review": "assemble_article",
             "revise_writing": "targeted_revision",
             "revise_visuals": "targeted_revision",
         },
@@ -176,11 +197,16 @@ def build_graph() -> StateGraph:
         _route_revision_target,
         {
             "error": "error_handler",
-            "pass": "push_to_draft",
+            "pass": "assemble_article",
             "skip_push": "ui_feedback",
             "revise_writing": "compose_draft",
             "revise_visuals": "generate_visual_assets",
         },
+    )
+    graph.add_conditional_edges(
+        "assemble_article",
+        _route_after_assemble,
+        {"error": "error_handler", "next": "push_to_draft", "skip_push": "ui_feedback"},
     )
     graph.add_conditional_edges("push_to_draft", _route_status, {"error": "error_handler", "next": "ui_feedback"})
     graph.add_edge("ui_feedback", END)
@@ -209,9 +235,8 @@ async def run_workflow(
         initial_state["status"] = "running"
         initial_state["error"] = None
         initial_state["retry_count"] = 0
-        initial_state["generation_config"] = normalize_generation_config(
-            generation_config if generation_config is not None else initial_state.get("generation_config")
-        )
+        raw_generation_config = generation_config if generation_config is not None else initial_state.get("generation_config")
+        initial_state["generation_config"] = normalize_generation_config(raw_generation_config)
         if hotspot_capture_config is not None:
             initial_state["hotspot_capture_config"] = dict(hotspot_capture_config)
         initial_state.setdefault("task_brief", {})
@@ -227,12 +252,21 @@ async def run_workflow(
         initial_state.setdefault("search_results", [])
         initial_state.setdefault("extracted_contents", [])
         initial_state.setdefault("hotspot_capture_config", {})
+        initial_state["config_snapshot"] = build_config_snapshot(
+            generation_config=raw_generation_config,
+            hotspot_capture_config=initial_state.get("hotspot_capture_config"),
+            skip_auto_push=skip_auto_push,
+        )
+        initial_state["mode"] = initial_state["config_snapshot"]["mode"]
         initial_state.setdefault("hotspot_candidates", [])
         initial_state.setdefault("selected_hotspot", None)
+        initial_state.setdefault("selected_topic", None)
         initial_state.setdefault("hotspot_capture_error", None)
         initial_state.setdefault("original_keywords", initial_state.get("keywords", keywords))
         initial_state.setdefault("article_plan", {})
         initial_state.setdefault("generated_article", {})
+        initial_state.setdefault("final_article", {})
+        initial_state.setdefault("revision_count", 0)
         if "skip_auto_push" not in initial_state:
             initial_state["skip_auto_push"] = skip_auto_push
         logger.info(
@@ -244,11 +278,18 @@ async def run_workflow(
         )
     else:
         normalized_generation_config = normalize_generation_config(generation_config)
+        config_snapshot = build_config_snapshot(
+            generation_config=generation_config,
+            hotspot_capture_config=hotspot_capture_config or {},
+            skip_auto_push=skip_auto_push,
+        )
         initial_state = {
             "task_id": task_id,
+            "mode": config_snapshot["mode"],
             "keywords": keywords,
             "original_keywords": keywords,
             "generation_config": normalized_generation_config,
+            "config_snapshot": config_snapshot,
             "hotspot_capture_config": dict(hotspot_capture_config or {}),
             "task_brief": {},
             "planning_state": {},
@@ -264,11 +305,14 @@ async def run_workflow(
             "extracted_contents": [],
             "hotspot_candidates": [],
             "selected_hotspot": None,
+            "selected_topic": None,
             "hotspot_capture_error": None,
             "article_plan": {},
             "generated_article": {},
+            "final_article": {},
             "draft_info": None,
             "retry_count": 0,
+            "revision_count": 0,
             "error": None,
             "status": "pending",
             "current_skill": "",

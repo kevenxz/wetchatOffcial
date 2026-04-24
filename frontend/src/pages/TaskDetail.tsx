@@ -169,7 +169,7 @@ export default function TaskDetail() {
   if (!taskId) return null
 
   const isLoading = !task
-  const generatedArticle = task?.generated_article as
+  const finalArticle = (task?.final_article || task?.generated_article) as
     | { title?: string; alt_titles?: string[]; content?: string; summary?: string; cover_image?: string }
     | undefined
   const qualityReport = task?.quality_report || task?.quality_state?.quality_report
@@ -260,19 +260,19 @@ export default function TaskDetail() {
                       }
                     />
 
-                    {generatedArticle?.title || generatedArticle?.content ? (
+                    {finalArticle?.title || finalArticle?.content ? (
                       <article className={styles.articleCard}>
                         <header className={styles.articleHeader}>
                           <p className={styles.kicker}>Generated Article</p>
-                          <h3>{generatedArticle?.title || '未返回标题'}</h3>
-                          {generatedArticle?.alt_titles?.length ? (
+                          <h3>{finalArticle?.title || '未返回标题'}</h3>
+                          {finalArticle?.alt_titles?.length ? (
                             <p className={styles.altTitles}>
-                              备选标题：{generatedArticle.alt_titles.join(' / ')}
+                              备选标题：{finalArticle.alt_titles.join(' / ')}
                             </p>
                           ) : null}
                         </header>
                         <div className={styles.articleContent}>
-                          {generatedArticle?.content || '暂无正文内容。'}
+                          {finalArticle?.content || '暂无正文内容。'}
                         </div>
                       </article>
                     ) : (
@@ -344,6 +344,14 @@ export default function TaskDetail() {
                 <div className={styles.signalCard}>
                   <span>任务简报</span>
                   <pre>{renderValue(task?.task_brief)}</pre>
+                </div>
+                <div className={styles.signalCard}>
+                  <span>配置快照</span>
+                  <pre>{renderValue(task?.config_snapshot)}</pre>
+                </div>
+                <div className={styles.signalCard}>
+                  <span>选题决策</span>
+                  <pre>{renderValue(task?.selected_topic)}</pre>
                 </div>
                 <div className={styles.signalCard}>
                   <span>研究状态</span>
