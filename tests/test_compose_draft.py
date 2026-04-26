@@ -25,6 +25,122 @@ async def test_compose_draft_generates_article_from_blueprint_and_evidence() -> 
 
 
 @pytest.mark.asyncio
+async def test_compose_draft_fallback_writes_complete_wechat_article_from_outline() -> None:
+    state = {
+        "task_brief": {"topic": "AI 搜索产品"},
+        "planning_state": {
+            "article_type": {"type_id": "trend_analysis"},
+            "article_blueprint": {
+                "thesis": "AI 搜索产品进入体验竞争阶段",
+                "sections": [
+                    {"heading": "为什么 AI 搜索重新变热", "goal": "解释用户需求和产品变化"},
+                    {"heading": "哪些证据能说明变化", "goal": "结合数据和案例说明趋势"},
+                    {"heading": "风险和证据边界在哪里", "goal": "说明不确定性"},
+                ],
+            },
+            "outline_result": {
+                "title_candidates": ["AI 搜索产品，真正的竞争才刚开始"],
+                "reader_value": "帮助读者判断 AI 搜索产品的真实变化。",
+                "outline": [
+                    {
+                        "section": "为什么 AI 搜索重新变热",
+                        "goal": "解释用户需求和产品变化",
+                        "shape": "drivers",
+                        "key_points": ["用户开始把搜索当成任务入口。"],
+                    },
+                    {
+                        "section": "哪些证据能说明变化",
+                        "goal": "结合数据和案例说明趋势",
+                        "shape": "evidence",
+                        "key_points": ["多家公司开始把 AI 搜索放到核心入口。"],
+                    },
+                    {
+                        "section": "风险和证据边界在哪里",
+                        "goal": "说明不确定性",
+                        "shape": "risks",
+                        "key_points": ["留存和商业化仍需要验证。"],
+                    },
+                ],
+            },
+        },
+        "research_state": {
+            "evidence_pack": {
+                "confirmed_facts": [{"claim": "多家公司开始上线 AI 搜索入口。"}],
+                "usable_data_points": ["用户搜索行为开始向对话式入口迁移。"],
+            }
+        },
+    }
+
+    with patch("workflow.skills.compose_draft.get_model_config") as mock_get_model_config:
+        model_config = MagicMock()
+        model_config.text.api_key = ""
+        mock_get_model_config.return_value = model_config
+
+        result = await compose_draft_node(state)
+
+    content = result["generated_article"]["content"]
+    assert result["generated_article"]["title"] == "AI 搜索产品，真正的竞争才刚开始"
+    assert len(content) > 600
+    assert "## 为什么 AI 搜索重新变热" in content
+    assert "## 哪些证据能说明变化" in content
+    assert "## 风险和证据边界在哪里" in content
+    assert "微信公众号" in content
+
+
+@pytest.mark.asyncio
+async def test_compose_draft_replaces_thin_model_output_with_complete_fallback() -> None:
+    state = {
+        "task_id": "task-thin",
+        "task_brief": {"topic": "AI 搜索产品"},
+        "planning_state": {
+            "article_type": {"type_id": "trend_analysis"},
+            "article_blueprint": {
+                "thesis": "AI 搜索产品进入体验竞争阶段",
+                "sections": [
+                    {"heading": "为什么重新变热", "goal": "解释变化"},
+                    {"heading": "风险在哪里", "goal": "说明边界"},
+                ],
+            },
+            "outline_result": {
+                "outline": [
+                    {"section": "为什么重新变热", "goal": "解释变化", "key_points": ["入口变化"]},
+                    {"section": "风险在哪里", "goal": "说明边界", "key_points": ["商业化未验证"]},
+                ]
+            },
+        },
+        "research_state": {"evidence_pack": {"confirmed_facts": [{"claim": "AI 搜索入口增加。"}]}},
+        "writing_state": {},
+    }
+
+    with patch("workflow.skills.compose_draft.get_model_config") as mock_get_model_config:
+        with patch("workflow.skills.compose_draft.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.skills.compose_draft.ChatOpenAI") as mock_chat_openai:
+                model_config = MagicMock()
+                model_config.text.api_key = "text-key"
+                model_config.text.base_url = "https://text.example.com/v1"
+                model_config.text.model = "text-model"
+                mock_get_model_config.return_value = model_config
+
+                prompt = MagicMock()
+                chain = AsyncMock()
+                llm = MagicMock()
+                llm.with_structured_output.return_value = MagicMock(name="structured-llm")
+                mock_prompt_class.from_messages.return_value = prompt
+                prompt.__or__.return_value = chain
+                mock_chat_openai.return_value = llm
+                chain.ainvoke.return_value = {
+                    "title": "AI 搜索产品大纲",
+                    "content": "## 为什么重新变热\n解释变化\n\n## 风险在哪里\n说明边界",
+                    "summary": "大纲",
+                }
+
+                result = await compose_draft_node(state)
+
+    assert len(result["generated_article"]["content"]) > 600
+    assert result["generated_article"]["title"] == "AI 搜索产品进入体验竞争阶段"
+
+
+@pytest.mark.asyncio
 async def test_compose_draft_uses_model_to_generate_structured_draft() -> None:
     state = {
         "task_id": "task-1",
