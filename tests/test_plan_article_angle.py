@@ -405,3 +405,85 @@ async def test_plan_article_angle_passes_search_materials_to_model() -> None:
     assert "Enterprise buyers slow AI agent rollout" in payload["search_materials"]
     assert blueprint["source_driven_framework"]
     assert blueprint["evidence_map"]
+
+
+@pytest.mark.asyncio
+async def test_plan_article_angle_passes_extracted_source_context_to_model() -> None:
+    extracted_text = (
+        "The source explains that enterprise AI sales workflow adoption is blocked by CRM integration, "
+        "security review, unclear ownership between sales ops and IT, and longer proof-of-value cycles."
+    )
+    state = {
+        "task_id": "task-source-context",
+        "task_brief": {"topic": "AI sales workflow"},
+        "planning_state": {
+            "article_type": {
+                "type_id": "trend_analysis",
+                "recommended_section_shapes": ["hook", "drivers", "evidence", "case", "risks"],
+            }
+        },
+        "research_state": {
+            "extracted_contents": [
+                {
+                    "title": "AI sales workflow adoption slows down",
+                    "url": "https://example.com/source",
+                    "text": extracted_text,
+                    "source_meta": {
+                        "query": "AI sales workflow adoption",
+                        "query_intent": "drivers",
+                        "source_type": "news",
+                        "domain": "example.com",
+                    },
+                }
+            ],
+            "search_results": [
+                {
+                    "title": "Search result should also be visible",
+                    "url": "https://example.com/search",
+                    "snippet": "Search snippet for AI sales workflow.",
+                    "domain": "example.com",
+                }
+            ],
+            "evidence_pack": {
+                "confirmed_facts": [{"claim": "Enterprise adoption is slowed by integration work."}],
+                "risk_points": [{"claim": "Vendor claims may overstate deployment speed."}],
+            },
+        },
+    }
+
+    with patch("workflow.skills.plan_article_angle.get_model_config") as mock_get_model_config:
+        with patch("workflow.skills.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.skills.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+                model_config = MagicMock()
+                model_config.text.api_key = "text-key"
+                model_config.text.base_url = "https://text.example.com/v1"
+                model_config.text.model = "text-model"
+                mock_get_model_config.return_value = model_config
+
+                prompt = MagicMock()
+                chain = AsyncMock()
+                llm = MagicMock()
+                llm.with_structured_output.return_value = MagicMock(name="structured-llm")
+                mock_prompt_class.from_messages.return_value = prompt
+                prompt.__or__.return_value = chain
+                mock_chat_openai.return_value = llm
+                chain.ainvoke.return_value = {
+                    "thesis": "Extracted search content should shape the outline.",
+                    "reader_value": "Help readers see what the sources actually support.",
+                    "sections": [
+                        {"heading": "Integration is the first blocker", "goal": "Use extracted source content", "shape": "hook"},
+                        {"heading": "Security review changes the sales cycle", "goal": "Use source evidence", "shape": "drivers"},
+                        {"heading": "Proof-of-value cycles are getting longer", "goal": "Use source evidence", "shape": "evidence"},
+                        {"heading": "The risk is vendor overclaiming", "goal": "Explain boundary", "shape": "risks"},
+                    ],
+                    "must_cover_points": [],
+                    "drop_points": [],
+                }
+
+                await plan_article_angle_node(state)
+
+    payload = chain.ainvoke.await_args.args[0]
+    assert "source_context" in payload
+    assert extracted_text in payload["source_context"]
+    assert "https://example.com/source" in payload["source_context"]
+    assert "Enterprise adoption is slowed by integration work." in payload["source_context"]

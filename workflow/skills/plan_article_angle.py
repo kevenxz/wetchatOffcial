@@ -1,6 +1,7 @@
 """Build the dynamic article blueprint from task brief and article type."""
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import structlog
@@ -96,6 +97,14 @@ def _material_claim(material: dict[str, Any]) -> str:
     return ""
 
 
+def _material_excerpt(material: dict[str, Any]) -> str:
+    for key in ("text", "content", "summary", "claim", "snippet"):
+        value = _clean_text(material.get(key), limit=900)
+        if value:
+            return value
+    return ""
+
+
 def _material_title(material: dict[str, Any]) -> str:
     return _clean_text(material.get("title") or material.get("claim") or material.get("snippet"), limit=64)
 
@@ -118,12 +127,14 @@ def _dedupe_materials(items: list[dict[str, Any]]) -> list[dict[str, str]]:
                 "query": str(item.get("query") or "").strip(),
                 "title": title,
                 "claim": claim,
+                "excerpt": _material_excerpt(item),
                 "source_type": str(item.get("source_type") or "unknown").strip(),
                 "domain": str(item.get("domain") or "").strip(),
                 "url": str(item.get("url") or "").strip(),
+                "published_at": str(item.get("published_at") or item.get("date") or "").strip(),
             }
         )
-    return materials[:10]
+    return materials[:12]
 
 
 def _collect_search_materials(research_state: dict[str, Any], evidence_pack: dict[str, Any]) -> list[dict[str, str]]:
@@ -419,13 +430,57 @@ def _build_evidence_summary(evidence_pack: dict[str, Any]) -> str:
 
 def _build_search_materials_summary(search_materials: list[dict[str, str]]) -> str:
     lines: list[str] = []
-    for index, item in enumerate(search_materials[:8], start=1):
+    for index, item in enumerate(search_materials[:10], start=1):
         claim = item.get("claim") or item.get("title") or ""
         title = item.get("title") or ""
         source = item.get("domain") or item.get("source_type") or "unknown"
         angle = item.get("angle") or "fact"
-        lines.append(f"{index}. [{angle}] {title} ({source}) - {claim}")
+        excerpt = item.get("excerpt") or claim
+        url = item.get("url") or ""
+        lines.append(
+            f"{index}. [{angle}] {title} ({source})\n"
+            f"   url: {url}\n"
+            f"   source_signal: {claim}\n"
+            f"   extracted_content: {excerpt}"
+        )
     return "\n".join(lines)
+
+
+def _build_source_context(search_materials: list[dict[str, str]], evidence_pack: dict[str, Any]) -> str:
+    payload = {
+        "instruction": (
+            "Use these search and extraction results as the primary material for deciding the WeChat article title, "
+            "H2 subtitles, section order, and evidence mapping. Do not create a structure before reading these sources."
+        ),
+        "sources": [
+            {
+                "index": index,
+                "angle": item.get("angle", ""),
+                "query": item.get("query", ""),
+                "title": item.get("title", ""),
+                "domain": item.get("domain", ""),
+                "url": item.get("url", ""),
+                "published_at": item.get("published_at", ""),
+                "source_type": item.get("source_type", ""),
+                "claim": item.get("claim", ""),
+                "extracted_content": item.get("excerpt", ""),
+            }
+            for index, item in enumerate(search_materials[:12], start=1)
+        ],
+        "evidence_pack": {
+            key: evidence_pack.get(key)
+            for key in (
+                "confirmed_facts",
+                "usable_data_points",
+                "usable_cases",
+                "risk_points",
+                "research_gaps",
+                "quality_summary",
+            )
+            if evidence_pack.get(key)
+        },
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
@@ -445,17 +500,19 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
         system_prompt = (
             "You are a planning agent for Chinese long-form content. "
             "Generate a dynamic article blueprint based on the actual search materials, extracted source content, and evidence density. "
+            "Read source_context first; it contains the real search results, extracted page text, source URLs, and evidence pack. "
             "You must decide the article framework, final title candidates, and H2 subtitles yourself from the materials. "
             "The result should feel like a WeChat public account article structure planned by an experienced editor. "
             "Section headings should be content-specific, topic-specific, and publication-ready instead of generic placeholders. "
             "Keep 4 to 6 H2 sections. Always include one risk-boundary section. "
-            "Use the search_materials to decide the article framework before using any generic topic template. "
+            "Use source_context and search_materials to decide the article framework before using any generic topic template. "
             "Each section should map to at least one concrete source signal when possible. "
             "Do not output a fixed template."
         )
         human_prompt = (
             "topic:\n{topic}\n\n"
             "article_type:\n{article_type}\n\n"
+            "source_context:\n{source_context}\n\n"
             "search_materials:\n{search_materials}\n\n"
             "evidence_pack:\n{evidence_pack}\n"
         )
@@ -477,6 +534,7 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
                 "content_template": planning_state.get("content_template") or {},
             },
             "search_materials": _build_search_materials_summary(search_materials),
+            "source_context": _build_source_context(search_materials, evidence_pack),
             "evidence_pack": _build_evidence_summary(evidence_pack),
         }
         model_context = build_model_context(
