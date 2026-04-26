@@ -2,11 +2,29 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
 import markdown
 from bs4 import BeautifulSoup
 
 from api.store import get_style_config
+
+
+def _public_image_ref(image_ref: str) -> str:
+    normalized = str(image_ref or "").strip().replace("\\", "/")
+    if not normalized or normalized.startswith("generated://"):
+        return ""
+    if normalized.startswith(("http://", "https://", "/")):
+        return normalized
+    marker = "/artifacts/"
+    marker_index = normalized.find(marker)
+    if marker_index >= 0:
+        return normalized[marker_index:]
+    try:
+        relative = Path(normalized).resolve().relative_to(Path("artifacts").resolve())
+        return f"/artifacts/{relative.as_posix()}"
+    except Exception:  # noqa: BLE001
+        return normalized
 
 
 def _merge_style(existing_style: str, style_str: str) -> str:
@@ -28,7 +46,9 @@ def markdown_to_wechat_html(
     def replacer(match: re.Match[str]) -> str:
         idx = int(match.group(1)) - 1
         if 0 <= idx < len(illustrations):
-            img_url = illustrations[idx]
+            img_url = _public_image_ref(illustrations[idx])
+            if not img_url:
+                return match.group(0)
             return (
                 '<figure class="wx-illustration-container" style="text-align: center; margin: 16px 0;">'
                 f'<img src="{img_url}" style="max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">'

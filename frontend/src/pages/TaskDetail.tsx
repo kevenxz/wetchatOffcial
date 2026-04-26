@@ -80,6 +80,20 @@ function buildArticleHtml(content: string | undefined, illustrations: string[] |
   return DOMPurify.sanitize(marked.parse(md, { breaks: true }) as string)
 }
 
+function normalizeArticleHtml(html: string | undefined) {
+  if (!html) return ''
+  const cleanHtml = DOMPurify.sanitize(html)
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(cleanHtml, 'text/html')
+  doc.querySelectorAll('img').forEach((image) => {
+    const src = normalizeImageSrc(image.getAttribute('src') || '')
+    if (src) {
+      image.setAttribute('src', src)
+    }
+  })
+  return doc.body.innerHTML
+}
+
 export default function TaskDetail() {
   const { id: taskId } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -211,7 +225,7 @@ export default function TaskDetail() {
       }
     | undefined
   const articleHtml = finalArticle?.html_content
-    ? DOMPurify.sanitize(finalArticle.html_content)
+    ? normalizeArticleHtml(finalArticle.html_content)
     : buildArticleHtml(finalArticle?.content, finalArticle?.illustrations)
   const coverImage = normalizeImageSrc(finalArticle?.cover_image)
   const outlineResult = task?.outline_result || task?.planning_state?.outline_result || finalArticle?.outline_result

@@ -38,8 +38,40 @@ function mergeStyle(existing: string | null, next: string) {
   return `${existing}${existing.trim().endsWith(';') ? ' ' : '; '}${next}`
 }
 
-function buildPreviewHtml(markdownText: string, config: StyleConfig | undefined) {
-  const rawHtml = marked.parse(markdownText || '', { breaks: true }) as string
+function normalizeImageSrc(value: string | undefined) {
+  if (!value) return ''
+  if (/^https?:\/\//i.test(value) || value.startsWith('/')) return value
+  const normalized = value.replace(/\\/g, '/')
+  const marker = '/artifacts/'
+  const index = normalized.indexOf(marker)
+  if (index >= 0) return normalized.slice(index)
+  if (value.startsWith('generated://')) return ''
+  return value
+}
+
+function injectIllustrations(markdownText: string, illustrations: string[] | undefined) {
+  return String(markdownText || '').replace(/\[插图(\d+)\]/g, (_, rawIndex: string) => {
+    const index = Number(rawIndex) - 1
+    const src = normalizeImageSrc(illustrations?.[index])
+    if (!src) return `[插图${rawIndex}]`
+    return `<figure class="wx-illustration-container"><img src="${src}" alt="文章插图${rawIndex}" /></figure>`
+  })
+}
+
+function normalizeHtmlImages(html: string) {
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(html, 'text/html')
+  doc.querySelectorAll('img').forEach((image) => {
+    const src = normalizeImageSrc(image.getAttribute('src') || '')
+    if (src) image.setAttribute('src', src)
+  })
+  return doc.body.innerHTML
+}
+
+function buildPreviewHtml(markdownText: string, config: StyleConfig | undefined, illustrations?: string[], htmlContent?: string) {
+  const rawHtml = htmlContent
+    ? normalizeHtmlImages(DOMPurify.sanitize(htmlContent))
+    : marked.parse(injectIllustrations(markdownText, illustrations), { breaks: true }) as string
   const cleanHtml = DOMPurify.sanitize(rawHtml)
   const parser = new DOMParser()
   const doc = parser.parseFromString(`<div class="wx-article-container">${cleanHtml}</div>`, 'text/html')
@@ -305,10 +337,17 @@ export default function ArticleManage() {
     },
   ]
 
-  const previewTitle = previewArticle?.generated_article?.title ?? '请选择一篇文章查看预览'
-  const previewContent = previewArticle ? String(previewArticle.generated_article?.content || '') : ''
+  const previewGeneratedArticle = previewArticle?.final_article || previewArticle?.generated_article
+  const previewTitle = previewGeneratedArticle?.title ?? '请选择一篇文章查看预览'
+  const previewContent = previewArticle ? String(previewGeneratedArticle?.content || '') : ''
+  const previewCoverImage = normalizeImageSrc(String(previewGeneratedArticle?.cover_image || ''))
   const previewHtml = previewArticle
-    ? buildPreviewHtml(previewContent, themeConfigMap[previewThemeName])
+    ? buildPreviewHtml(
+        previewContent,
+        themeConfigMap[previewThemeName],
+        previewGeneratedArticle?.illustrations as string[] | undefined,
+        String(previewGeneratedArticle?.html_content || ''),
+      )
     : ''
 
   return (
@@ -387,7 +426,7 @@ export default function ArticleManage() {
               )}
             </div>
 
-            {previewArticle?.generated_article ? (
+            {previewGeneratedArticle ? (
               <div
                 style={{
                   maxHeight: 720,
@@ -401,6 +440,20 @@ export default function ArticleManage() {
                 <Title level={4} style={{ marginTop: 0 }}>
                   {previewTitle}
                 </Title>
+                {previewCoverImage ? (
+                  <img
+                    src={previewCoverImage}
+                    alt={previewTitle}
+                    style={{
+                      display: 'block',
+                      width: '100%',
+                      maxHeight: 280,
+                      objectFit: 'cover',
+                      borderRadius: 12,
+                      marginBottom: 18,
+                    }}
+                  />
+                ) : null}
                 <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
               </div>
             ) : (
