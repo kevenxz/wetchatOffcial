@@ -18,6 +18,8 @@ logger = structlog.get_logger(__name__)
 class BlueprintOutput(BaseModel):
     """Structured article blueprint payload."""
 
+    framework: str = Field(default="", description="AI-selected article framework")
+    title_candidates: list[str] = Field(default_factory=list, description="Publication-ready title candidates")
     thesis: str = Field(description="Core thesis of the article")
     reader_value: str = Field(default="", description="Why the reader should care")
     sections: list[dict[str, str]] = Field(default_factory=list, description="Ordered H2 sections")
@@ -51,6 +53,11 @@ def _normalize_blueprint_output(result: BlueprintOutput | dict[str, Any]) -> Blu
     else:
         payload = dict(result)
     payload["sections"] = _normalize_sections(list(payload.get("sections") or []))[:6]
+    payload["title_candidates"] = [
+        str(item).strip()
+        for item in list(payload.get("title_candidates") or [])
+        if str(item).strip()
+    ][:4]
     return BlueprintOutput(**payload)
 
 
@@ -302,6 +309,32 @@ def _build_evidence_map(sections: list[dict[str, str]], search_materials: list[d
     return evidence_map
 
 
+def _enforce_evidence_boundary_sections(blueprint: BlueprintOutput, evidence_pack: dict[str, Any]) -> BlueprintOutput:
+    research_gaps = list(evidence_pack.get("research_gaps") or [])
+    quality_summary = dict(evidence_pack.get("quality_summary") or {})
+    source_coverage = dict(quality_summary.get("source_coverage") or {})
+    needs_validation = bool(
+        "missing_high_confidence_fact" in research_gaps
+        or "missing_data_evidence" in research_gaps
+        or (source_coverage and set(source_coverage).issubset({"community", "aggregator", "unknown"}))
+    )
+    if not needs_validation:
+        return blueprint
+    if not any("验证" in section.get("heading", "") or "证据" in section.get("heading", "") for section in blueprint.sections):
+        validation_section = {
+            "heading": "还需要验证哪些关键判断",
+            "goal": "明确当前搜索材料的证据边界，说明哪些结论仍缺少官方、数据或多源确认。",
+            "shape": "validation",
+        }
+        if len(blueprint.sections) >= 6:
+            blueprint.sections[-1] = validation_section
+        else:
+            blueprint.sections.append(validation_section)
+    if "补齐官方或数据证据" not in blueprint.must_cover_points:
+        blueprint.must_cover_points.append("补齐官方或数据证据")
+    return blueprint
+
+
 def _build_fallback_blueprint(
     topic: str,
     article_type: dict[str, Any],
@@ -324,7 +357,18 @@ def _build_fallback_blueprint(
         "launch": "帮助读者判断新动作背后的真实价值",
         "general": "帮助读者快速建立主题判断框架",
     }
+    framework_map = {
+        "funding": "融资趋势解读型",
+        "expansion": "出海机会分析型",
+        "launch": "产品发布解读型",
+        "general": "搜索证据解读型",
+    }
     sections = _build_dynamic_sections(topic, article_type, evidence_pack, search_materials)
+    title_candidates = [
+        f"{topic}，真正值得看的不是热闹",
+        f"从搜索证据看{topic}的下一步",
+        f"{topic}背后的信号和边界",
+    ]
     must_cover_points = [section["heading"] for section in sections[:3]]
     if "missing_high_confidence_fact" in research_gaps or "missing_data_evidence" in research_gaps:
         must_cover_points.append("补齐官方或数据证据")
@@ -332,6 +376,8 @@ def _build_fallback_blueprint(
         must_cover_points.append("交代当前证据边界")
     drop_points = ["泛泛背景复述"] if profile in {"funding", "expansion"} else []
     return BlueprintOutput(
+        framework=framework_map[profile],
+        title_candidates=title_candidates,
         thesis=thesis_map[profile],
         reader_value=reader_value_map[profile],
         sections=sections,
@@ -386,12 +432,13 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
     search_materials = _collect_search_materials(research_state, evidence_pack)
 
     text_model_config = get_model_config().text
-    if not text_model_config.api_key:
+    if not text_model_config.api_key or not state.get("task_id"):
         blueprint = _build_fallback_blueprint(topic, article_type, evidence_pack, search_materials)
     else:
         system_prompt = (
             "You are a planning agent for Chinese long-form content. "
             "Generate a dynamic article blueprint based on the actual search materials, extracted source content, and evidence density. "
+            "You must decide the article framework, final title candidates, and H2 subtitles yourself from the materials. "
             "The result should feel like a WeChat public account article structure planned by an experienced editor. "
             "Section headings should be content-specific, topic-specific, and publication-ready instead of generic placeholders. "
             "Keep 4 to 6 H2 sections. Always include one risk-boundary section. "
@@ -443,6 +490,7 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
             blueprint = _normalize_blueprint_output(result)
             if len(blueprint.sections) < 4:
                 raise ValueError("insufficient dynamic sections from model blueprint")
+            blueprint = _enforce_evidence_boundary_sections(blueprint, evidence_pack)
             if search_materials and not blueprint.source_driven_framework:
                 blueprint.source_driven_framework = _build_source_driven_sections(topic, search_materials)
             if search_materials and not blueprint.evidence_map:

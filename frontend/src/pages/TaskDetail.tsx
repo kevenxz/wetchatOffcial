@@ -2,6 +2,8 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
 import { Button, Empty, Result, Spin, Tag, message } from 'antd'
+import DOMPurify from 'dompurify'
+import { marked } from 'marked'
 import {
   ARTICLE_STRATEGY_LABELS,
   getTask,
@@ -19,11 +21,11 @@ const SKILL_STEPS: StatusRailStep[] = [
   { key: 'plan_research', title: '研究规划', description: '拆解检索角度和证据覆盖目标。' },
   { key: 'run_research', title: '资料研究', description: '搜索、抓取并整理可信来源。' },
   { key: 'build_evidence_pack', title: '证据包', description: '提炼事实、数据、案例和风险边界。' },
-  { key: 'plan_article_angle', title: '文章角度', description: '生成论点、结构和段落目标。' },
+  { key: 'outline_planner', title: '文章大纲', description: '基于搜索素材提炼标题、子标题、结构和证据映射。' },
   { key: 'compose_draft', title: '写作成稿', description: '输出标题、摘要和公众号正文。' },
   { key: 'review_article_draft', title: '文章审核', description: '检查结构、事实支撑和表达风险。' },
   { key: 'plan_visual_assets', title: '图片规划', description: '决定封面和文内配图需求。' },
-  { key: 'generate_visual_assets', title: '图片生成', description: '生成图片资产并合入文章。' },
+  { key: 'image_agent', title: '生图 Agent', description: '使用配置的图片模型生成封面和文内插图。' },
   { key: 'review_visual_assets', title: '图片审核', description: '检查图片完整性和内容适配度。' },
   { key: 'quality_gate', title: '质量门禁', description: '决定发布、修订或人工处理。' },
   { key: 'push_to_draft', title: '推送草稿', description: '推送至微信公众号草稿箱。' },
@@ -55,6 +57,27 @@ function renderValue(value: unknown) {
   if (Array.isArray(value)) return value.length ? value.join(' / ') : '-'
   if (typeof value === 'object') return JSON.stringify(value, null, 2)
   return String(value)
+}
+
+function normalizeImageSrc(value: string | undefined) {
+  if (!value) return ''
+  if (/^https?:\/\//i.test(value) || value.startsWith('/')) return value
+  const normalized = value.replace(/\\/g, '/')
+  const marker = '/artifacts/'
+  const index = normalized.indexOf(marker)
+  if (index >= 0) return normalized.slice(index)
+  if (value.startsWith('generated://')) return ''
+  return value
+}
+
+function buildArticleHtml(content: string | undefined, illustrations: string[] | undefined) {
+  const md = String(content || '').replace(/\[插图(\d+)\]/g, (_, rawIndex: string) => {
+    const index = Number(rawIndex) - 1
+    const src = normalizeImageSrc(illustrations?.[index])
+    if (!src) return `[插图${rawIndex}]`
+    return `<figure class="task-article-figure"><img src="${src}" alt="文章插图${rawIndex}" /></figure>`
+  })
+  return DOMPurify.sanitize(marked.parse(md, { breaks: true }) as string)
 }
 
 export default function TaskDetail() {
@@ -144,7 +167,11 @@ export default function TaskDetail() {
             if (result.style_profile) nextTask.style_profile = result.style_profile
             if (result.article_blueprint) nextTask.article_blueprint = result.article_blueprint
             if (result.article_plan) nextTask.article_plan = result.article_plan
+            if (result.outline_result) nextTask.outline_result = result.outline_result
             if (result.generated_article) nextTask.generated_article = result.generated_article
+            if (result.final_article) nextTask.final_article = result.final_article
+            if (result.config_snapshot) nextTask.config_snapshot = result.config_snapshot
+            if (result.selected_topic) nextTask.selected_topic = result.selected_topic
             if (result.draft_info) nextTask.draft_info = result.draft_info
           }
           return nextTask
@@ -170,8 +197,24 @@ export default function TaskDetail() {
 
   const isLoading = !task
   const finalArticle = (task?.final_article || task?.generated_article) as
-    | { title?: string; alt_titles?: string[]; content?: string; summary?: string; cover_image?: string }
+    | {
+        title?: string
+        alt_titles?: string[]
+        content?: string
+        summary?: string
+        cover_image?: string
+        illustrations?: string[]
+        html_content?: string
+        images?: Record<string, any>[]
+        image_plan?: Record<string, any>
+        outline_result?: Record<string, any>
+      }
     | undefined
+  const articleHtml = finalArticle?.html_content
+    ? DOMPurify.sanitize(finalArticle.html_content)
+    : buildArticleHtml(finalArticle?.content, finalArticle?.illustrations)
+  const coverImage = normalizeImageSrc(finalArticle?.cover_image)
+  const outlineResult = task?.outline_result || task?.planning_state?.outline_result || finalArticle?.outline_result
   const qualityReport = task?.quality_report || task?.quality_state?.quality_report
   const hotspotCandidates = task?.hotspot_candidates || []
   const metaItems = task
@@ -262,6 +305,11 @@ export default function TaskDetail() {
 
                     {finalArticle?.title || finalArticle?.content ? (
                       <article className={styles.articleCard}>
+                        {coverImage ? (
+                          <figure className={styles.coverFrame}>
+                            <img src={coverImage} alt={finalArticle?.title || '文章封面'} />
+                          </figure>
+                        ) : null}
                         <header className={styles.articleHeader}>
                           <p className={styles.kicker}>Generated Article</p>
                           <h3>{finalArticle?.title || '未返回标题'}</h3>
@@ -271,9 +319,10 @@ export default function TaskDetail() {
                             </p>
                           ) : null}
                         </header>
-                        <div className={styles.articleContent}>
-                          {finalArticle?.content || '暂无正文内容。'}
-                        </div>
+                        <div
+                          className={styles.articleContent}
+                          dangerouslySetInnerHTML={{ __html: articleHtml || '<p>暂无正文内容。</p>' }}
+                        />
                       </article>
                     ) : (
                       <Empty description="任务完成，但尚未返回正文内容。" />
@@ -352,6 +401,18 @@ export default function TaskDetail() {
                 <div className={styles.signalCard}>
                   <span>选题决策</span>
                   <pre>{renderValue(task?.selected_topic)}</pre>
+                </div>
+                <div className={styles.signalCard}>
+                  <span>文章大纲</span>
+                  <pre>{renderValue(outlineResult)}</pre>
+                </div>
+                <div className={styles.signalCard}>
+                  <span>图片计划</span>
+                  <pre>{renderValue(task?.visual_state?.image_briefs || finalArticle?.image_plan)}</pre>
+                </div>
+                <div className={styles.signalCard}>
+                  <span>图片资产</span>
+                  <pre>{renderValue(task?.visual_state?.assets || finalArticle?.images)}</pre>
                 </div>
                 <div className={styles.signalCard}>
                   <span>研究状态</span>

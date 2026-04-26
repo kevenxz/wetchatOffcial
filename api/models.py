@@ -374,6 +374,7 @@ class TaskResponse(BaseModel):
     style_profile: Optional[dict] = Field(default=None, description="Auto-generated writing style profile")
     article_blueprint: Optional[dict] = Field(default=None, description="Resolved article blueprint")
     article_plan: Optional[dict] = Field(default=None, description="Resolved article plan from LangGraph")
+    outline_result: Optional[dict] = Field(default=None, description="AI-generated article outline")
     generated_article: Optional[dict] = Field(default=None, description="Generated article")
     draft_info: Optional[dict] = Field(default=None, description="Latest draft push result")
     hotspot_capture_config: Optional[dict] = Field(default=None, description="Resolved hotspot capture config")

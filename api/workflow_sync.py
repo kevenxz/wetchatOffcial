@@ -73,6 +73,7 @@ def sync_task_from_workflow_event(task: TaskResponse, data: dict[str, Any]) -> N
         "style_profile",
         "article_blueprint",
         "article_plan",
+        "outline_result",
         "generated_article",
         "final_article",
         "draft_info",

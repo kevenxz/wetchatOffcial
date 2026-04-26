@@ -154,6 +154,7 @@ export interface TaskResponse {
   style_profile?: Record<string, any> | null
   article_blueprint?: Record<string, any> | null
   article_plan?: Record<string, any> | null
+  outline_result?: Record<string, any> | null
   generated_article?: Record<string, any> | null
   final_article?: Record<string, any> | null
   draft_info?: Record<string, any> | null

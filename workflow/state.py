@@ -37,6 +37,7 @@ class WorkflowState(TypedDict, total=False):
     hotspot_capture_error: Optional[str]
 
     article_plan: dict
+    outline_result: dict
     generated_article: dict
     final_article: dict
     draft_info: Optional[dict]

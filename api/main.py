@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from api.auth import ensure_default_admin_user
 from api.logging_config import setup_logging
@@ -42,6 +44,10 @@ app.include_router(articles.router, prefix="/api")
 app.include_router(schedules.router, prefix="/api")
 app.include_router(hotspots.router, prefix="/api")
 app.include_router(ws.router)
+
+ARTIFACTS_DIR = Path("artifacts").resolve()
+ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/artifacts", StaticFiles(directory=str(ARTIFACTS_DIR)), name="artifacts")
 
 
 @app.on_event("startup")

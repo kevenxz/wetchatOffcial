@@ -51,8 +51,10 @@ def _build_evidence_summary(evidence_pack: dict[str, Any]) -> str:
 
 
 def _build_fallback_draft(topic: str, blueprint: dict[str, Any]) -> DraftOutput:
-    sections = list(blueprint.get("sections") or [])
-    title = str(blueprint.get("thesis") or topic or "未命名主题").strip()
+    outline_result = dict(blueprint.get("outline_result") or {})
+    sections = list(outline_result.get("outline") or blueprint.get("sections") or [])
+    title_candidates = list(outline_result.get("title_candidates") or blueprint.get("title_candidates") or [])
+    title = str(title_candidates[0] if title_candidates else blueprint.get("thesis") or topic or "未命名主题").strip()
     alt_titles = [
         candidate
         for candidate in (
@@ -62,9 +64,9 @@ def _build_fallback_draft(topic: str, blueprint: dict[str, Any]) -> DraftOutput:
         if candidate and candidate != title
     ][:2]
     content = "\n\n".join(
-        f"## {section['heading']}\n{section['goal']}"
+        f"## {section.get('section') or section.get('heading')}\n{section.get('goal', '')}"
         for section in sections
-        if section.get("heading") and section.get("goal")
+        if (section.get("section") or section.get("heading")) and section.get("goal")
     )
     return DraftOutput(title=title, alt_titles=alt_titles, content=content, summary="")
 
@@ -73,6 +75,9 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
     """Generate the first article draft from blueprint and research evidence."""
     planning_state = dict(state.get("planning_state") or {})
     blueprint = dict(planning_state.get("article_blueprint") or {})
+    outline_result = dict(state.get("outline_result") or planning_state.get("outline_result") or {})
+    if outline_result:
+        blueprint["outline_result"] = outline_result
     research_state = dict(state.get("research_state") or {})
     evidence_pack = dict(research_state.get("evidence_pack") or {})
     revision_brief = dict((state.get("writing_state") or {}).get("revision_brief") or {})
@@ -87,7 +92,7 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
             "status": "running",
             "current_skill": "compose_draft",
             "progress": 54,
-            "writing_state": {"draft": fallback.model_dump(), "review_findings": []},
+            "writing_state": {"draft": fallback.model_dump(), "review_findings": [], "outline_result": outline_result},
             "generated_article": {
                 "title": fallback.title,
                 "alt_titles": fallback.alt_titles,
@@ -103,7 +108,7 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
             "status": "running",
             "current_skill": "compose_draft",
             "progress": 54,
-            "writing_state": {"draft": fallback.model_dump(), "review_findings": []},
+            "writing_state": {"draft": fallback.model_dump(), "review_findings": [], "outline_result": outline_result},
             "generated_article": {
                 "title": fallback.title,
                 "alt_titles": fallback.alt_titles,
@@ -117,6 +122,7 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
         "Write a clean Markdown article draft from the provided thesis, sections, and evidence pack. "
         "The result should read like a polished WeChat public account article. "
         "The article framework must follow the source_driven_framework and evidence_map in the blueprint when they are present. "
+        "The article must strictly follow outline_result when present: title candidates, section order, section goals, source_refs, key_points, must_use_facts, and risk_boundaries. "
         "Do not replace a search-driven framework with a generic template. "
         "Every major H2 section should be grounded in the searched source signals or explicitly state the evidence boundary. "
         "Produce a publication-ready title, two alternative title candidates, a concise summary, and a strong opening hook paragraph before the first H2 section. "
@@ -131,6 +137,7 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
         "topic:\n{topic}\n\n"
         "article_type:\n{article_type}\n\n"
         "blueprint:\n{blueprint}\n\n"
+        "outline_result:\n{outline_result}\n\n"
         "evidence_pack:\n{evidence_pack}\n\n"
         "account_profile:\n{account_profile}\n\n"
         "content_template:\n{content_template}\n\n"
@@ -151,6 +158,7 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
         "topic": topic,
         "article_type": dict(planning_state.get("article_type") or {}),
         "blueprint": blueprint,
+        "outline_result": outline_result,
         "evidence_pack": _build_evidence_summary(evidence_pack),
         "revision_brief": revision_brief,
         "account_profile": dict(config_snapshot.get("account_profile") or {}),
@@ -199,6 +207,7 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
             "draft": draft.model_dump(),
             "review_findings": [],
             "revision_brief": {},
+            "outline_result": outline_result,
         },
         "generated_article": {
             "title": draft.title,

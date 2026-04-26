@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from workflow.state import WorkflowState
+from workflow.utils.markdown_to_wechat import markdown_to_wechat_html
 
 
 def _asset_ref(asset: dict[str, Any]) -> str:
@@ -74,6 +75,11 @@ async def assemble_article_node(state: WorkflowState) -> dict[str, Any]:
     quality_state = dict(state.get("quality_state") or {})
     config_snapshot = dict(state.get("config_snapshot") or {})
     final_article = _merge_visuals(generated_article, visual_state)
+    illustrations = [str(item).strip() for item in list(final_article.get("illustrations") or []) if str(item).strip()]
+    final_article["html_content"] = markdown_to_wechat_html(
+        str(final_article.get("content") or ""),
+        illustrations,
+    )
     publish_decision = _build_publish_decision(
         quality_state,
         config_snapshot,
@@ -83,6 +89,12 @@ async def assemble_article_node(state: WorkflowState) -> dict[str, Any]:
         {
             "selected_topic": state.get("selected_topic"),
             "selected_hotspot": state.get("selected_hotspot"),
+            "outline_result": state.get("outline_result") or dict(state.get("planning_state") or {}).get("outline_result"),
+            "image_plan": {
+                "briefs": list(visual_state.get("image_briefs") or []),
+                "assets": list(visual_state.get("assets") or []),
+            },
+            "images": list(visual_state.get("assets") or []),
             "quality_report": quality_state.get("quality_report"),
             "publish_decision": publish_decision,
         }

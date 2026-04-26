@@ -134,6 +134,7 @@ async def retry_task(
         "search_results": [],
         "extracted_contents": [],
         "article_plan": task.article_plan or {},
+        "outline_result": task.outline_result or {},
         "generated_article": task.generated_article or {},
         "final_article": task.final_article or {},
         "draft_info": task.draft_info,

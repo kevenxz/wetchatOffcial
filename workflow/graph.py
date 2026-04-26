@@ -17,8 +17,8 @@ from workflow.skills.build_evidence_pack import build_evidence_pack_node
 from workflow.skills.compose_draft import compose_draft_node
 from workflow.skills.intake_task_brief import intake_task_brief_node
 from workflow.skills.planner_agent import planner_agent_node
-from workflow.skills.generate_visual_assets import generate_visual_assets_node
-from workflow.skills.plan_article_angle import plan_article_angle_node
+from workflow.skills.image_agent import image_agent_node
+from workflow.skills.outline_planner import outline_planner_node
 from workflow.skills.plan_research import plan_research_node
 from workflow.skills.plan_visual_assets import plan_visual_assets_node
 from workflow.skills.quality_gate import quality_gate_node
@@ -66,6 +66,7 @@ def _build_result_payload(final_state: dict | None) -> dict:
         "style_profile": state.get("style_profile"),
         "article_blueprint": state.get("article_blueprint"),
         "article_plan": state.get("article_plan"),
+        "outline_result": state.get("outline_result") or dict(state.get("planning_state") or {}).get("outline_result"),
         "generated_article": state.get("generated_article"),
         "final_article": state.get("final_article"),
         "draft_info": state.get("draft_info"),
@@ -152,11 +153,11 @@ def build_graph() -> StateGraph:
     graph.add_node("run_research", run_research_node)
     graph.add_node("build_evidence_pack", build_evidence_pack_node)
     graph.add_node("resolve_article_type", resolve_article_type_node)
-    graph.add_node("plan_article_angle", plan_article_angle_node)
+    graph.add_node("outline_planner", outline_planner_node)
     graph.add_node("compose_draft", compose_draft_node)
     graph.add_node("review_article_draft", review_article_draft_node)
     graph.add_node("plan_visual_assets", plan_visual_assets_node)
-    graph.add_node("generate_visual_assets", generate_visual_assets_node)
+    graph.add_node("image_agent", image_agent_node)
     graph.add_node("review_visual_assets", review_visual_assets_node)
     graph.add_node("quality_gate", quality_gate_node)
     graph.add_node("targeted_revision", targeted_revision_node)
@@ -173,12 +174,12 @@ def build_graph() -> StateGraph:
     graph.add_conditional_edges("plan_research", _route_status, {"error": "error_handler", "next": "run_research"})
     graph.add_conditional_edges("run_research", _route_status, {"error": "error_handler", "next": "build_evidence_pack"})
     graph.add_conditional_edges("build_evidence_pack", _route_status, {"error": "error_handler", "next": "resolve_article_type"})
-    graph.add_conditional_edges("resolve_article_type", _route_status, {"error": "error_handler", "next": "plan_article_angle"})
-    graph.add_conditional_edges("plan_article_angle", _route_status, {"error": "error_handler", "next": "compose_draft"})
+    graph.add_conditional_edges("resolve_article_type", _route_status, {"error": "error_handler", "next": "outline_planner"})
+    graph.add_conditional_edges("outline_planner", _route_status, {"error": "error_handler", "next": "compose_draft"})
     graph.add_conditional_edges("compose_draft", _route_status, {"error": "error_handler", "next": "review_article_draft"})
     graph.add_conditional_edges("review_article_draft", _route_status, {"error": "error_handler", "next": "plan_visual_assets"})
-    graph.add_conditional_edges("plan_visual_assets", _route_status, {"error": "error_handler", "next": "generate_visual_assets"})
-    graph.add_conditional_edges("generate_visual_assets", _route_status, {"error": "error_handler", "next": "review_visual_assets"})
+    graph.add_conditional_edges("plan_visual_assets", _route_status, {"error": "error_handler", "next": "image_agent"})
+    graph.add_conditional_edges("image_agent", _route_status, {"error": "error_handler", "next": "review_visual_assets"})
     graph.add_conditional_edges("review_visual_assets", _route_status, {"error": "error_handler", "next": "quality_gate"})
     graph.add_conditional_edges(
         "quality_gate",
@@ -200,7 +201,7 @@ def build_graph() -> StateGraph:
             "pass": "assemble_article",
             "skip_push": "ui_feedback",
             "revise_writing": "compose_draft",
-            "revise_visuals": "generate_visual_assets",
+            "revise_visuals": "image_agent",
         },
     )
     graph.add_conditional_edges(
@@ -264,6 +265,7 @@ async def run_workflow(
         initial_state.setdefault("hotspot_capture_error", None)
         initial_state.setdefault("original_keywords", initial_state.get("keywords", keywords))
         initial_state.setdefault("article_plan", {})
+        initial_state.setdefault("outline_result", {})
         initial_state.setdefault("generated_article", {})
         initial_state.setdefault("final_article", {})
         initial_state.setdefault("revision_count", 0)
@@ -308,6 +310,7 @@ async def run_workflow(
             "selected_topic": None,
             "hotspot_capture_error": None,
             "article_plan": {},
+            "outline_result": {},
             "generated_article": {},
             "final_article": {},
             "draft_info": None,
