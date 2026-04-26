@@ -290,3 +290,118 @@ async def test_plan_article_angle_model_prompt_requests_wechat_style_structure()
     system_prompt = messages[0][1]
     assert "wechat" in system_prompt.lower()
     assert "section headings should be content-specific" in system_prompt.lower()
+
+
+@pytest.mark.asyncio
+async def test_plan_article_angle_builds_framework_from_search_materials() -> None:
+    state = {
+        "task_brief": {"topic": "AI sales workflow"},
+        "planning_state": {
+            "article_type": {
+                "type_id": "trend_analysis",
+                "recommended_section_shapes": ["hook", "drivers", "evidence", "case", "risks"],
+            }
+        },
+        "research_state": {
+            "evidence_items": [
+                {
+                    "angle": "fact",
+                    "title": "Enterprise buyers slow AI agent rollout",
+                    "claim": "Large companies are delaying AI agent rollout because integration costs remain high.",
+                    "source_type": "news",
+                    "domain": "example.com",
+                    "url": "https://example.com/a",
+                },
+                {
+                    "angle": "data",
+                    "title": "AI sales tools face longer payback cycles",
+                    "claim": "Survey data shows payback cycles for AI sales tools are lengthening.",
+                    "source_type": "dataset",
+                    "domain": "data.example.com",
+                    "url": "https://example.com/b",
+                },
+            ],
+            "evidence_pack": {
+                "confirmed_facts": [
+                    {"claim": "Large companies are delaying AI agent rollout because integration costs remain high."}
+                ],
+                "usable_data_points": [
+                    {"claim": "Survey data shows payback cycles for AI sales tools are lengthening."}
+                ],
+                "usable_cases": [],
+            },
+        },
+    }
+
+    result = await plan_article_angle_node(state)
+    blueprint = result["planning_state"]["article_blueprint"]
+    headings = [section["heading"] for section in blueprint["sections"]]
+
+    assert blueprint["source_driven_framework"]
+    assert blueprint["evidence_map"]
+    assert any("Enterprise buyers slow AI agent rollout" in heading for heading in headings)
+    assert any("AI sales tools face longer payback cycles" in heading for heading in headings)
+
+
+@pytest.mark.asyncio
+async def test_plan_article_angle_passes_search_materials_to_model() -> None:
+    state = {
+        "task_id": "task-search-materials",
+        "task_brief": {"topic": "AI sales workflow"},
+        "planning_state": {
+            "article_type": {
+                "type_id": "trend_analysis",
+                "recommended_section_shapes": ["hook", "drivers", "evidence", "case", "risks"],
+            }
+        },
+        "research_state": {
+            "evidence_items": [
+                {
+                    "angle": "fact",
+                    "title": "Enterprise buyers slow AI agent rollout",
+                    "claim": "Large companies delay AI agent rollout because integration costs remain high.",
+                    "source_type": "news",
+                    "domain": "example.com",
+                }
+            ],
+            "evidence_pack": {"confirmed_facts": [{"claim": "Large companies delay AI agent rollout."}]},
+        },
+    }
+
+    with patch("workflow.skills.plan_article_angle.get_model_config") as mock_get_model_config:
+        with patch("workflow.skills.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.skills.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+                model_config = MagicMock()
+                model_config.text.api_key = "text-key"
+                model_config.text.base_url = "https://text.example.com/v1"
+                model_config.text.model = "text-model"
+                mock_get_model_config.return_value = model_config
+
+                prompt = MagicMock()
+                chain = AsyncMock()
+                llm = MagicMock()
+                llm.with_structured_output.return_value = MagicMock(name="structured-llm")
+                mock_prompt_class.from_messages.return_value = prompt
+                prompt.__or__.return_value = chain
+                mock_chat_openai.return_value = llm
+                chain.ainvoke.return_value = {
+                    "thesis": "Search content should shape the article.",
+                    "reader_value": "Help readers understand the signal.",
+                    "sections": [
+                        {"heading": "Search signal one", "goal": "Explain source one", "shape": "hook"},
+                        {"heading": "Search signal two", "goal": "Explain source two", "shape": "drivers"},
+                        {"heading": "Search signal three", "goal": "Explain source three", "shape": "evidence"},
+                        {"heading": "Risk boundary", "goal": "Explain uncertainty", "shape": "risks"},
+                    ],
+                    "must_cover_points": [],
+                    "drop_points": [],
+                }
+
+                result = await plan_article_angle_node(state)
+
+    payload = chain.ainvoke.await_args.args[0]
+    blueprint = result["planning_state"]["article_blueprint"]
+    assert "search_materials" in payload
+    assert "Enterprise buyers slow AI agent rollout" in payload["search_materials"]
+    assert blueprint["source_driven_framework"]
+    assert blueprint["evidence_map"]

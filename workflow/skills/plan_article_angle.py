@@ -23,6 +23,14 @@ class BlueprintOutput(BaseModel):
     sections: list[dict[str, str]] = Field(default_factory=list, description="Ordered H2 sections")
     must_cover_points: list[str] = Field(default_factory=list, description="Points that must be covered")
     drop_points: list[str] = Field(default_factory=list, description="Points intentionally left out")
+    source_driven_framework: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="Search-result-backed structure signals used to shape the article",
+    )
+    evidence_map: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="Mapping from planned sections to source claims",
+    )
 
 
 def _normalize_sections(sections: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -66,7 +74,152 @@ def _topic_focus_phrase(topic: str) -> str:
     return cleaned or "这个变化"
 
 
-def _build_dynamic_sections(topic: str, article_type: dict[str, Any], evidence_pack: dict[str, Any]) -> list[dict[str, str]]:
+def _clean_text(value: Any, limit: int = 90) -> str:
+    cleaned = " ".join(str(value or "").split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[:limit].rstrip("，,。.;；:： ") + "..."
+
+
+def _material_claim(material: dict[str, Any]) -> str:
+    for key in ("claim", "snippet", "title"):
+        value = _clean_text(material.get(key), limit=110)
+        if value:
+            return value
+    return ""
+
+
+def _material_title(material: dict[str, Any]) -> str:
+    return _clean_text(material.get("title") or material.get("claim") or material.get("snippet"), limit=64)
+
+
+def _dedupe_materials(items: list[dict[str, Any]]) -> list[dict[str, str]]:
+    materials: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in items:
+        title = _material_title(item)
+        claim = _material_claim(item)
+        if not title and not claim:
+            continue
+        key = (title, claim)
+        if key in seen:
+            continue
+        seen.add(key)
+        materials.append(
+            {
+                "angle": str(item.get("angle") or item.get("query_intent") or "fact").strip() or "fact",
+                "query": str(item.get("query") or "").strip(),
+                "title": title,
+                "claim": claim,
+                "source_type": str(item.get("source_type") or "unknown").strip(),
+                "domain": str(item.get("domain") or "").strip(),
+                "url": str(item.get("url") or "").strip(),
+            }
+        )
+    return materials[:10]
+
+
+def _collect_search_materials(research_state: dict[str, Any], evidence_pack: dict[str, Any]) -> list[dict[str, str]]:
+    raw_items: list[dict[str, Any]] = []
+    raw_items.extend([dict(item) for item in list(research_state.get("evidence_items") or []) if isinstance(item, dict)])
+
+    for label in ("confirmed_facts", "usable_data_points", "usable_cases", "risk_points"):
+        for item in list(evidence_pack.get(label) or []):
+            if isinstance(item, dict):
+                raw_items.append({**item, "angle": item.get("angle") or label})
+
+    for item in list(research_state.get("extracted_contents") or []):
+        if not isinstance(item, dict):
+            continue
+        source_meta = dict(item.get("source_meta") or {})
+        raw_items.append(
+            {
+                "angle": source_meta.get("query_intent") or source_meta.get("angle") or "fact",
+                "query": source_meta.get("query"),
+                "title": item.get("title"),
+                "claim": item.get("text"),
+                "snippet": source_meta.get("snippet"),
+                "source_type": source_meta.get("source_type"),
+                "domain": source_meta.get("domain"),
+                "url": item.get("url"),
+            }
+        )
+
+    for item in list(research_state.get("search_results") or []):
+        if isinstance(item, dict):
+            raw_items.append(item)
+
+    return _dedupe_materials(raw_items)
+
+
+def _shape_from_material(material: dict[str, str], index: int) -> str:
+    angle = str(material.get("angle") or "").lower()
+    source_type = str(material.get("source_type") or "").lower()
+    if "risk" in angle or "caution" in angle:
+        return "risks"
+    if "case" in angle or source_type in {"news", "media"}:
+        return "case"
+    if "data" in angle or source_type in {"dataset", "report"}:
+        return "evidence"
+    if index == 0:
+        return "hook"
+    return "drivers"
+
+
+def _section_from_material(topic: str, material: dict[str, str], index: int) -> dict[str, str]:
+    focus_phrase = _topic_focus_phrase(topic)
+    title = _material_title(material) or focus_phrase
+    claim = _material_claim(material)
+    shape = _shape_from_material(material, index)
+    if shape == "hook":
+        heading = f"先从{title}看清问题"
+        goal = f"用搜索结果中最强的信号开篇，说明{focus_phrase}为什么值得写。"
+    elif shape == "evidence":
+        heading = f"{title}给出了什么数据线索"
+        goal = "围绕搜索到的数据、报告或事实材料建立判断，而不是先套固定模板。"
+    elif shape == "case":
+        heading = f"{title}这个案例说明了什么"
+        goal = "用搜索到的案例解释具体变化，区分现象、动作和可验证结果。"
+    elif shape == "risks":
+        heading = f"{title}背后的风险边界"
+        goal = "把搜索材料里的不确定性、争议和证据缺口讲清楚。"
+    else:
+        heading = f"{title}背后真正的驱动因素"
+        goal = "从搜索材料拆出原因链条，解释变化为什么发生。"
+    if claim:
+        goal = f"{goal} 参考线索：{claim}"
+    return {"heading": heading, "goal": goal, "shape": shape}
+
+
+def _build_source_driven_sections(topic: str, search_materials: list[dict[str, str]]) -> list[dict[str, str]]:
+    sections: list[dict[str, str]] = []
+    used_shapes: set[str] = set()
+    for material in search_materials:
+        section = _section_from_material(topic, material, len(sections))
+        shape = section["shape"]
+        if shape in used_shapes and shape not in {"case", "evidence"}:
+            continue
+        used_shapes.add(shape)
+        sections.append(section)
+        if len(sections) >= 5:
+            break
+    if sections and not any(section["shape"] == "risks" for section in sections):
+        sections.append(
+            {
+                "heading": "风险和证据边界在哪里",
+                "goal": "基于搜索来源质量说明结论边界，避免把单一来源写成确定结论。",
+                "shape": "risks",
+            }
+        )
+    return sections[:6]
+
+
+def _build_dynamic_sections(
+    topic: str,
+    article_type: dict[str, Any],
+    evidence_pack: dict[str, Any],
+    search_materials: list[dict[str, str]],
+) -> list[dict[str, str]]:
     profile = _topic_profile(topic)
     focus_phrase = _topic_focus_phrase(topic)
     data_points = list(evidence_pack.get("usable_data_points") or [])
@@ -75,6 +228,19 @@ def _build_dynamic_sections(topic: str, article_type: dict[str, Any], evidence_p
     research_gaps = list(evidence_pack.get("research_gaps") or [])
     quality_summary = dict(evidence_pack.get("quality_summary") or {})
     source_coverage = dict(quality_summary.get("source_coverage") or {})
+    source_sections = _build_source_driven_sections(topic, search_materials)
+
+    if len(source_sections) >= 4:
+        return source_sections[:6]
+    elif source_sections:
+        sections = source_sections
+        if not any(section["shape"] == "evidence" for section in sections) and data_points:
+            sections.append({"heading": f"数据如何验证{focus_phrase}", "goal": "补充搜索证据中的数据和事实支撑", "shape": "evidence"})
+        if not any(section["shape"] == "case" for section in sections) and cases:
+            sections.append({"heading": f"哪些案例能说明{focus_phrase}", "goal": "用可验证案例承接前文判断", "shape": "case"})
+        if not any(section["shape"] == "risks" for section in sections):
+            sections.append({"heading": "结论的边界在哪里", "goal": "交代证据强弱和不确定性", "shape": "risks"})
+        return sections[:6]
 
     if profile == "funding":
         sections = [
@@ -122,7 +288,26 @@ def _build_dynamic_sections(topic: str, article_type: dict[str, Any], evidence_p
     return sections[:6]
 
 
-def _build_fallback_blueprint(topic: str, article_type: dict[str, Any], evidence_pack: dict[str, Any]) -> BlueprintOutput:
+def _build_evidence_map(sections: list[dict[str, str]], search_materials: list[dict[str, str]]) -> list[dict[str, str]]:
+    evidence_map: list[dict[str, str]] = []
+    for section, material in zip(sections, search_materials, strict=False):
+        evidence_map.append(
+            {
+                "section_heading": section.get("heading", ""),
+                "source_title": material.get("title", ""),
+                "source_claim": material.get("claim", ""),
+                "source_url": material.get("url", ""),
+            }
+        )
+    return evidence_map
+
+
+def _build_fallback_blueprint(
+    topic: str,
+    article_type: dict[str, Any],
+    evidence_pack: dict[str, Any],
+    search_materials: list[dict[str, str]],
+) -> BlueprintOutput:
     profile = _topic_profile(topic)
     research_gaps = list(evidence_pack.get("research_gaps") or [])
     quality_summary = dict(evidence_pack.get("quality_summary") or {})
@@ -139,7 +324,7 @@ def _build_fallback_blueprint(topic: str, article_type: dict[str, Any], evidence
         "launch": "帮助读者判断新动作背后的真实价值",
         "general": "帮助读者快速建立主题判断框架",
     }
-    sections = _build_dynamic_sections(topic, article_type, evidence_pack)
+    sections = _build_dynamic_sections(topic, article_type, evidence_pack, search_materials)
     must_cover_points = [section["heading"] for section in sections[:3]]
     if "missing_high_confidence_fact" in research_gaps or "missing_data_evidence" in research_gaps:
         must_cover_points.append("补齐官方或数据证据")
@@ -152,6 +337,8 @@ def _build_fallback_blueprint(topic: str, article_type: dict[str, Any], evidence
         sections=sections,
         must_cover_points=must_cover_points,
         drop_points=drop_points,
+        source_driven_framework=sections,
+        evidence_map=_build_evidence_map(sections, search_materials),
     )
 
 
@@ -177,6 +364,17 @@ def _build_evidence_summary(evidence_pack: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _build_search_materials_summary(search_materials: list[dict[str, str]]) -> str:
+    lines: list[str] = []
+    for index, item in enumerate(search_materials[:8], start=1):
+        claim = item.get("claim") or item.get("title") or ""
+        title = item.get("title") or ""
+        source = item.get("domain") or item.get("source_type") or "unknown"
+        angle = item.get("angle") or "fact"
+        lines.append(f"{index}. [{angle}] {title} ({source}) - {claim}")
+    return "\n".join(lines)
+
+
 async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
     """Create a dynamic section plan for the current article."""
     planning_state = dict(state.get("planning_state") or {})
@@ -185,22 +383,26 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
     topic = str(selected_topic.get("title") or state.get("task_brief", {}).get("topic", "")).strip()
     research_state = dict(state.get("research_state") or {})
     evidence_pack = dict(research_state.get("evidence_pack") or {})
+    search_materials = _collect_search_materials(research_state, evidence_pack)
 
     text_model_config = get_model_config().text
     if not text_model_config.api_key:
-        blueprint = _build_fallback_blueprint(topic, article_type, evidence_pack)
+        blueprint = _build_fallback_blueprint(topic, article_type, evidence_pack, search_materials)
     else:
         system_prompt = (
             "You are a planning agent for Chinese long-form content. "
-            "Generate a dynamic article blueprint based on topic, article type, and evidence density. "
+            "Generate a dynamic article blueprint based on the actual search materials, extracted source content, and evidence density. "
             "The result should feel like a WeChat public account article structure planned by an experienced editor. "
             "Section headings should be content-specific, topic-specific, and publication-ready instead of generic placeholders. "
             "Keep 4 to 6 H2 sections. Always include one risk-boundary section. "
+            "Use the search_materials to decide the article framework before using any generic topic template. "
+            "Each section should map to at least one concrete source signal when possible. "
             "Do not output a fixed template."
         )
         human_prompt = (
             "topic:\n{topic}\n\n"
             "article_type:\n{article_type}\n\n"
+            "search_materials:\n{search_materials}\n\n"
             "evidence_pack:\n{evidence_pack}\n"
         )
         prompt = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", human_prompt)])
@@ -220,6 +422,7 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
                 "account_profile": planning_state.get("account_profile") or {},
                 "content_template": planning_state.get("content_template") or {},
             },
+            "search_materials": _build_search_materials_summary(search_materials),
             "evidence_pack": _build_evidence_summary(evidence_pack),
         }
         model_context = build_model_context(
@@ -240,6 +443,10 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
             blueprint = _normalize_blueprint_output(result)
             if len(blueprint.sections) < 4:
                 raise ValueError("insufficient dynamic sections from model blueprint")
+            if search_materials and not blueprint.source_driven_framework:
+                blueprint.source_driven_framework = _build_source_driven_sections(topic, search_materials)
+            if search_materials and not blueprint.evidence_map:
+                blueprint.evidence_map = _build_evidence_map(blueprint.sections, search_materials)
             log_model_response(
                 logger,
                 task_id=str(state.get("task_id") or ""),
@@ -253,7 +460,7 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
                 task_id=str(state.get("task_id") or ""),
                 error=str(exc),
             )
-            blueprint = _build_fallback_blueprint(topic, article_type, evidence_pack)
+            blueprint = _build_fallback_blueprint(topic, article_type, evidence_pack, search_materials)
 
     planning_state["article_blueprint"] = blueprint.model_dump()
     return {
