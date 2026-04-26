@@ -7,6 +7,12 @@ from workflow.skills.plan_article_angle import plan_article_angle_node
 from workflow.state import WorkflowState
 
 
+def _claim_text(item: Any) -> str:
+    if isinstance(item, dict):
+        return str(item.get("claim") or item.get("message") or item.get("title") or "").strip()
+    return str(item or "").strip()
+
+
 def _normalize_outline(blueprint: dict[str, Any], research_state: dict[str, Any]) -> dict[str, Any]:
     evidence_map = list(blueprint.get("evidence_map") or [])
     outline: list[dict[str, Any]] = []
@@ -31,9 +37,9 @@ def _normalize_outline(blueprint: dict[str, Any], research_state: dict[str, Any]
         if isinstance(item, dict) and str(item.get("claim") or "").strip()
     ][:8]
     risk_boundaries = [
-        str(item.get("claim") or item).strip()
+        claim
         for item in list(evidence_pack.get("risk_points") or []) + list(evidence_pack.get("research_gaps") or [])
-        if str(item.get("claim") if isinstance(item, dict) else item).strip()
+        if (claim := _claim_text(item))
     ][:6]
 
     inline_count = sum(1 for item in outline if item.get("image_hint") == "inline")

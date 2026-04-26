@@ -26,6 +26,7 @@ async def test_outline_planner_outputs_structured_outline_from_evidence() -> Non
                 "confirmed_facts": [{"claim": "Enterprise buyers slow rollout."}],
                 "usable_data_points": [{"claim": "Payback cycles are lengthening."}],
                 "risk_points": [{"claim": "Single-source data should be treated carefully."}],
+                "research_gaps": ["missing_high_confidence_fact"],
             },
         },
     }
@@ -44,3 +45,22 @@ async def test_outline_planner_outputs_structured_outline_from_evidence() -> Non
     assert outline_result["risk_boundaries"]
     assert outline_result["image_plan_seed"]["cover_needed"] is True
     assert result["planning_state"]["outline_result"] == outline_result
+
+
+def test_outline_planner_handles_string_risk_items() -> None:
+    from workflow.skills.outline_planner import _normalize_outline
+
+    outline = _normalize_outline(
+        {
+            "sections": [{"heading": "证据边界", "goal": "说明限制", "shape": "validation"}],
+            "evidence_map": [],
+        },
+        {
+            "evidence_pack": {
+                "risk_points": ["单一来源风险"],
+                "research_gaps": ["missing_data_evidence"],
+            }
+        },
+    )
+
+    assert outline["risk_boundaries"] == ["单一来源风险", "missing_data_evidence"]

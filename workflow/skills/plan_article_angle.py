@@ -394,7 +394,14 @@ def _build_evidence_summary(evidence_pack: dict[str, Any]) -> str:
         items = list(evidence_pack.get(label) or [])
         if not items:
             continue
-        claims = [str(item.get("claim") or "").strip() for item in items[:4] if str(item.get("claim") or "").strip()]
+        claims = []
+        for item in items[:4]:
+            if isinstance(item, dict):
+                claim = str(item.get("claim") or item.get("message") or item.get("title") or "").strip()
+            else:
+                claim = str(item or "").strip()
+            if claim:
+                claims.append(claim)
         if claims:
             lines.append(f"{label}: " + " | ".join(claims))
     research_gaps = list(evidence_pack.get("research_gaps") or [])
