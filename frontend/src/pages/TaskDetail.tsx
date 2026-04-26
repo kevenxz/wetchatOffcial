@@ -94,6 +94,33 @@ function normalizeArticleHtml(html: string | undefined) {
   return doc.body.innerHTML
 }
 
+function collectImageRefs(article: Record<string, any> | undefined) {
+  if (!article) return []
+  const refs: Array<{ role: string; src: string; prompt?: string; purpose?: string }> = []
+  const seen = new Set<string>()
+  const pushRef = (role: string, rawSrc: string | undefined, prompt?: string, purpose?: string) => {
+    const src = normalizeImageSrc(rawSrc)
+    if (!src || seen.has(src)) return
+    seen.add(src)
+    refs.push({ role, src, prompt, purpose })
+  }
+  pushRef('cover', article.cover_image)
+  ;(article.illustrations || []).forEach((item: string, index: number) => pushRef(`插图${index + 1}`, item))
+  ;[...(article.images || []), ...(article.visual_assets || [])].forEach((asset: string | Record<string, any>, index: number) => {
+    if (typeof asset === 'string') {
+      pushRef(`图片${index + 1}`, asset)
+      return
+    }
+    pushRef(
+      String(asset.role || `图片${index + 1}`),
+      String(asset.url || asset.path || asset.src || asset.ref || ''),
+      String(asset.prompt || ''),
+      String(asset.purpose || asset.section || ''),
+    )
+  })
+  return refs
+}
+
 export default function TaskDetail() {
   const { id: taskId } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -224,7 +251,9 @@ export default function TaskDetail() {
         outline_result?: Record<string, any>
       }
     | undefined
-  const articleHtml = finalArticle?.html_content
+  const imageRefs = collectImageRefs(finalArticle)
+  const htmlHasImages = /<img\s/i.test(String(finalArticle?.html_content || ''))
+  const articleHtml = finalArticle?.html_content && (htmlHasImages || !finalArticle?.illustrations?.length)
     ? normalizeArticleHtml(finalArticle.html_content)
     : buildArticleHtml(finalArticle?.content, finalArticle?.illustrations)
   const coverImage = normalizeImageSrc(finalArticle?.cover_image)
@@ -337,6 +366,19 @@ export default function TaskDetail() {
                           className={styles.articleContent}
                           dangerouslySetInnerHTML={{ __html: articleHtml || '<p>暂无正文内容。</p>' }}
                         />
+                        {imageRefs.length ? (
+                          <div className={styles.imageGallery}>
+                            {imageRefs.map((image) => (
+                              <figure key={`${image.role}-${image.src}`} className={styles.imageCard}>
+                                <img src={image.src} alt={image.role} />
+                                <figcaption>
+                                  <strong>{image.role}</strong>
+                                  {image.purpose ? <span>{image.purpose}</span> : null}
+                                </figcaption>
+                              </figure>
+                            ))}
+                          </div>
+                        ) : null}
                       </article>
                     ) : (
                       <Empty description="任务完成，但尚未返回正文内容。" />

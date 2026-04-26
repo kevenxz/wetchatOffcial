@@ -160,6 +160,42 @@
   height: auto;
 }
 
+.imageGallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  margin-top: 10px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(15, 23, 42, 0.12);
+}
+
+.imageCard {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 18px;
+  background: #f8fafc;
+}
+
+.imageCard img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+
+.imageCard figcaption {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  color: #475569;
+  font-size: 0.82rem;
+}
+
+.imageCard figcaption strong {
+  color: #0f172a;
+}
+
 .metaGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

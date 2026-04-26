@@ -96,6 +96,28 @@ function buildPreviewHtml(markdownText: string, config: StyleConfig | undefined,
   return container.outerHTML
 }
 
+function collectImageRefs(article: Record<string, any> | undefined) {
+  if (!article) return []
+  const refs: Array<{ role: string; src: string }> = []
+  const seen = new Set<string>()
+  const pushRef = (role: string, rawSrc: string | undefined) => {
+    const src = normalizeImageSrc(rawSrc)
+    if (!src || seen.has(src)) return
+    seen.add(src)
+    refs.push({ role, src })
+  }
+  pushRef('封面', article.cover_image)
+  ;(article.illustrations || []).forEach((item: string, index: number) => pushRef(`插图${index + 1}`, item))
+  ;[...(article.images || []), ...(article.visual_assets || [])].forEach((asset: string | Record<string, any>, index: number) => {
+    if (typeof asset === 'string') {
+      pushRef(`图片${index + 1}`, asset)
+      return
+    }
+    pushRef(String(asset.role || `图片${index + 1}`), String(asset.url || asset.path || asset.src || asset.ref || ''))
+  })
+  return refs
+}
+
 function getPushedAccountNames(pushRecords: PushRecord[] | undefined): string[] {
   const records = pushRecords ?? []
   const names = records
@@ -341,12 +363,15 @@ export default function ArticleManage() {
   const previewTitle = previewGeneratedArticle?.title ?? '请选择一篇文章查看预览'
   const previewContent = previewArticle ? String(previewGeneratedArticle?.content || '') : ''
   const previewCoverImage = normalizeImageSrc(String(previewGeneratedArticle?.cover_image || ''))
+  const previewImageRefs = collectImageRefs(previewGeneratedArticle as Record<string, any> | undefined)
+  const previewHtmlContent = String(previewGeneratedArticle?.html_content || '')
+  const previewHtmlHasImages = /<img\s/i.test(previewHtmlContent)
   const previewHtml = previewArticle
     ? buildPreviewHtml(
         previewContent,
         themeConfigMap[previewThemeName],
         previewGeneratedArticle?.illustrations as string[] | undefined,
-        String(previewGeneratedArticle?.html_content || ''),
+        previewHtmlHasImages ? previewHtmlContent : '',
       )
     : ''
 
@@ -455,6 +480,37 @@ export default function ArticleManage() {
                   />
                 ) : null}
                 <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                {previewImageRefs.length ? (
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                      gap: 12,
+                      marginTop: 18,
+                      paddingTop: 16,
+                      borderTop: '1px solid #e5e7eb',
+                    }}
+                  >
+                    {previewImageRefs.map((image) => (
+                      <figure key={`${image.role}-${image.src}`} style={{ margin: 0 }}>
+                        <img
+                          src={image.src}
+                          alt={image.role}
+                          style={{
+                            display: 'block',
+                            width: '100%',
+                            aspectRatio: '16 / 10',
+                            objectFit: 'cover',
+                            borderRadius: 10,
+                          }}
+                        />
+                        <figcaption style={{ marginTop: 6, color: '#64748b', fontSize: 12 }}>
+                          {image.role}
+                        </figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : (
               <Empty description="选择一篇文章查看预览" />
