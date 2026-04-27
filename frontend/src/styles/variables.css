@@ -1,24 +1,24 @@
 :root {
-  --app-primary: #166534;
-  --app-primary-hover: #15803d;
-  --app-primary-active: #14532d;
-  --app-primary-bg: rgba(22, 101, 52, 0.1);
-  --app-primary-bg-hover: rgba(22, 101, 52, 0.16);
+  --app-primary: #5b3ff4;
+  --app-primary-hover: #6d5dfc;
+  --app-primary-active: #4f32d9;
+  --app-primary-bg: rgba(91, 63, 244, 0.1);
+  --app-primary-bg-hover: rgba(91, 63, 244, 0.16);
 
   --app-success: #34d399;
   --app-warning: #fbbf24;
   --app-error: #f87171;
   --app-info: #7dd3fc;
 
-  --app-bg: #f6f8f4;
-  --app-bg-gradient: #f6f8f4;
+  --app-bg: #f7f8fa;
+  --app-bg-gradient: #f7f8fa;
   --app-surface: #ffffff;
-  --app-surface-muted: #f1f4ee;
-  --app-surface-strong: #e7ece3;
-  --app-toolbar-bg: #f1f4ee;
-  --app-list-row-hover: #eef3ec;
-  --app-border: #d9ded3;
-  --app-border-strong: #c4cbbc;
+  --app-surface-muted: #f8fafc;
+  --app-surface-strong: #eef2ff;
+  --app-toolbar-bg: #ffffff;
+  --app-list-row-hover: #f8fafc;
+  --app-border: #e8ebf0;
+  --app-border-strong: #d8dce5;
   --app-text: #0f172a;
   --app-text-secondary: #516074;
   --app-text-tertiary: #738196;
@@ -27,11 +27,11 @@
   --app-shadow-md: 0 18px 40px -24px rgba(15, 23, 42, 0.18), 0 10px 24px -18px rgba(15, 23, 42, 0.12);
   --app-shadow-lg: 0 30px 60px -28px rgba(15, 23, 42, 0.22);
 
-  --color-primary: #166534;
-  --color-primary-hover: #15803d;
-  --color-primary-active: #14532d;
-  --color-primary-bg: rgba(22, 101, 52, 0.1);
-  --color-primary-bg-hover: rgba(22, 101, 52, 0.16);
+  --color-primary: #5b3ff4;
+  --color-primary-hover: #6d5dfc;
+  --color-primary-active: #4f32d9;
+  --color-primary-bg: rgba(91, 63, 244, 0.1);
+  --color-primary-bg-hover: rgba(91, 63, 244, 0.16);
 
   --color-success: #34d399;
   --color-success-bg: rgba(52, 211, 153, 0.12);
@@ -119,15 +119,15 @@
 }
 
 :root[data-theme='light'] {
-  --app-bg: #f6f8f4;
-  --app-bg-gradient: #f6f8f4;
+  --app-bg: #f7f8fa;
+  --app-bg-gradient: #f7f8fa;
   --app-surface: #ffffff;
-  --app-surface-muted: #f1f4ee;
-  --app-surface-strong: #e7ece3;
-  --app-toolbar-bg: #f1f4ee;
-  --app-list-row-hover: #eef3ec;
-  --app-border: #d9ded3;
-  --app-border-strong: #c4cbbc;
+  --app-surface-muted: #f8fafc;
+  --app-surface-strong: #eef2ff;
+  --app-toolbar-bg: #ffffff;
+  --app-list-row-hover: #f8fafc;
+  --app-border: #e8ebf0;
+  --app-border-strong: #d8dce5;
   --app-text: #0f172a;
   --app-text-secondary: #516074;
   --app-text-tertiary: #738196;

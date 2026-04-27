@@ -188,13 +188,13 @@ describe('ThemeModeSwitch', () => {
 
     expect(document.documentElement.dataset.theme).toBe('light')
     expect(getComputedStyle(document.documentElement).getPropertyValue('--app-bg').trim()).toBe(
-      '#f6f8f4',
+      '#f7f8fa',
     )
-    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f6f8f4')
+    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f7f8fa')
 
     document.documentElement.removeAttribute('data-theme')
 
-    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f6f8f4')
+    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f7f8fa')
 
     bridgeProbe.remove()
   })
@@ -292,16 +292,14 @@ describe('ThemeModeSwitch', () => {
     const footerRule = getCssRuleForClass(getCssModuleClass(lightSurfaces.footer!))
     const canvasRule = getCssRuleForClass(getCssModuleClass(lightSurfaces.canvas!))
 
-    expect(shellRule).toContain('var(--app-bg)')
-    expect(sidebarRule).toContain('var(--app-surface)')
-    expect(sidebarRule).toContain('var(--app-border)')
-    expect(brandRule).toContain('var(--app-surface-muted)')
-    expect(brandRule).toContain('var(--app-border)')
-    expect(brandCopyRule).toContain('var(--app-text-tertiary)')
-    expect(navLinkRule).toContain('var(--app-text-secondary)')
-    expect(activeNavRule).toContain('#edf3ef')
-    expect(footerRule).toContain('var(--app-text-tertiary)')
-    expect(activeNavRule).toContain('var(--app-text)')
+    expect(shellRule).toContain('#f7f8fa')
+    expect(sidebarRule).toContain('#111827')
+    expect(brandRule).toContain('rgba(148, 163, 184, 0.18)')
+    expect(brandCopyRule).toContain('#7f8ea3')
+    expect(navLinkRule).toContain('#9aa7ba')
+    expect(activeNavRule).toContain('#5b3ff4')
+    expect(footerRule).toContain('rgba(148, 163, 184, 0.18)')
+    expect(activeNavRule).toContain('#fff')
     expect(sidebarRule).not.toContain('var(--text-')
     expect(brandRule).not.toContain('var(--text-')
     expect(brandCopyRule).not.toContain('var(--text-')
@@ -326,17 +324,17 @@ describe('ThemeModeSwitch', () => {
     expect(darkSurfaces.footer).toBeInTheDocument()
     expect(darkSurfaces.canvas).toBeInTheDocument()
 
-    expect(resolveCssValue(getComputedStyle(darkSurfaces.sidebar as HTMLElement).background)).toBe(
-      '#121a2b',
+    expect(resolveCssValue(getComputedStyle(darkSurfaces.sidebar as HTMLElement).backgroundColor)).toBe(
+      'rgb(17, 24, 39)',
     )
-    expect(resolveCssValue(getComputedStyle(darkSurfaces.brand as HTMLElement).background)).toBe(
-      '#0f172a',
+    expect(resolveCssValue(getComputedStyle(darkSurfaces.brand as HTMLElement).borderBottomColor)).toBe(
+      'rgba(148, 163, 184, 0.18)',
     )
     expect(resolveCssValue(getComputedStyle(darkSurfaces.brandCopy as HTMLElement).color)).toBe(
-      '#71829e',
+      'rgb(127, 142, 163)',
     )
-    expect(resolveCssValue(getComputedStyle(darkSurfaces.footer as HTMLElement).color)).toBe(
-      '#71829e',
+    expect(resolveCssValue(getComputedStyle(darkSurfaces.footer as HTMLElement).borderTopColor)).toBe(
+      'rgba(148, 163, 184, 0.18)',
     )
     expect(darkSurfaces.canvas).toBeInTheDocument()
   })

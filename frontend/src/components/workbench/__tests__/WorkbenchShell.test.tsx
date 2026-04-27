@@ -1,29 +1,16 @@
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import { beforeEach, expect, test } from 'vitest'
-import App from '@/App'
+import WorkbenchShell from '@/components/workbench/WorkbenchShell'
 import useAuthStore from '@/store/authStore'
+import { renderWithRouter } from '@/test/renderWithRouter'
 
 beforeEach(() => {
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    value: (query: string) => ({
-      matches: false,
-      media: query,
-      onchange: null,
-      addListener: () => undefined,
-      removeListener: () => undefined,
-      addEventListener: () => undefined,
-      removeEventListener: () => undefined,
-      dispatchEvent: () => false,
-    }),
-  })
-  localStorage.setItem('wechat_project_access_token', 'test-token')
   useAuthStore.setState({
     token: 'test-token',
     user: {
       user_id: 'u-1',
       username: 'admin',
-      display_name: 'Admin',
+      display_name: '管理员',
       role: 'admin',
       enabled: true,
       created_at: '2026-01-01T00:00:00Z',
@@ -32,21 +19,21 @@ beforeEach(() => {
     },
     initialized: true,
   })
-  window.history.replaceState({}, '', '/task')
 })
 
-test('renders the brand studio shell for the task creation route', async () => {
-  render(<App />)
+test('renders the AI content factory shell for task management', () => {
+  renderWithRouter(<WorkbenchShell />, { route: '/task' })
 
-  expect((await screen.findAllByText('Brand Studio')).length).toBeGreaterThan(0)
-  expect(screen.getByRole('link', { name: '创作台' })).toBeInTheDocument()
-  expect(screen.getByText('任务创建')).toBeInTheDocument()
+  expect(screen.getByText('AI内容工厂')).toBeInTheDocument()
+  expect(screen.getByText('智能公众号生产系统')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: '任务管理' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: '任务管理' })).toBeInTheDocument()
 })
 
-test('keeps system accounts as a standalone navigation entry', async () => {
-  render(<App />)
+test('keeps system accounts as a standalone navigation entry', () => {
+  renderWithRouter(<WorkbenchShell />, { route: '/task' })
 
-  const systemAccountLink = await screen.findByRole('link', { name: '系统账号' })
+  const systemAccountLink = screen.getByRole('link', { name: '系统账号' })
 
   expect(systemAccountLink).toHaveAttribute('href', '/users')
   expect(screen.queryByRole('link', { name: '系统管理' })).not.toBeInTheDocument()

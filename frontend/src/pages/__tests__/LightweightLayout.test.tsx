@@ -81,7 +81,7 @@ function getDeclarationValue(ruleBody: string, property: string) {
   return match?.[1]?.replace(/\s*!important\s*$/i, '').trim() ?? ''
 }
 
-test('renders a dense 232px sidebar shell with top context bar', () => {
+test('renders a dark 280px sidebar shell with top context bar', () => {
   const { container } = renderWithRouter(<WorkbenchShell />, { route: '/task', theme: 'light' })
 
   const shell = container.firstElementChild as HTMLElement | null
@@ -97,13 +97,12 @@ test('renders a dense 232px sidebar shell with top context bar', () => {
   const shellStyle = getComputedStyle(shell as HTMLElement)
   const topbarStyle = getComputedStyle(topbar as HTMLElement)
 
-  expect(shellStyle.getPropertyValue('grid-template-columns')).toBe('232px minmax(0, 1fr)')
+  expect(shellStyle.getPropertyValue('grid-template-columns')).toBe('280px minmax(0, 1fr)')
   expect(shellStyle.getPropertyValue('background-image')).toBe('')
-  expect(topbarStyle.minHeight).toBe('68px')
-  expect(topbarStyle.paddingTop).toBe('12px')
-  expect(topbarStyle.paddingRight).toBe('22px')
-  expect(topbarStyle.paddingBottom).toBe('12px')
-  expect(topbarStyle.paddingLeft).toBe('22px')
+  expect(topbarStyle.paddingTop).toBe('0px')
+  expect(topbarStyle.paddingRight).toBe('28px')
+  expect(topbarStyle.paddingBottom).toBe('0px')
+  expect(topbarStyle.paddingLeft).toBe('28px')
 })
 
 test('renders a compact HeroPanel with spaced title and description', () => {
@@ -147,7 +146,7 @@ test('collapses the shell to a single column at the breakpoint', () => {
   const sheet = Array.from(document.styleSheets).find((candidate) => {
     try {
       return Array.from(candidate.cssRules).some(
-        (rule) => rule instanceof CSSMediaRule && rule.conditionText.includes('max-width: 1100px'),
+        (rule) => rule instanceof CSSMediaRule && rule.conditionText.includes('max-width: 1180px'),
       )
     } catch {
       return false
@@ -157,7 +156,7 @@ test('collapses the shell to a single column at the breakpoint', () => {
   expect(sheet).toBeDefined()
 
   const mediaRule = Array.from((sheet as CSSStyleSheet).cssRules).find(
-    (rule) => rule instanceof CSSMediaRule && rule.conditionText.includes('max-width: 1100px'),
+    (rule) => rule instanceof CSSMediaRule && rule.conditionText.includes('max-width: 1180px'),
   ) as CSSMediaRule | undefined
 
   expect(mediaRule).toBeDefined()
@@ -182,9 +181,9 @@ test('keeps shared surfaces light in light mode', () => {
   expect(canvas).toBeInTheDocument()
 
   const rootRuleBody = getRuleBody(variablesSource, ":root[data-theme='light']")
-  expect(getDeclarationValue(rootRuleBody, '--app-surface-muted')).toBe('#f1f4ee')
-  expect(getDeclarationValue(rootRuleBody, '--app-toolbar-bg')).toBe('#f1f4ee')
-  expect(getDeclarationValue(rootRuleBody, '--app-list-row-hover')).toBe('#eef3ec')
+  expect(getDeclarationValue(rootRuleBody, '--app-surface-muted')).toBe('#f8fafc')
+  expect(getDeclarationValue(rootRuleBody, '--app-toolbar-bg')).toBe('#ffffff')
+  expect(getDeclarationValue(rootRuleBody, '--app-list-row-hover')).toBe('#f8fafc')
 
   const toolbarRuleBody = getRuleBody(globalStylesSource, '.backstage-toolbar')
   expect(getDeclarationValue(toolbarRuleBody, 'background')).toBe('var(--app-toolbar-bg)')

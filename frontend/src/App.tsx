@@ -6,6 +6,7 @@ import { useThemeStore } from '@/store/themeStore'
 import AccountConfigPage from '@/pages/AccountConfig'
 import ArticleManage from '@/pages/ArticleManage'
 import History from '@/pages/History'
+import ImageManage from '@/pages/ImageManage'
 import LoginPage from '@/pages/Login'
 import ModelConfigPage from '@/pages/ModelConfig'
 import ReviewCenter from '@/pages/ReviewCenter'
@@ -13,6 +14,7 @@ import ScheduleManage from '@/pages/ScheduleManage'
 import StyleConfigPage from '@/pages/StyleConfig'
 import TaskCreate from '@/pages/TaskCreate'
 import TaskDetail from '@/pages/TaskDetail'
+import TaskManage from '@/pages/TaskManage'
 import TopicCenter from '@/pages/TopicCenter'
 import UserManage from '@/pages/UserManage'
 import useAuthStore from '@/store/authStore'
@@ -52,11 +54,13 @@ export default function App() {
           <Route path="/" element={<Navigate to="/task" replace />} />
           <Route element={<WorkbenchShell />}>
             <Route path="/topics" element={<TopicCenter />} />
-            <Route path="/task" element={<TaskCreate />} />
+            <Route path="/task" element={<TaskManage />} />
+            <Route path="/task/new" element={<TaskCreate />} />
             <Route path="/task/:id" element={<TaskDetail />} />
             <Route path="/reviews" element={<ReviewCenter />} />
             <Route path="/history" element={<History />} />
             <Route path="/articles" element={<ArticleManage />} />
+            <Route path="/images" element={<ImageManage />} />
             <Route path="/schedules" element={<ScheduleManage />} />
             <Route path="/settings" element={<StyleConfigPage />} />
             <Route path="/models" element={<ModelConfigPage />} />
