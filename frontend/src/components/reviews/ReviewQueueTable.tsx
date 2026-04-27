@@ -139,7 +139,7 @@ export default function ReviewQueueTable({
       rowKey="review_id"
       loading={loading}
       pagination={{ pageSize: 8 }}
-      size="middle"
+      size="small"
     />
   )
 }

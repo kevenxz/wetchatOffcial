@@ -81,7 +81,7 @@ export default function ReviewCenter() {
   return (
     <div className="backstage-page">
       <div className={styles.layout}>
-        <Card className="backstage-surface-card">
+        <Card className="backstage-surface-card" size="small">
           <div className={styles.toolbar}>
             <Space wrap>
               <Select
@@ -111,7 +111,7 @@ export default function ReviewCenter() {
           )}
         </Card>
 
-        <Card className="backstage-surface-card">
+        <Card className="backstage-surface-card" size="small">
           <div className={styles.riskPanel}>
             <Title level={4}>风险摘要</Title>
             {selectedReview ? (

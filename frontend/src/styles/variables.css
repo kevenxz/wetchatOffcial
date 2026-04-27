@@ -1,27 +1,24 @@
 :root {
-  --app-primary: #7dd3fc;
-  --app-primary-hover: #a5f3fc;
-  --app-primary-active: #38bdf8;
-  --app-primary-bg: rgba(125, 211, 252, 0.12);
-  --app-primary-bg-hover: rgba(125, 211, 252, 0.18);
+  --app-primary: #166534;
+  --app-primary-hover: #15803d;
+  --app-primary-active: #14532d;
+  --app-primary-bg: rgba(22, 101, 52, 0.1);
+  --app-primary-bg-hover: rgba(22, 101, 52, 0.16);
 
   --app-success: #34d399;
   --app-warning: #fbbf24;
   --app-error: #f87171;
   --app-info: #7dd3fc;
 
-  --app-bg: #f3f6fb;
-  --app-bg-gradient:
-    radial-gradient(circle at top left, rgba(125, 211, 252, 0.16), transparent 35%),
-    radial-gradient(circle at top right, rgba(167, 139, 250, 0.08), transparent 28%),
-    linear-gradient(180deg, #f3f6fb 0%, #eef3fb 100%);
+  --app-bg: #f6f8f4;
+  --app-bg-gradient: #f6f8f4;
   --app-surface: #ffffff;
-  --app-surface-muted: #f8fbff;
-  --app-surface-strong: #eef4fb;
-  --app-toolbar-bg: #f8fbff;
-  --app-list-row-hover: #f3f7fd;
-  --app-border: #d8e1ee;
-  --app-border-strong: #c7d3e4;
+  --app-surface-muted: #f1f4ee;
+  --app-surface-strong: #e7ece3;
+  --app-toolbar-bg: #f1f4ee;
+  --app-list-row-hover: #eef3ec;
+  --app-border: #d9ded3;
+  --app-border-strong: #c4cbbc;
   --app-text: #0f172a;
   --app-text-secondary: #516074;
   --app-text-tertiary: #738196;
@@ -30,11 +27,11 @@
   --app-shadow-md: 0 18px 40px -24px rgba(15, 23, 42, 0.18), 0 10px 24px -18px rgba(15, 23, 42, 0.12);
   --app-shadow-lg: 0 30px 60px -28px rgba(15, 23, 42, 0.22);
 
-  --color-primary: #7dd3fc;
-  --color-primary-hover: #a5f3fc;
-  --color-primary-active: #38bdf8;
-  --color-primary-bg: rgba(125, 211, 252, 0.12);
-  --color-primary-bg-hover: rgba(125, 211, 252, 0.18);
+  --color-primary: #166534;
+  --color-primary-hover: #15803d;
+  --color-primary-active: #14532d;
+  --color-primary-bg: rgba(22, 101, 52, 0.1);
+  --color-primary-bg-hover: rgba(22, 101, 52, 0.16);
 
   --color-success: #34d399;
   --color-success-bg: rgba(52, 211, 153, 0.12);
@@ -83,8 +80,8 @@
   --space-2xl: 48px;
   --space-3xl: 64px;
 
-  --font-family-sans: 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
-  --font-family-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --font-family-sans: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+  --font-family-mono: 'SFMono-Regular', Consolas, monospace;
   --font-xs: 12px;
   --font-sm: 14px;
   --font-base: 16px;
@@ -122,18 +119,15 @@
 }
 
 :root[data-theme='light'] {
-  --app-bg: #f3f6fb;
-  --app-bg-gradient:
-    radial-gradient(circle at top left, rgba(125, 211, 252, 0.16), transparent 35%),
-    radial-gradient(circle at top right, rgba(167, 139, 250, 0.08), transparent 28%),
-    linear-gradient(180deg, #f3f6fb 0%, #eef3fb 100%);
+  --app-bg: #f6f8f4;
+  --app-bg-gradient: #f6f8f4;
   --app-surface: #ffffff;
-  --app-surface-muted: #f8fbff;
-  --app-surface-strong: #eef4fb;
-  --app-toolbar-bg: #f8fbff;
-  --app-list-row-hover: #f3f7fd;
-  --app-border: #d8e1ee;
-  --app-border-strong: #c7d3e4;
+  --app-surface-muted: #f1f4ee;
+  --app-surface-strong: #e7ece3;
+  --app-toolbar-bg: #f1f4ee;
+  --app-list-row-hover: #eef3ec;
+  --app-border: #d9ded3;
+  --app-border-strong: #c4cbbc;
   --app-text: #0f172a;
   --app-text-secondary: #516074;
   --app-text-tertiary: #738196;

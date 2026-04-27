@@ -131,7 +131,7 @@ export default function TopicCandidateTable({
       rowKey="topic_id"
       loading={loading}
       pagination={{ pageSize: 8 }}
-      size="middle"
+      size="small"
     />
   )
 }

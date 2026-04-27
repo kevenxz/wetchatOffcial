@@ -3,9 +3,7 @@ import { Button } from 'antd'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { navigationItems, resolveRouteMeta } from '@/config/navigation'
 import useAuthStore from '@/store/authStore'
-import HeroPanel from './HeroPanel'
 import ThemeModeSwitch from './ThemeModeSwitch'
-import SectionBlock from './SectionBlock'
 import styles from './WorkbenchShell.module.css'
 
 export default function WorkbenchShell() {
@@ -21,14 +19,16 @@ export default function WorkbenchShell() {
   }
 
   return (
-    <div className={styles.shell} style={{ backgroundImage: 'none' }}>
+    <div className={styles.shell}>
       <aside className={styles.sidebar}>
         <div className={styles.brand}>
           <span className={styles.brandMark} aria-hidden="true">
             <WechatOutlined />
           </span>
-          <strong className={styles.brandTitle}>Brand Studio</strong>
-          <p className={styles.brandCopy}>面向公众号生产链路的统一创作工作台。</p>
+          <div>
+            <strong className={styles.brandTitle}>Brand Studio</strong>
+            <span className={styles.brandCopy}>内容生产后台</span>
+          </div>
         </div>
 
         <nav className={styles.nav} aria-label="Primary">
@@ -48,31 +48,26 @@ export default function WorkbenchShell() {
           ))}
         </nav>
 
-        <p className={styles.sidebarFooter}>Brand Studio 工作台骨架已接入新的应用外壳。</p>
+        <p className={styles.sidebarFooter}>Workflow / Agents / Review</p>
       </aside>
 
       <main className={styles.main}>
-        <div className={styles.frame}>
+        <header className={styles.topbar}>
+          <div className={styles.routeContext}>
+            <span className={styles.eyebrow}>{routeMeta.contextEyebrow}</span>
+            <h1>{routeMeta.contextTitle}</h1>
+            <p>{routeMeta.contextDescription}</p>
+          </div>
           <div className={styles.toolbar}>
             <ThemeModeSwitch />
             <Button icon={<LogoutOutlined />} size="small" onClick={handleLogout}>
               {user?.display_name ?? user?.username ?? '退出登录'}
             </Button>
           </div>
+        </header>
 
-          <HeroPanel
-            eyebrow={routeMeta.contextEyebrow}
-            title={routeMeta.contextTitle}
-            description={routeMeta.contextDescription}
-          />
-
-          <div className={styles.overview}>
-            <SectionBlock title="工作区">
-              <div className={styles.canvas}>
-                <Outlet />
-              </div>
-            </SectionBlock>
-          </div>
+        <div className={styles.canvas}>
+          <Outlet />
         </div>
       </main>
     </div>

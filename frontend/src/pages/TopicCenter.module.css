@@ -1,13 +1,18 @@
 .toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
   justify-content: space-between;
 }
 
 .summaryGrid {
   display: grid;
-  gap: 16px;
+  gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.search {
+  flex: 1 1 280px;
+  max-width: 420px;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Button, Card, Empty, Select, message } from 'antd'
-import { ReloadOutlined } from '@ant-design/icons'
+import { Button, Card, Empty, Input, Select, Space, message } from 'antd'
+import { PlusOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
   convertTopicToTask,
   ignoreTopic,
@@ -25,6 +25,7 @@ export default function TopicCenter() {
   const [status, setStatus] = useState<TopicFilter>('pending')
   const [loading, setLoading] = useState(false)
   const [actionLoadingId, setActionLoadingId] = useState('')
+  const [keyword, setKeyword] = useState('')
 
   const fetchTopics = async (nextStatus = status) => {
     setLoading(true)
@@ -76,7 +77,7 @@ export default function TopicCenter() {
         <TopicScoreCard label="已转任务" value={metrics.converted} tone="success" />
       </div>
 
-      <Card className="backstage-surface-card">
+      <Card className="backstage-surface-card" size="small">
         <div className={styles.toolbar}>
           <Select
             aria-label="选题状态筛选"
@@ -85,18 +86,31 @@ export default function TopicCenter() {
             style={{ width: 160 }}
             onChange={handleStatusChange}
           />
-          <Button icon={<ReloadOutlined />} onClick={() => void fetchTopics()} loading={loading}>
-            刷新
-          </Button>
+          <Input.Search
+            aria-label="选题关键词"
+            placeholder="筛选标题、标签、来源"
+            allowClear
+            className={styles.search}
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+          />
+          <Space>
+            <Button icon={<ReloadOutlined />} onClick={() => void fetchTopics()} loading={loading}>
+              刷新
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />}>
+              手动选题
+            </Button>
+          </Space>
         </div>
       </Card>
 
-      <Card className="backstage-surface-card">
-        {topics.length === 0 && !loading ? (
+      <Card className="backstage-surface-card" size="small">
+        {topics.filter((item) => !keyword || `${item.title} ${item.summary ?? ''} ${item.source ?? ''} ${(item.tags ?? []).join(' ')}`.toLowerCase().includes(keyword.toLowerCase())).length === 0 && !loading ? (
           <Empty description="暂无候选选题" />
         ) : (
           <TopicCandidateTable
-            topics={topics}
+            topics={topics.filter((item) => !keyword || `${item.title} ${item.summary ?? ''} ${item.source ?? ''} ${(item.tags ?? []).join(' ')}`.toLowerCase().includes(keyword.toLowerCase()))}
             loading={loading}
             actionLoadingId={actionLoadingId}
             onIgnore={(topicId) => void runTopicAction(topicId, 'ignore')}

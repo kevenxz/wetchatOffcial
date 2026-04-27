@@ -1,6 +1,10 @@
 .card {
   border: 1px solid var(--app-border);
-  border-radius: 12px;
+  border-radius: 8px;
   background: var(--app-surface);
   box-shadow: none;
+}
+
+.card :global(.ant-card-body) {
+  padding: 12px 14px;
 }
