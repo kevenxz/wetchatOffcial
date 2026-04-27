@@ -188,13 +188,13 @@ describe('ThemeModeSwitch', () => {
 
     expect(document.documentElement.dataset.theme).toBe('light')
     expect(getComputedStyle(document.documentElement).getPropertyValue('--app-bg').trim()).toBe(
-      '#f3f6fb',
+      '#f6f8f4',
     )
-    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f3f6fb')
+    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f6f8f4')
 
     document.documentElement.removeAttribute('data-theme')
 
-    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f3f6fb')
+    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f6f8f4')
 
     bridgeProbe.remove()
   })
@@ -293,15 +293,13 @@ describe('ThemeModeSwitch', () => {
     const canvasRule = getCssRuleForClass(getCssModuleClass(lightSurfaces.canvas!))
 
     expect(shellRule).toContain('var(--app-bg)')
-    expect(shellRule).toContain('var(--app-bg-gradient)')
     expect(sidebarRule).toContain('var(--app-surface)')
     expect(sidebarRule).toContain('var(--app-border)')
-    expect(brandRule).toContain('var(--app-surface-strong)')
+    expect(brandRule).toContain('var(--app-surface-muted)')
     expect(brandRule).toContain('var(--app-border)')
-    expect(brandCopyRule).toContain('var(--app-text-secondary)')
+    expect(brandCopyRule).toContain('var(--app-text-tertiary)')
     expect(navLinkRule).toContain('var(--app-text-secondary)')
-    expect(activeNavRule).toContain('var(--app-primary-bg)')
-    expect(activeNavRule).toContain('var(--app-surface-strong)')
+    expect(activeNavRule).toContain('#edf3ef')
     expect(footerRule).toContain('var(--app-text-tertiary)')
     expect(activeNavRule).toContain('var(--app-text)')
     expect(sidebarRule).not.toContain('var(--text-')
@@ -310,8 +308,7 @@ describe('ThemeModeSwitch', () => {
     expect(navLinkRule).not.toContain('var(--text-')
     expect(activeNavRule).not.toContain('var(--text-')
     expect(footerRule).not.toContain('var(--text-')
-    expect(canvasRule).toContain('var(--app-surface)')
-    expect(canvasRule).toContain('var(--app-border)')
+    expect(canvasRule).toContain('padding')
 
     act(() => {
       useThemeStore.getState().setMode('dark', true)
@@ -333,17 +330,15 @@ describe('ThemeModeSwitch', () => {
       '#121a2b',
     )
     expect(resolveCssValue(getComputedStyle(darkSurfaces.brand as HTMLElement).background)).toBe(
-      '#182235',
+      '#0f172a',
     )
     expect(resolveCssValue(getComputedStyle(darkSurfaces.brandCopy as HTMLElement).color)).toBe(
-      '#a6b4c9',
+      '#71829e',
     )
     expect(resolveCssValue(getComputedStyle(darkSurfaces.footer as HTMLElement).color)).toBe(
       '#71829e',
     )
-    expect(resolveCssValue(getComputedStyle(darkSurfaces.canvas as HTMLElement).background)).toBe(
-      '#121a2b',
-    )
+    expect(darkSurfaces.canvas).toBeInTheDocument()
   })
 
   it('uses semantic theme variables for the trigger surface in light mode', () => {

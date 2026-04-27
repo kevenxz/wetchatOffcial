@@ -81,30 +81,29 @@ function getDeclarationValue(ruleBody: string, property: string) {
   return match?.[1]?.replace(/\s*!important\s*$/i, '').trim() ?? ''
 }
 
-test('renders a fixed 216px sidebar shell with compact main spacing', () => {
+test('renders a dense 232px sidebar shell with top context bar', () => {
   const { container } = renderWithRouter(<WorkbenchShell />, { route: '/task', theme: 'light' })
 
   const shell = container.firstElementChild as HTMLElement | null
   const sidebar = shell?.querySelector('aside') as HTMLElement | null
   const main = shell?.querySelector('main') as HTMLElement | null
-  const frame = main?.firstElementChild as HTMLElement | null
+  const topbar = main?.firstElementChild as HTMLElement | null
 
   expect(shell).toBeInTheDocument()
   expect(sidebar).toBeInTheDocument()
   expect(main).toBeInTheDocument()
-  expect(frame).toBeInTheDocument()
+  expect(topbar).toBeInTheDocument()
 
   const shellStyle = getComputedStyle(shell as HTMLElement)
-  const mainStyle = getComputedStyle(main as HTMLElement)
-  const frameStyle = getComputedStyle(frame as HTMLElement)
+  const topbarStyle = getComputedStyle(topbar as HTMLElement)
 
-  expect(shellStyle.getPropertyValue('grid-template-columns')).toBe('216px minmax(0, 1fr)')
-  expect(shellStyle.getPropertyValue('background-image')).toBe('none')
-  expect(mainStyle.paddingTop).toBe('20px')
-  expect(mainStyle.paddingRight).toBe('24px')
-  expect(mainStyle.paddingBottom).toBe('20px')
-  expect(mainStyle.paddingLeft).toBe('24px')
-  expect(frameStyle.getPropertyValue('gap')).toBe('16px')
+  expect(shellStyle.getPropertyValue('grid-template-columns')).toBe('232px minmax(0, 1fr)')
+  expect(shellStyle.getPropertyValue('background-image')).toBe('')
+  expect(topbarStyle.minHeight).toBe('68px')
+  expect(topbarStyle.paddingTop).toBe('12px')
+  expect(topbarStyle.paddingRight).toBe('22px')
+  expect(topbarStyle.paddingBottom).toBe('12px')
+  expect(topbarStyle.paddingLeft).toBe('22px')
 })
 
 test('renders a compact HeroPanel with spaced title and description', () => {
@@ -183,9 +182,9 @@ test('keeps shared surfaces light in light mode', () => {
   expect(canvas).toBeInTheDocument()
 
   const rootRuleBody = getRuleBody(variablesSource, ":root[data-theme='light']")
-  expect(getDeclarationValue(rootRuleBody, '--app-surface-muted')).toBe('#f8fbff')
-  expect(getDeclarationValue(rootRuleBody, '--app-toolbar-bg')).toBe('#f8fbff')
-  expect(getDeclarationValue(rootRuleBody, '--app-list-row-hover')).toBe('#f3f7fd')
+  expect(getDeclarationValue(rootRuleBody, '--app-surface-muted')).toBe('#f1f4ee')
+  expect(getDeclarationValue(rootRuleBody, '--app-toolbar-bg')).toBe('#f1f4ee')
+  expect(getDeclarationValue(rootRuleBody, '--app-list-row-hover')).toBe('#eef3ec')
 
   const toolbarRuleBody = getRuleBody(globalStylesSource, '.backstage-toolbar')
   expect(getDeclarationValue(toolbarRuleBody, 'background')).toBe('var(--app-toolbar-bg)')
