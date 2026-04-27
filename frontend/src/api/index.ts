@@ -501,6 +501,105 @@ export const runScheduleNow = (scheduleId: string): Promise<ScheduleExecuteRespo
 export const previewHotspots = (data: HotspotPreviewRequest): Promise<HotspotPreviewResponse> =>
   http.post('/hotspots/preview', data)
 
+export type TopicStatus = 'pending' | 'ignored' | 'converted'
+
+export interface TopicCandidate {
+  topic_id: string
+  title: string
+  summary?: string
+  source?: string
+  url?: string | null
+  score?: number | null
+  tags?: string[]
+  status: TopicStatus
+  task_id?: string | null
+  metadata?: Record<string, any>
+  created_at?: string | null
+  updated_at?: string | null
+  source_cluster?: string[]
+  angle?: string
+  category?: string | null
+  hot_score?: number
+  account_fit_score?: number
+  risk_score?: number
+}
+
+export interface ListTopicsParams {
+  status?: TopicStatus | 'all'
+  limit?: number
+}
+
+export const listTopics = (params: ListTopicsParams = {}): Promise<TopicCandidate[]> => {
+  const query = { ...params }
+  if (query.status === 'all') delete query.status
+  return http.get('/topics', { params: query })
+}
+
+export const ignoreTopic = (topicId: string): Promise<TopicCandidate> =>
+  http.post(`/topics/${encodeURIComponent(topicId)}/ignore`)
+
+export const convertTopicToTask = (topicId: string): Promise<TaskResponse> =>
+  http.post(`/topics/${encodeURIComponent(topicId)}/convert-to-task`, {})
+
+export type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'revision_requested'
+export type ReviewTargetType = 'topic' | 'task' | 'article' | 'workflow_step' | 'custom'
+export type ReviewDecisionAction = 'approve' | 'reject' | 'request_revision'
+
+export interface ReviewRiskIssue {
+  code?: string | null
+  message: string
+  severity?: 'low' | 'medium' | 'high' | 'critical' | string
+  source?: string | null
+}
+
+export interface ReviewDecision {
+  review_id: string
+  target_type: ReviewTargetType
+  target_id?: string
+  title?: string
+  payload?: Record<string, any>
+  status: ReviewStatus
+  decision?: ReviewStatus | null
+  comment?: string | null
+  reviewer_id?: string | null
+  task_id?: string | null
+  reviewer?: string | null
+  risk_summary?: string | null
+  risk_issues?: ReviewRiskIssue[]
+  article_score?: number | null
+  visual_score?: number | null
+  blocking_reasons?: string[]
+  revision_guidance?: string[]
+  created_at?: string | null
+  updated_at?: string | null
+  decided_at?: string | null
+}
+
+export interface ListReviewsParams {
+  status?: ReviewStatus | 'all'
+  limit?: number
+}
+
+export interface ReviewDecisionRequest {
+  action: ReviewDecisionAction
+  comment?: string
+}
+
+export const listReviews = (params: ListReviewsParams = {}): Promise<ReviewDecision[]> => {
+  const query = { ...params }
+  if (query.status === 'all') delete query.status
+  return http.get('/reviews', { params: query })
+}
+
+export const approveReview = (reviewId: string, comment?: string): Promise<ReviewDecision> =>
+  http.post(`/reviews/${encodeURIComponent(reviewId)}/approve`, { comment })
+
+export const rejectReview = (reviewId: string, comment?: string): Promise<ReviewDecision> =>
+  http.post(`/reviews/${encodeURIComponent(reviewId)}/reject`, { comment })
+
+export const requestReviewRevision = (reviewId: string, comment?: string): Promise<ReviewDecision> =>
+  http.post(`/reviews/${encodeURIComponent(reviewId)}/request-revision`, { comment })
+
 export type UserRole = 'admin' | 'operator'
 
 export interface UserProfile {

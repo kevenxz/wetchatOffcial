@@ -42,3 +42,12 @@ test('renders the brand studio shell for the task creation route', async () => {
   expect(screen.getByRole('link', { name: '创作台' })).toBeInTheDocument()
   expect(screen.getByText('任务创建')).toBeInTheDocument()
 })
+
+test('keeps system accounts as a standalone navigation entry', async () => {
+  render(<App />)
+
+  const systemAccountLink = await screen.findByRole('link', { name: '系统账号' })
+
+  expect(systemAccountLink).toHaveAttribute('href', '/users')
+  expect(screen.queryByRole('link', { name: '系统管理' })).not.toBeInTheDocument()
+})

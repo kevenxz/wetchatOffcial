@@ -11,7 +11,20 @@ from fastapi.staticfiles import StaticFiles
 
 from api.auth import ensure_default_admin_user
 from api.logging_config import setup_logging
-from api.routers import tasks, ws, config, accounts, articles, schedules, auth, users, hotspots
+from api.routers import (
+    accounts,
+    articles,
+    auth,
+    config,
+    hotspots,
+    reviews,
+    schedules,
+    tasks,
+    topics,
+    users,
+    workflow_runs,
+    ws,
+)
 from api.scheduler import scheduler_engine
 
 # 加载 .env 环境变量
@@ -43,6 +56,9 @@ app.include_router(users.router, prefix="/api")
 app.include_router(articles.router, prefix="/api")
 app.include_router(schedules.router, prefix="/api")
 app.include_router(hotspots.router, prefix="/api")
+app.include_router(topics.router, prefix="/api")
+app.include_router(reviews.router, prefix="/api")
+app.include_router(workflow_runs.router, prefix="/api")
 app.include_router(ws.router)
 
 ARTIFACTS_DIR = Path("artifacts").resolve()

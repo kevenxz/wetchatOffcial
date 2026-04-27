@@ -88,7 +88,7 @@ export default function UserManage() {
         }
         const updated = await updateUser(editingUser.user_id, patch)
         setUsers((prev) => prev.map((item) => (item.user_id === updated.user_id ? updated : item)))
-        message.success('用户已更新')
+        message.success('系统账号已更新')
       } else {
         const payload: CreateUserRequest = {
           username: values.username,
@@ -99,7 +99,7 @@ export default function UserManage() {
         }
         const created = await createUser(payload)
         setUsers((prev) => [created, ...prev])
-        message.success('用户已创建')
+        message.success('系统账号已创建')
       }
       setModalOpen(false)
     } catch (err) {
@@ -114,7 +114,7 @@ export default function UserManage() {
     try {
       await deleteUser(userId)
       setUsers((prev) => prev.filter((item) => item.user_id !== userId))
-      message.success('用户已删除')
+      message.success('系统账号已删除')
     } catch (err) {
       message.error(err instanceof Error ? err.message : '删除失败')
     }
@@ -216,7 +216,7 @@ export default function UserManage() {
             <Tag color="green">启用 {enabledCount}</Tag>
             <Tag color="blue">总数 {users.length}</Tag>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-              新建用户
+              新建系统账号
             </Button>
           </Space>
         )}
@@ -232,7 +232,7 @@ export default function UserManage() {
       </SectionBlock>
 
       <Modal
-        title={editingUser ? '编辑用户' : '新建用户'}
+        title={editingUser ? '编辑系统账号' : '新建系统账号'}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
         onOk={handleSubmit}

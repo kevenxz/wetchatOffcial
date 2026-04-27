@@ -47,6 +47,35 @@ class TaskStatus(str, Enum):
     failed = "failed"
 
 
+class TopicStatus(str, Enum):
+    pending = "pending"
+    ignored = "ignored"
+    converted = "converted"
+
+
+class ReviewStatus(str, Enum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+    revision_requested = "revision_requested"
+
+
+class ReviewTargetType(str, Enum):
+    topic = "topic"
+    task = "task"
+    article = "article"
+    workflow_step = "workflow_step"
+    custom = "custom"
+
+
+class WorkflowRunStepStatus(str, Enum):
+    pending = "pending"
+    running = "running"
+    succeeded = "succeeded"
+    failed = "failed"
+    skipped = "skipped"
+
+
 class AccountProfileConfig(BaseModel):
     positioning: str = Field(default="", max_length=300)
     target_readers: list[str] = Field(default_factory=list)
@@ -198,6 +227,268 @@ class CreateTaskRequest(BaseModel):
         if not value.strip():
             raise ValueError("keywords cannot be blank")
         return value.strip()
+
+
+class TopicCandidate(BaseModel):
+    topic_id: str = Field(..., description="Topic candidate id")
+    title: str = Field(..., min_length=1, max_length=200)
+    summary: str = Field(default="", max_length=2000)
+    source: str = Field(default="", max_length=100)
+    url: Optional[str] = Field(default=None, max_length=500)
+    score: Optional[float] = Field(default=None, ge=0, le=100)
+    tags: list[str] = Field(default_factory=list)
+    status: TopicStatus = Field(default=TopicStatus.pending)
+    task_id: Optional[str] = Field(default=None, description="Converted task id")
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("title cannot be blank")
+        return cleaned
+
+    @field_validator("summary", "source")
+    @classmethod
+    def strip_optional_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("url")
+    @classmethod
+    def normalize_url(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, value: list[str]) -> list[str]:
+        return _normalize_unique_strings(value)
+
+
+class CreateTopicCandidateRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    summary: str = Field(default="", max_length=2000)
+    source: str = Field(default="", max_length=100)
+    url: Optional[str] = Field(default=None, max_length=500)
+    score: Optional[float] = Field(default=None, ge=0, le=100)
+    tags: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("title cannot be blank")
+        return cleaned
+
+    @field_validator("summary", "source")
+    @classmethod
+    def strip_optional_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("url")
+    @classmethod
+    def normalize_url(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, value: list[str]) -> list[str]:
+        return _normalize_unique_strings(value)
+
+
+class UpdateTopicCandidateRequest(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    summary: Optional[str] = Field(default=None, max_length=2000)
+    source: Optional[str] = Field(default=None, max_length=100)
+    url: Optional[str] = Field(default=None, max_length=500)
+    score: Optional[float] = Field(default=None, ge=0, le=100)
+    tags: Optional[list[str]] = None
+    metadata: Optional[dict[str, Any]] = None
+
+    @field_validator("title")
+    @classmethod
+    def normalize_title(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("title cannot be blank")
+        return cleaned
+
+    @field_validator("summary", "source", "url")
+    @classmethod
+    def strip_optional_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, value: Optional[list[str]]) -> Optional[list[str]]:
+        if value is None:
+            return None
+        return _normalize_unique_strings(value)
+
+
+class ConvertTopicToTaskRequest(BaseModel):
+    generation_config: GenerationConfig = Field(default_factory=lambda: GenerationConfig())
+    hotspot_capture_config: Optional[dict] = None
+
+
+class ReviewQueueItem(BaseModel):
+    review_id: str = Field(..., description="Review queue item id")
+    target_type: ReviewTargetType = Field(default=ReviewTargetType.custom)
+    target_id: str = Field(..., min_length=1, max_length=200)
+    title: str = Field(..., min_length=1, max_length=200)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    status: ReviewStatus = Field(default=ReviewStatus.pending)
+    decision: Optional[ReviewStatus] = None
+    comment: Optional[str] = Field(default=None, max_length=2000)
+    reviewer_id: Optional[str] = Field(default=None, max_length=100)
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    decided_at: Optional[datetime] = None
+
+    @field_validator("target_id", "title")
+    @classmethod
+    def not_blank(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("field cannot be blank")
+        return cleaned
+
+    @field_validator("comment", "reviewer_id")
+    @classmethod
+    def strip_nullable_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+
+class CreateReviewQueueItemRequest(BaseModel):
+    target_type: ReviewTargetType = Field(default=ReviewTargetType.custom)
+    target_id: str = Field(..., min_length=1, max_length=200)
+    title: str = Field(..., min_length=1, max_length=200)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("target_id", "title")
+    @classmethod
+    def not_blank(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("field cannot be blank")
+        return cleaned
+
+
+class ReviewDecisionRequest(BaseModel):
+    comment: Optional[str] = Field(default=None, max_length=2000)
+    reviewer_id: Optional[str] = Field(default=None, max_length=100)
+
+    @field_validator("comment", "reviewer_id")
+    @classmethod
+    def strip_nullable_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+
+class WorkflowRunStepRecord(BaseModel):
+    run_step_id: str = Field(..., description="Workflow run step record id")
+    run_id: Optional[str] = Field(default=None, max_length=100)
+    task_id: Optional[str] = Field(default=None, max_length=100)
+    step_name: str = Field(..., min_length=1, max_length=100)
+    status: WorkflowRunStepStatus = Field(default=WorkflowRunStepStatus.pending)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    error: Optional[str] = Field(default=None, max_length=2000)
+    started_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    @field_validator("step_name")
+    @classmethod
+    def normalize_step_name(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("step_name cannot be blank")
+        return cleaned
+
+    @field_validator("run_id", "task_id", "error")
+    @classmethod
+    def strip_nullable_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+
+class CreateWorkflowRunStepRequest(BaseModel):
+    run_id: Optional[str] = Field(default=None, max_length=100)
+    task_id: Optional[str] = Field(default=None, max_length=100)
+    step_name: str = Field(..., min_length=1, max_length=100)
+    status: WorkflowRunStepStatus = Field(default=WorkflowRunStepStatus.pending)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    error: Optional[str] = Field(default=None, max_length=2000)
+    started_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+
+    @field_validator("step_name")
+    @classmethod
+    def normalize_step_name(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("step_name cannot be blank")
+        return cleaned
+
+    @field_validator("run_id", "task_id", "error")
+    @classmethod
+    def strip_nullable_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
+
+
+class UpdateWorkflowRunStepRequest(BaseModel):
+    run_id: Optional[str] = Field(default=None, max_length=100)
+    task_id: Optional[str] = Field(default=None, max_length=100)
+    step_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    status: Optional[WorkflowRunStepStatus] = None
+    payload: Optional[dict[str, Any]] = None
+    error: Optional[str] = Field(default=None, max_length=2000)
+    started_at: Optional[datetime] = None
+    ended_at: Optional[datetime] = None
+
+    @field_validator("step_name")
+    @classmethod
+    def normalize_step_name(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("step_name cannot be blank")
+        return cleaned
+
+    @field_validator("run_id", "task_id", "error")
+    @classmethod
+    def strip_nullable_text(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        return cleaned or None
 
 
 class PlatformType(str, Enum):

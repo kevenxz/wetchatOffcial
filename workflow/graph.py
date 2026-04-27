@@ -11,26 +11,26 @@ from langgraph.graph import END, StateGraph
 
 from workflow.article_generation import normalize_generation_config
 from workflow.config import build_config_snapshot
-from workflow.skills.analyze_hotspot_opportunities import analyze_hotspot_opportunities_node
-from workflow.skills.assemble_article import assemble_article_node
-from workflow.skills.build_evidence_pack import build_evidence_pack_node
-from workflow.skills.compose_draft import compose_draft_node
-from workflow.skills.intake_task_brief import intake_task_brief_node
-from workflow.skills.planner_agent import planner_agent_node
-from workflow.skills.image_agent import image_agent_node
-from workflow.skills.outline_planner import outline_planner_node
-from workflow.skills.plan_research import plan_research_node
-from workflow.skills.plan_visual_assets import plan_visual_assets_node
-from workflow.skills.quality_gate import quality_gate_node
-from workflow.skills.resolve_article_type import resolve_article_type_node
-from workflow.skills.review_article_draft import review_article_draft_node
-from workflow.skills.review_visual_assets import review_visual_assets_node
-from workflow.skills.run_research import run_research_node
-from workflow.skills.targeted_revision import targeted_revision_node
-from workflow.skills.capture_hot_topics import capture_hot_topics_node
-from workflow.skills.error_handler import error_handler
-from workflow.skills.push_to_draft import push_to_draft_node
-from workflow.skills.ui_feedback import ui_feedback_node
+from workflow.agents.hotspot import capture_hot_topics_node
+from workflow.agents.image import image_agent_node
+from workflow.agents.outline import outline_planner_node
+from workflow.agents.planner import planner_agent_node
+from workflow.agents.reviewer import review_article_draft_node
+from workflow.agents.visual_reviewer import review_visual_assets_node
+from workflow.agents.writer import compose_draft_node
+from workflow.nodes.assemble_article import assemble_article_node
+from workflow.nodes.evidence_pack import build_evidence_pack_node
+from workflow.nodes.error_handler import error_handler
+from workflow.nodes.intake import intake_task_brief_node
+from workflow.nodes.quality_gate import quality_gate_node
+from workflow.nodes.research_plan import plan_research_node
+from workflow.nodes.resolve_article_type import resolve_article_type_node
+from workflow.nodes.run_research import run_research_node
+from workflow.nodes.targeted_revision import targeted_revision_node
+from workflow.nodes.topic_decision import analyze_hotspot_opportunities_node
+from workflow.nodes.ui_feedback import ui_feedback_node
+from workflow.nodes.visual_plan import plan_visual_assets_node
+from workflow.tools.wechat_draft import push_to_draft_node
 from workflow.state import WorkflowState
 
 logger = structlog.get_logger(__name__)

@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react'
 import {
   CalendarOutlined,
+  CheckSquareOutlined,
   FileTextOutlined,
   HistoryOutlined,
   PlusCircleOutlined,
   SettingOutlined,
   TeamOutlined,
+  ThunderboltOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { matchPath } from 'react-router-dom'
@@ -22,6 +24,14 @@ export type RouteMeta = {
 }
 
 export const routeMetadata: RouteMeta[] = [
+  {
+    path: '/topics',
+    navLabel: '选题中心',
+    contextTitle: '选题中心',
+    contextEyebrow: 'Topics',
+    contextDescription: '集中管理热点候选、人工选题和转任务动作。',
+    icon: <ThunderboltOutlined />,
+  },
   {
     path: '/task',
     navLabel: '创作台',
@@ -49,6 +59,14 @@ export const routeMetadata: RouteMeta[] = [
     icon: <HistoryOutlined />,
   },
   {
+    path: '/reviews',
+    navLabel: '审核中心',
+    contextTitle: '审核中心',
+    contextEyebrow: 'Review',
+    contextDescription: '处理人工复核队列，查看风险摘要并决定通过、驳回或退回改写。',
+    icon: <CheckSquareOutlined />,
+  },
+  {
     path: '/articles',
     navLabel: '文章库',
     contextTitle: '文章管理',
@@ -67,7 +85,7 @@ export const routeMetadata: RouteMeta[] = [
   {
     path: '/settings',
     navLabel: '风格设定',
-    contextTitle: '系统设置',
+    contextTitle: '风格设定',
     contextEyebrow: 'System',
     contextDescription: '维护品牌风格、文案偏好与系统配置。',
     icon: <SettingOutlined />,

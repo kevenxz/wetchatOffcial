@@ -9,10 +9,13 @@ from api.models import (
     AccountConfig,
     ImageModelConfig,
     ModelConfig,
+    ReviewQueueItem,
     ScheduleConfig,
     TaskResponse,
     TextModelConfig,
+    TopicCandidate,
     UserAccount,
+    WorkflowRunStepRecord,
 )
 
 DATA_DIR = Path("data")
@@ -23,8 +26,14 @@ MODEL_CONFIG_FILE = DATA_DIR / "model_config.json"
 ACCOUNTS_FILE = DATA_DIR / "accounts.json"
 USERS_FILE = DATA_DIR / "users.json"
 SCHEDULES_FILE = DATA_DIR / "schedules.json"
+TOPICS_FILE = DATA_DIR / "topics.json"
+REVIEWS_FILE = DATA_DIR / "reviews.json"
+WORKFLOW_RUN_STEPS_FILE = DATA_DIR / "workflow_run_steps.json"
 
 task_store: dict[str, TaskResponse] = {}
+topic_store: dict[str, TopicCandidate] = {}
+review_store: dict[str, ReviewQueueItem] = {}
+workflow_run_step_store: dict[str, WorkflowRunStepRecord] = {}
 
 
 def _ensure_data_dir() -> None:
@@ -54,6 +63,60 @@ def load_tasks() -> None:
 def save_tasks() -> None:
     payload = {task_id: task.model_dump(mode="json") for task_id, task in task_store.items()}
     _write_json(TASKS_FILE, payload)
+
+
+def load_topics() -> None:
+    if not TOPICS_FILE.exists():
+        return
+    try:
+        with open(TOPICS_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        for topic_id, payload in data.items():
+            topic_store[topic_id] = TopicCandidate(**payload)
+    except Exception:
+        return
+
+
+def save_topics() -> None:
+    payload = {topic_id: topic.model_dump(mode="json") for topic_id, topic in topic_store.items()}
+    _write_json(TOPICS_FILE, payload)
+
+
+def load_reviews() -> None:
+    if not REVIEWS_FILE.exists():
+        return
+    try:
+        with open(REVIEWS_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        for review_id, payload in data.items():
+            review_store[review_id] = ReviewQueueItem(**payload)
+    except Exception:
+        return
+
+
+def save_reviews() -> None:
+    payload = {review_id: item.model_dump(mode="json") for review_id, item in review_store.items()}
+    _write_json(REVIEWS_FILE, payload)
+
+
+def load_workflow_run_steps() -> None:
+    if not WORKFLOW_RUN_STEPS_FILE.exists():
+        return
+    try:
+        with open(WORKFLOW_RUN_STEPS_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        for run_step_id, payload in data.items():
+            workflow_run_step_store[run_step_id] = WorkflowRunStepRecord(**payload)
+    except Exception:
+        return
+
+
+def save_workflow_run_steps() -> None:
+    payload = {
+        run_step_id: step.model_dump(mode="json")
+        for run_step_id, step in workflow_run_step_store.items()
+    }
+    _write_json(WORKFLOW_RUN_STEPS_FILE, payload)
 
 
 DEFAULT_STYLE: dict[str, str] = {
@@ -451,7 +514,96 @@ def delete_user(user_id: str) -> None:
     _save_users()
 
 
+def list_topics(status: str | None = None) -> list[TopicCandidate]:
+    topics = list(topic_store.values())
+    if status is not None:
+        topics = [topic for topic in topics if topic.status.value == status]
+    return sorted(topics, key=lambda topic: topic.created_at, reverse=True)
+
+
+def get_topic(topic_id: str) -> TopicCandidate | None:
+    return topic_store.get(topic_id)
+
+
+def create_topic(topic: TopicCandidate) -> TopicCandidate:
+    topic_store[topic.topic_id] = topic
+    save_topics()
+    return topic
+
+
+def update_topic(topic_id: str, patch: dict) -> TopicCandidate:
+    topic = topic_store.get(topic_id)
+    if topic is None:
+        raise ValueError(f"topic {topic_id!r} not found")
+    updated = topic.model_copy(update=patch)
+    topic_store[topic_id] = updated
+    save_topics()
+    return updated
+
+
+def list_reviews(status: str | None = None) -> list[ReviewQueueItem]:
+    reviews = list(review_store.values())
+    if status is not None:
+        reviews = [review for review in reviews if review.status.value == status]
+    return sorted(reviews, key=lambda review: review.created_at, reverse=True)
+
+
+def get_review(review_id: str) -> ReviewQueueItem | None:
+    return review_store.get(review_id)
+
+
+def create_review(review: ReviewQueueItem) -> ReviewQueueItem:
+    review_store[review.review_id] = review
+    save_reviews()
+    return review
+
+
+def update_review(review_id: str, patch: dict) -> ReviewQueueItem:
+    review = review_store.get(review_id)
+    if review is None:
+        raise ValueError(f"review {review_id!r} not found")
+    updated = review.model_copy(update=patch)
+    review_store[review_id] = updated
+    save_reviews()
+    return updated
+
+
+def list_workflow_run_steps(
+    task_id: str | None = None,
+    run_id: str | None = None,
+) -> list[WorkflowRunStepRecord]:
+    steps = list(workflow_run_step_store.values())
+    if task_id is not None:
+        steps = [step for step in steps if step.task_id == task_id]
+    if run_id is not None:
+        steps = [step for step in steps if step.run_id == run_id]
+    return sorted(steps, key=lambda step: step.created_at, reverse=True)
+
+
+def get_workflow_run_step(run_step_id: str) -> WorkflowRunStepRecord | None:
+    return workflow_run_step_store.get(run_step_id)
+
+
+def create_workflow_run_step(step: WorkflowRunStepRecord) -> WorkflowRunStepRecord:
+    workflow_run_step_store[step.run_step_id] = step
+    save_workflow_run_steps()
+    return step
+
+
+def update_workflow_run_step(run_step_id: str, patch: dict) -> WorkflowRunStepRecord:
+    step = workflow_run_step_store.get(run_step_id)
+    if step is None:
+        raise ValueError(f"workflow run step {run_step_id!r} not found")
+    updated = step.model_copy(update=patch)
+    workflow_run_step_store[run_step_id] = updated
+    save_workflow_run_steps()
+    return updated
+
+
 load_tasks()
+load_topics()
+load_reviews()
+load_workflow_run_steps()
 load_accounts()
 load_users()
 load_schedules()

@@ -1,4 +1,7 @@
+import inspect
+
 from api.models import TaskResponse
+import workflow.graph as workflow_graph
 from workflow.graph import _route_revision_target
 from workflow.state import WorkflowState
 
@@ -44,3 +47,7 @@ def test_route_revision_target_routes_writing_revisions_through_targeted_revisio
     }
 
     assert _route_revision_target(state) == "revise_writing"
+
+
+def test_graph_uses_refactored_workflow_modules() -> None:
+    assert "workflow.skills" not in inspect.getsource(workflow_graph)

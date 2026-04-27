@@ -1,0 +1,6 @@
+.card {
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: var(--app-surface);
+  box-shadow: none;
+}
