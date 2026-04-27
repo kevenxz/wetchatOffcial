@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+import asyncio
 from datetime import datetime, timezone
 from typing import Annotated
 
@@ -24,8 +25,34 @@ from api.store import (
     task_store,
     update_topic,
 )
+from api.workflow_sync import sync_task_from_workflow_event
+from api.ws_manager import manager
+from workflow.graph import run_workflow
 
 router = APIRouter(prefix="/topics", tags=["topics"])
+
+
+async def _progress_callback(task_id: str, data: dict) -> None:
+    task = task_store.get(task_id)
+    if task:
+        sync_task_from_workflow_event(task, data)
+        save_tasks()
+    await manager.broadcast(task_id, data)
+
+
+async def _run_converted_topic_task(
+    task_id: str,
+    keywords: str,
+    generation_config: dict,
+    hotspot_capture_config: dict | None,
+) -> None:
+    await run_workflow(
+        task_id,
+        keywords,
+        generation_config=generation_config,
+        hotspot_capture_config=hotspot_capture_config,
+        progress_callback=_progress_callback,
+    )
 
 
 @router.get("", response_model=list[TopicCandidate])
@@ -122,5 +149,13 @@ async def convert_topic_to_task(
             "task_id": task.task_id,
             "updated_at": datetime.now(tz=timezone.utc),
         },
+    )
+    asyncio.create_task(
+        _run_converted_topic_task(
+            task.task_id,
+            task.keywords,
+            task.generation_config.model_dump(),
+            task.hotspot_capture_config,
+        )
     )
     return task

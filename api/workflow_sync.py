@@ -4,7 +4,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from api.models import TaskResponse, TaskStatus
+from api.models import ReviewQueueItem, ReviewTargetType, TaskResponse, TaskStatus
+from api.store import create_review, get_review
 
 
 def sync_task_from_workflow_event(task: TaskResponse, data: dict[str, Any]) -> None:
@@ -88,4 +89,38 @@ def sync_task_from_workflow_event(task: TaskResponse, data: dict[str, Any]) -> N
     task.human_review_required = bool(
         result.get("human_review_required")
         or (task.quality_report and not task.quality_report.get("ready_to_publish"))
+    )
+    if task.human_review_required:
+        _ensure_review_queue_item(task)
+
+
+def _ensure_review_queue_item(task: TaskResponse) -> None:
+    review_id = f"task-review-{task.task_id}"
+    if get_review(review_id) is not None:
+        return
+    quality_report = task.quality_report or {}
+    final_article = task.final_article or task.generated_article or {}
+    title = (
+        str(final_article.get("title") or "").strip()
+        or str(task.keywords or "").strip()
+        or f"任务 {task.task_id} 人工审核"
+    )
+    create_review(
+        ReviewQueueItem(
+            review_id=review_id,
+            target_type=ReviewTargetType.task,
+            target_id=task.task_id,
+            title=title,
+            payload={
+                "task_id": task.task_id,
+                "quality_report": quality_report,
+                "quality_state": task.quality_state or {},
+                "final_article": final_article,
+                "risk_summary": "、".join(list(quality_report.get("blocking_reasons") or [])),
+                "article_score": quality_report.get("article_score"),
+                "visual_score": quality_report.get("visual_score"),
+                "blocking_reasons": list(quality_report.get("blocking_reasons") or []),
+            },
+            created_at=datetime.now(tz=timezone.utc),
+        )
     )

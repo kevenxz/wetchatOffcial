@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api import store
+from api.models import GenerationConfig, TaskResponse, TaskStatus
 from api.routers import reviews
 
 
@@ -15,16 +16,32 @@ def _build_app() -> FastAPI:
 
 def test_review_queue_pending_and_decisions(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(store, "REVIEWS_FILE", tmp_path / "reviews.json")
+    monkeypatch.setattr(store, "TASKS_FILE", tmp_path / "tasks.json")
     review_backup = dict(store.review_store)
+    task_backup = dict(store.task_store)
     store.review_store.clear()
+    store.task_store.clear()
 
     try:
+        from datetime import datetime, timezone
+
+        store.task_store["task-1"] = TaskResponse(
+            task_id="task-1",
+            keywords="Review this topic",
+            original_keywords="Review this topic",
+            generation_config=GenerationConfig(),
+            status=TaskStatus.done,
+            created_at=datetime.now(tz=timezone.utc),
+            human_review_required=True,
+            quality_report={"ready_to_publish": False, "article_score": 70},
+            quality_state={"human_review_required": True, "ready_to_publish": False},
+        )
         client = TestClient(_build_app())
         create_response = client.post(
             "/api/reviews",
             json={
-                "target_type": "topic",
-                "target_id": "topic-1",
+                "target_type": "task",
+                "target_id": "task-1",
                 "title": "Review this topic",
                 "payload": {"score": 91},
             },
@@ -48,12 +65,16 @@ def test_review_queue_pending_and_decisions(monkeypatch, tmp_path) -> None:
         assert approved["comment"] == "ok"
         assert approved["reviewer_id"] == "u-admin"
         assert approved["decided_at"] is not None
+        assert store.task_store["task-1"].human_review_required is False
+        assert store.task_store["task-1"].quality_report["ready_to_publish"] is True
 
         pending_after_decision = client.get("/api/reviews/pending")
         assert pending_after_decision.json() == []
     finally:
         store.review_store.clear()
         store.review_store.update(review_backup)
+        store.task_store.clear()
+        store.task_store.update(task_backup)
 
 
 def test_review_reject_and_request_revision(monkeypatch, tmp_path) -> None:

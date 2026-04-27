@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from unittest.mock import Mock
 
 from api import store
 from api.routers import topics
@@ -20,6 +21,14 @@ def test_topic_crud_ignore_and_convert_to_task(monkeypatch, tmp_path) -> None:
     task_backup = dict(store.task_store)
     store.topic_store.clear()
     store.task_store.clear()
+    create_task_mock = Mock()
+
+    def fake_create_task(coro):
+        coro.close()
+        create_task_mock()
+        return None
+
+    monkeypatch.setattr(topics.asyncio, "create_task", fake_create_task)
 
     try:
         client = TestClient(_build_app())
@@ -69,6 +78,7 @@ def test_topic_crud_ignore_and_convert_to_task(monkeypatch, tmp_path) -> None:
         topic_detail = client.get(f"/api/topics/{created['topic_id']}").json()
         assert topic_detail["status"] == "converted"
         assert topic_detail["task_id"] == task["task_id"]
+        create_task_mock.assert_called_once()
     finally:
         store.topic_store.clear()
         store.topic_store.update(topic_backup)
