@@ -1,10 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from workflow.skills.plan_article_angle import plan_article_angle_node
+from workflow.nodes.plan_article_angle import plan_article_angle_node
 
 
 @pytest.mark.asyncio
@@ -96,9 +96,9 @@ async def test_plan_article_angle_uses_model_to_generate_structured_blueprint() 
         },
     }
 
-    with patch("workflow.skills.plan_article_angle.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.skills.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+        with patch("workflow.nodes.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.nodes.plan_article_angle.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -199,9 +199,9 @@ async def test_plan_article_angle_passes_research_quality_summary_to_model() -> 
         },
     }
 
-    with patch("workflow.skills.plan_article_angle.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.skills.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+        with patch("workflow.nodes.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.nodes.plan_article_angle.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -255,9 +255,9 @@ async def test_plan_article_angle_model_prompt_requests_wechat_style_structure()
         },
     }
 
-    with patch("workflow.skills.plan_article_angle.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.skills.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+        with patch("workflow.nodes.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.nodes.plan_article_angle.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -368,9 +368,9 @@ async def test_plan_article_angle_passes_search_materials_to_model() -> None:
         },
     }
 
-    with patch("workflow.skills.plan_article_angle.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.skills.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+        with patch("workflow.nodes.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.nodes.plan_article_angle.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -451,9 +451,9 @@ async def test_plan_article_angle_passes_extracted_source_context_to_model() -> 
         },
     }
 
-    with patch("workflow.skills.plan_article_angle.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.skills.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+        with patch("workflow.nodes.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.nodes.plan_article_angle.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"

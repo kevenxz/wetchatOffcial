@@ -1,10 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from workflow.skills.push_to_draft import push_to_draft_node
+from workflow.tools.wechat_draft import push_to_draft_node
 
 
 @pytest.mark.asyncio
@@ -23,8 +23,8 @@ async def test_push_to_draft_uses_generated_article_with_visual_assets() -> None
         },
     }
 
-    with patch("workflow.skills.push_to_draft.os.getenv", side_effect=lambda key: {"WECHAT_APP_ID": "appid", "WECHAT_APP_SECRET": "secret"}.get(key)):
-        with patch("workflow.skills.push_to_draft.push_article_to_wechat_draft", new=AsyncMock(return_value={"media_id": "media-1", "url": ""})) as mock_push:
+    with patch("workflow.tools.wechat_draft.os.getenv", side_effect=lambda key: {"WECHAT_APP_ID": "appid", "WECHAT_APP_SECRET": "secret"}.get(key)):
+        with patch("workflow.tools.wechat_draft.push_article_to_wechat_draft", new=AsyncMock(return_value={"media_id": "media-1", "url": ""})) as mock_push:
             result = await push_to_draft_node(state)
 
     article = mock_push.await_args.kwargs["article"]

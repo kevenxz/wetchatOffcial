@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import base64
 from pathlib import Path
@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from workflow.skills.generate_visual_assets import _generate_image_asset, generate_visual_assets_node
+from workflow.tools.image_generation import _generate_image_asset, generate_visual_assets_node
 
 
 @pytest.mark.asyncio
@@ -31,8 +31,8 @@ async def test_generate_visual_assets_uses_image_model_for_visual_briefs() -> No
         },
     }
 
-    with patch("workflow.skills.generate_visual_assets.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.generate_visual_assets._generate_image_asset") as mock_generate_image_asset:
+    with patch("workflow.tools.image_generation.get_model_config") as mock_get_model_config:
+        with patch("workflow.tools.image_generation._generate_image_asset") as mock_generate_image_asset:
             model_config = MagicMock()
             model_config.image.enabled = True
             model_config.image.api_key = "image-key"
@@ -72,7 +72,7 @@ async def test_generate_visual_assets_falls_back_to_placeholder_assets_when_imag
         },
     }
 
-    with patch("workflow.skills.generate_visual_assets.get_model_config") as mock_get_model_config:
+    with patch("workflow.tools.image_generation.get_model_config") as mock_get_model_config:
         model_config = MagicMock()
         model_config.image.enabled = False
         model_config.image.api_key = ""
@@ -108,8 +108,8 @@ async def test_generate_visual_assets_passes_visual_revision_brief_to_regenerati
         },
     }
 
-    with patch("workflow.skills.generate_visual_assets.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.generate_visual_assets._generate_image_asset") as mock_generate_image_asset:
+    with patch("workflow.tools.image_generation.get_model_config") as mock_get_model_config:
+        with patch("workflow.tools.image_generation._generate_image_asset") as mock_generate_image_asset:
             model_config = MagicMock()
             model_config.image.enabled = True
             model_config.image.api_key = "image-key"
@@ -158,8 +158,8 @@ async def test_generate_visual_assets_maps_assets_back_to_generated_article() ->
         },
     }
 
-    with patch("workflow.skills.generate_visual_assets.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.generate_visual_assets._generate_image_asset") as mock_generate_image_asset:
+    with patch("workflow.tools.image_generation.get_model_config") as mock_get_model_config:
+        with patch("workflow.tools.image_generation._generate_image_asset") as mock_generate_image_asset:
             model_config = MagicMock()
             model_config.image.enabled = True
             model_config.image.api_key = "image-key"
@@ -206,8 +206,8 @@ async def test_generate_visual_assets_inserts_illustration_placeholders_into_con
         },
     }
 
-    with patch("workflow.skills.generate_visual_assets.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.generate_visual_assets._generate_image_asset") as mock_generate_image_asset:
+    with patch("workflow.tools.image_generation.get_model_config") as mock_get_model_config:
+        with patch("workflow.tools.image_generation._generate_image_asset") as mock_generate_image_asset:
             model_config = MagicMock()
             model_config.image.enabled = True
             model_config.image.api_key = "image-key"
@@ -259,8 +259,8 @@ async def test_generate_visual_assets_places_infographic_near_evidence_section_a
         },
     }
 
-    with patch("workflow.skills.generate_visual_assets.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.generate_visual_assets._generate_image_asset") as mock_generate_image_asset:
+    with patch("workflow.tools.image_generation.get_model_config") as mock_get_model_config:
+        with patch("workflow.tools.image_generation._generate_image_asset") as mock_generate_image_asset:
             model_config = MagicMock()
             model_config.image.enabled = True
             model_config.image.api_key = "image-key"
@@ -308,8 +308,8 @@ async def test_generate_visual_assets_saves_b64_image_payloads_to_files(tmp_path
         },
     }
 
-    with patch("workflow.skills.generate_visual_assets.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.generate_visual_assets._generate_image_asset") as mock_generate_image_asset:
+    with patch("workflow.tools.image_generation.get_model_config") as mock_get_model_config:
+        with patch("workflow.tools.image_generation._generate_image_asset") as mock_generate_image_asset:
             model_config = MagicMock()
             model_config.image.enabled = True
             model_config.image.api_key = "image-key"
@@ -325,7 +325,7 @@ async def test_generate_visual_assets_saves_b64_image_payloads_to_files(tmp_path
                 "output_format": "png",
             }
 
-            with patch("workflow.skills.generate_visual_assets.GENERATED_IMAGES_DIR", tmp_path, create=True):
+            with patch("workflow.tools.image_generation.GENERATED_IMAGES_DIR", tmp_path, create=True):
                 result = await generate_visual_assets_node(state)
 
     article = result["generated_article"]

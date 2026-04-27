@@ -1,9 +1,9 @@
-"""Tests for fetch_extract skill."""
+﻿"""Tests for fetch_extract skill."""
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from workflow.state import WorkflowState
-from workflow.skills.fetch_extract import fetch_extract_node, _is_valid_image
+from workflow.tools.fetch_extract import fetch_extract_node, _is_valid_image
 
 
 @pytest.fixture
@@ -40,8 +40,8 @@ def test_is_valid_image():
 
 @pytest.mark.asyncio
 async def test_fetch_extract_node_success(mock_state):
-    with patch("workflow.skills.fetch_extract.httpx.AsyncClient") as mock_client_class:
-        with patch("workflow.skills.fetch_extract.trafilatura.extract") as mock_extract:
+    with patch("workflow.tools.fetch_extract.httpx.AsyncClient") as mock_client_class:
+        with patch("workflow.tools.fetch_extract.trafilatura.extract") as mock_extract:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
             
@@ -87,7 +87,7 @@ async def test_fetch_extract_node_no_urls(mock_state):
 
 @pytest.mark.asyncio
 async def test_fetch_extract_node_all_failed(mock_state):
-    with patch("workflow.skills.fetch_extract.httpx.AsyncClient") as mock_client_class:
+    with patch("workflow.tools.fetch_extract.httpx.AsyncClient") as mock_client_class:
         mock_client = AsyncMock()
         mock_client_class.return_value.__aenter__.return_value = mock_client
         mock_client.get.side_effect = Exception("Fetch failed")

@@ -1,8 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import pytest
 
-from workflow.skills.intake_task_brief import intake_task_brief_node
+from workflow.nodes.intake import intake_task_brief_node
 
 
 @pytest.mark.asyncio

@@ -1,8 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import pytest
 
-from workflow.skills.quality_gate import quality_gate_node
+from workflow.nodes.quality_gate import quality_gate_node
 
 
 @pytest.mark.asyncio

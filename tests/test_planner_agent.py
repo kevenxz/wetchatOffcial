@@ -1,8 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import pytest
 
-from workflow.skills.planner_agent import planner_agent_node
+from workflow.agents.planner import planner_agent_node
 
 
 @pytest.mark.asyncio

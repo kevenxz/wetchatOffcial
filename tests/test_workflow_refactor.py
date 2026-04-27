@@ -1,7 +1,7 @@
-import pytest
+﻿import pytest
 
 from workflow.config import build_config_snapshot
-from workflow.skills.assemble_article import assemble_article_node
+from workflow.nodes.assemble_article import assemble_article_node
 
 
 def test_build_config_snapshot_normalizes_workflow_policies():

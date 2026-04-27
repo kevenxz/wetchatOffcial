@@ -1,9 +1,9 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import pytest
 from unittest.mock import MagicMock, patch
 
-from workflow.skills.outline_planner import outline_planner_node
+from workflow.agents.outline import outline_planner_node
 
 
 @pytest.mark.asyncio
@@ -31,7 +31,7 @@ async def test_outline_planner_outputs_structured_outline_from_evidence() -> Non
         },
     }
 
-    with patch("workflow.skills.plan_article_angle.get_model_config") as mock_get_model_config:
+    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
         model_config = MagicMock()
         model_config.text.api_key = ""
         mock_get_model_config.return_value = model_config
@@ -48,7 +48,7 @@ async def test_outline_planner_outputs_structured_outline_from_evidence() -> Non
 
 
 def test_outline_planner_handles_string_risk_items() -> None:
-    from workflow.skills.outline_planner import _normalize_outline
+    from workflow.agents.outline import _normalize_outline
 
     outline = _normalize_outline(
         {

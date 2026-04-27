@@ -1,10 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from workflow.skills.review_article_draft import review_article_draft_node
+from workflow.agents.reviewer import review_article_draft_node
 
 
 @pytest.mark.asyncio
@@ -30,9 +30,9 @@ async def test_review_article_draft_uses_model_and_records_revision_guidance() -
         },
     }
 
-    with patch("workflow.skills.review_article_draft.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.review_article_draft.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.skills.review_article_draft.ChatOpenAI") as mock_chat_openai:
+    with patch("workflow.agents.reviewer.get_model_config") as mock_get_model_config:
+        with patch("workflow.agents.reviewer.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.agents.reviewer.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -81,7 +81,7 @@ async def test_review_article_draft_falls_back_to_rule_checks_without_api_key() 
         },
     }
 
-    with patch("workflow.skills.review_article_draft.get_model_config") as mock_get_model_config:
+    with patch("workflow.agents.reviewer.get_model_config") as mock_get_model_config:
         model_config = MagicMock()
         model_config.text.api_key = ""
         model_config.text.base_url = None
@@ -113,7 +113,7 @@ async def test_review_article_draft_fallback_flags_thin_evidence() -> None:
         },
     }
 
-    with patch("workflow.skills.review_article_draft.get_model_config") as mock_get_model_config:
+    with patch("workflow.agents.reviewer.get_model_config") as mock_get_model_config:
         model_config = MagicMock()
         model_config.text.api_key = ""
         model_config.text.base_url = None
@@ -151,9 +151,9 @@ async def test_review_article_draft_passes_research_quality_summary_to_model() -
         },
     }
 
-    with patch("workflow.skills.review_article_draft.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.review_article_draft.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.skills.review_article_draft.ChatOpenAI") as mock_chat_openai:
+    with patch("workflow.agents.reviewer.get_model_config") as mock_get_model_config:
+        with patch("workflow.agents.reviewer.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.agents.reviewer.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -199,7 +199,7 @@ async def test_review_article_draft_fallback_flags_generic_opener() -> None:
         },
     }
 
-    with patch("workflow.skills.review_article_draft.get_model_config") as mock_get_model_config:
+    with patch("workflow.agents.reviewer.get_model_config") as mock_get_model_config:
         model_config = MagicMock()
         model_config.text.api_key = ""
         model_config.text.base_url = None
@@ -225,7 +225,7 @@ async def test_review_article_draft_fallback_flags_thin_sections_without_transit
         },
     }
 
-    with patch("workflow.skills.review_article_draft.get_model_config") as mock_get_model_config:
+    with patch("workflow.agents.reviewer.get_model_config") as mock_get_model_config:
         model_config = MagicMock()
         model_config.text.api_key = ""
         model_config.text.base_url = None

@@ -1,9 +1,9 @@
-"""Tests for ui_feedback skill."""
+﻿"""Tests for ui_feedback skill."""
 import pytest
 from unittest.mock import patch
 
 from workflow.state import WorkflowState
-from workflow.skills.ui_feedback import ui_feedback_node
+from workflow.nodes.ui_feedback import ui_feedback_node
 
 
 @pytest.fixture

@@ -1,8 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import pytest
 
-from workflow.skills.run_research import run_research_node
+from workflow.nodes.run_research import run_research_node
 
 
 @pytest.mark.asyncio
@@ -48,8 +48,8 @@ async def test_run_research_builds_evidence_items_from_search_and_extract(monkey
             ],
         }
 
-    monkeypatch.setattr("workflow.skills.run_research.search_web_node", fake_search_web_node)
-    monkeypatch.setattr("workflow.skills.run_research.fetch_extract_node", fake_fetch_extract_node)
+    monkeypatch.setattr("workflow.nodes.run_research.search_web_node", fake_search_web_node)
+    monkeypatch.setattr("workflow.nodes.run_research.fetch_extract_node", fake_fetch_extract_node)
 
     state = {
         "task_id": "task-1",
@@ -117,8 +117,8 @@ async def test_run_research_marks_low_authority_sources_for_caution(monkeypatch:
             ],
         }
 
-    monkeypatch.setattr("workflow.skills.run_research.search_web_node", fake_search_web_node)
-    monkeypatch.setattr("workflow.skills.run_research.fetch_extract_node", fake_fetch_extract_node)
+    monkeypatch.setattr("workflow.nodes.run_research.search_web_node", fake_search_web_node)
+    monkeypatch.setattr("workflow.nodes.run_research.fetch_extract_node", fake_fetch_extract_node)
 
     state = {
         "task_id": "task-2",
@@ -187,8 +187,8 @@ async def test_run_research_batches_queries_and_aggregates_results(monkeypatch: 
             "extracted_contents": extracted_contents,
         }
 
-    monkeypatch.setattr("workflow.skills.run_research.search_web_node", fake_search_web_node)
-    monkeypatch.setattr("workflow.skills.run_research.fetch_extract_node", fake_fetch_extract_node)
+    monkeypatch.setattr("workflow.nodes.run_research.search_web_node", fake_search_web_node)
+    monkeypatch.setattr("workflow.nodes.run_research.fetch_extract_node", fake_fetch_extract_node)
 
     state = {
         "task_id": "task-3",

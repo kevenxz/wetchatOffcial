@@ -1,4 +1,4 @@
-"""Hotspot preview routes."""
+﻿"""Hotspot preview routes."""
 from __future__ import annotations
 
 import uuid
@@ -6,7 +6,7 @@ import uuid
 from fastapi import APIRouter
 
 from api.models import HotspotPreviewRequest, HotspotPreviewResponse
-from workflow.skills.capture_hot_topics import capture_hot_topics_node
+from workflow.agents.hotspot import capture_hot_topics_node
 
 router = APIRouter(prefix="/hotspots", tags=["hotspots"])
 

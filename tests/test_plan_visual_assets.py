@@ -1,8 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import pytest
 
-from workflow.skills.plan_visual_assets import plan_visual_assets_node
+from workflow.nodes.visual_plan import plan_visual_assets_node
 
 
 @pytest.mark.asyncio

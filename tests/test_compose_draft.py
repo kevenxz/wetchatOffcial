@@ -1,10 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from workflow.skills.compose_draft import compose_draft_node
+from workflow.agents.writer import compose_draft_node
 
 
 @pytest.mark.asyncio
@@ -71,7 +71,7 @@ async def test_compose_draft_fallback_writes_complete_wechat_article_from_outlin
         },
     }
 
-    with patch("workflow.skills.compose_draft.get_model_config") as mock_get_model_config:
+    with patch("workflow.agents.writer.get_model_config") as mock_get_model_config:
         model_config = MagicMock()
         model_config.text.api_key = ""
         mock_get_model_config.return_value = model_config
@@ -112,9 +112,9 @@ async def test_compose_draft_replaces_thin_model_output_with_complete_fallback()
         "writing_state": {},
     }
 
-    with patch("workflow.skills.compose_draft.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.compose_draft.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.skills.compose_draft.ChatOpenAI") as mock_chat_openai:
+    with patch("workflow.agents.writer.get_model_config") as mock_get_model_config:
+        with patch("workflow.agents.writer.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.agents.writer.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -165,9 +165,9 @@ async def test_compose_draft_uses_model_to_generate_structured_draft() -> None:
         "writing_state": {},
     }
 
-    with patch("workflow.skills.compose_draft.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.compose_draft.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.skills.compose_draft.ChatOpenAI") as mock_chat_openai:
+    with patch("workflow.agents.writer.get_model_config") as mock_get_model_config:
+        with patch("workflow.agents.writer.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.agents.writer.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -237,9 +237,9 @@ async def test_compose_draft_passes_revision_brief_to_model() -> None:
         },
     }
 
-    with patch("workflow.skills.compose_draft.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.compose_draft.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.skills.compose_draft.ChatOpenAI") as mock_chat_openai:
+    with patch("workflow.agents.writer.get_model_config") as mock_get_model_config:
+        with patch("workflow.agents.writer.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.agents.writer.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -301,9 +301,9 @@ async def test_compose_draft_passes_research_quality_summary_to_model() -> None:
         "writing_state": {},
     }
 
-    with patch("workflow.skills.compose_draft.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.compose_draft.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.skills.compose_draft.ChatOpenAI") as mock_chat_openai:
+    with patch("workflow.agents.writer.get_model_config") as mock_get_model_config:
+        with patch("workflow.agents.writer.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.agents.writer.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -355,9 +355,9 @@ async def test_compose_draft_model_prompt_allows_heading_refinement_for_wechat()
         "writing_state": {},
     }
 
-    with patch("workflow.skills.compose_draft.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.compose_draft.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.skills.compose_draft.ChatOpenAI") as mock_chat_openai:
+    with patch("workflow.agents.writer.get_model_config") as mock_get_model_config:
+        with patch("workflow.agents.writer.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.agents.writer.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -405,9 +405,9 @@ async def test_compose_draft_model_prompt_requests_wechat_ready_title_summary_an
         "writing_state": {},
     }
 
-    with patch("workflow.skills.compose_draft.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.compose_draft.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.skills.compose_draft.ChatOpenAI") as mock_chat_openai:
+    with patch("workflow.agents.writer.get_model_config") as mock_get_model_config:
+        with patch("workflow.agents.writer.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.agents.writer.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -455,9 +455,9 @@ async def test_compose_draft_model_prompt_requests_alt_titles_and_non_generic_ho
         "writing_state": {},
     }
 
-    with patch("workflow.skills.compose_draft.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.compose_draft.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.skills.compose_draft.ChatOpenAI") as mock_chat_openai:
+    with patch("workflow.agents.writer.get_model_config") as mock_get_model_config:
+        with patch("workflow.agents.writer.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.agents.writer.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -504,9 +504,9 @@ async def test_compose_draft_model_prompt_requests_section_transitions_and_parag
         "writing_state": {},
     }
 
-    with patch("workflow.skills.compose_draft.get_model_config") as mock_get_model_config:
-        with patch("workflow.skills.compose_draft.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.skills.compose_draft.ChatOpenAI") as mock_chat_openai:
+    with patch("workflow.agents.writer.get_model_config") as mock_get_model_config:
+        with patch("workflow.agents.writer.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.agents.writer.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"

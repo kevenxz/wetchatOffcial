@@ -1,8 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import pytest
 
-from workflow.skills.plan_research import plan_research_node
+from workflow.nodes.research_plan import plan_research_node
 
 
 @pytest.mark.asyncio

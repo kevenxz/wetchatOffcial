@@ -1,11 +1,11 @@
-"""Tests for search_web skill."""
+﻿"""Tests for search_web skill."""
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from workflow.skills.search_web import _dedupe_results, search_web_node
+from workflow.tools.search_web import _dedupe_results, search_web_node
 from workflow.state import WorkflowState
 
 
@@ -52,14 +52,14 @@ def test_dedupe_results() -> None:
 @pytest.mark.asyncio
 async def test_search_web_node_collects_structured_results(mock_state: WorkflowState) -> None:
     with patch.dict("os.environ", {"SERPAPI_API_KEY": "fake-key"}, clear=True):
-        with patch("workflow.skills.search_web._search_google", new=AsyncMock(return_value=[
+        with patch("workflow.tools.search_web._search_google", new=AsyncMock(return_value=[
             {
                 "url": "https://openai.com/index/hello-gpt-4o",
                 "title": "Introducing GPT-4o",
                 "snippet": "Official announcement from OpenAI",
             }
         ])):
-            with patch("workflow.skills.search_web._search_duckduckgo", new=AsyncMock(return_value=[
+            with patch("workflow.tools.search_web._search_duckduckgo", new=AsyncMock(return_value=[
                 {
                     "url": "https://www.theverge.com/ai/123",
                     "title": "The Verge on GPT-4o",
@@ -78,7 +78,7 @@ async def test_search_web_node_collects_structured_results(mock_state: WorkflowS
 @pytest.mark.asyncio
 async def test_search_web_node_uses_duckduckgo_without_api_keys(mock_state: WorkflowState) -> None:
     with patch.dict("os.environ", {}, clear=True):
-        with patch("workflow.skills.search_web._search_duckduckgo", new=AsyncMock(return_value=[
+        with patch("workflow.tools.search_web._search_duckduckgo", new=AsyncMock(return_value=[
             {
                 "url": "https://openai.com/blog/gpt-4o",
                 "title": "Introducing GPT-4o",
@@ -94,7 +94,7 @@ async def test_search_web_node_uses_duckduckgo_without_api_keys(mock_state: Work
 @pytest.mark.asyncio
 async def test_search_web_node_failed_when_all_providers_empty(mock_state: WorkflowState) -> None:
     with patch.dict("os.environ", {}, clear=True):
-        with patch("workflow.skills.search_web._search_duckduckgo", new=AsyncMock(return_value=[])):
+        with patch("workflow.tools.search_web._search_duckduckgo", new=AsyncMock(return_value=[])):
             result = await search_web_node(mock_state)
 
     assert result["status"] == "failed"
@@ -110,8 +110,8 @@ async def test_search_web_node_retries_provider_calls(mock_state: WorkflowState)
         "snippet": "Official announcement",
     }]])
     with patch.dict("os.environ", {}, clear=True):
-        with patch("workflow.skills.search_web.asyncio.sleep", new=AsyncMock()):
-            with patch("workflow.skills.search_web._search_duckduckgo", new=ddg_mock):
+        with patch("workflow.tools.search_web.asyncio.sleep", new=AsyncMock()):
+            with patch("workflow.tools.search_web._search_duckduckgo", new=ddg_mock):
                 result = await search_web_node(mock_state)
 
     assert result["status"] == "running"

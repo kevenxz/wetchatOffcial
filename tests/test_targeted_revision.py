@@ -1,8 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import pytest
 
-from workflow.skills.targeted_revision import targeted_revision_node
+from workflow.nodes.targeted_revision import targeted_revision_node
 
 
 @pytest.mark.asyncio

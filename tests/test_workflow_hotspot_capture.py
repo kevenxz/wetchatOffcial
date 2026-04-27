@@ -1,11 +1,11 @@
-"""Tests for capture_hot_topics workflow skill."""
+﻿"""Tests for capture_hot_topics workflow skill."""
 from __future__ import annotations
 
 from unittest.mock import patch
 
 import pytest
 
-from workflow.skills.capture_hot_topics import capture_hot_topics_node
+from workflow.agents.hotspot import capture_hot_topics_node
 
 
 @pytest.mark.asyncio
@@ -65,7 +65,7 @@ async def test_capture_hot_topics_selects_high_score_item() -> None:
         ]
 
     with patch(
-        "workflow.skills.capture_hot_topics.TopHubClient.fetch_platform_hot_items",
+        "workflow.agents.hotspot.TopHubClient.fetch_platform_hot_items",
         side_effect=fake_fetch_platform_hot_items,
     ):
         result = await capture_hot_topics_node(state)  # type: ignore[arg-type]

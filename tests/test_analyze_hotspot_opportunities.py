@@ -1,8 +1,8 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import pytest
 
-from workflow.skills.analyze_hotspot_opportunities import analyze_hotspot_opportunities_node
+from workflow.nodes.topic_decision import analyze_hotspot_opportunities_node
 from workflow.utils.hotspot_scoring import score_hotspot_candidate
 
 
