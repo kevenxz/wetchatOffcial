@@ -10,7 +10,7 @@ import structlog
 
 from workflow.state import WorkflowState
 from workflow.utils.hotspot_ranker import pick_best_hotspot, rank_hotspots
-from workflow.utils.tophub_client import TopHubClient
+from workflow.utils.tophub_client import TopHubClient, list_builtin_platforms
 
 logger = structlog.get_logger(__name__)
 
@@ -91,8 +91,11 @@ async def _discover_platforms_from_categories(
     client: TopHubClient,
     categories: list[str],
 ) -> list[dict[str, Any]]:
+    builtin = list_builtin_platforms(categories)
+    if builtin:
+        return builtin
     if not categories:
-        return []
+        return list_builtin_platforms()
 
     discovered_results = await asyncio.gather(
         *[client.fetch_category_platforms(category) for category in categories[:5]],

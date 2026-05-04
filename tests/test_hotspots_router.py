@@ -153,7 +153,21 @@ def test_hotspot_monitor_capture_persists_and_returns_monitor(monkeypatch, tmp_p
         store.topic_store.update(topic_backup)
 
 
-def test_hotspot_platform_catalog_discovers_multiple_sources(monkeypatch) -> None:
+def test_hotspot_platform_catalog_returns_builtin_n_paths() -> None:
+    client = TestClient(_build_app())
+
+    response = client.get("/api/hotspots/platforms?categories=科技&categories=AI&limit_per_category=4")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["source"] == "tophub"
+    paths = {item["path"] for item in payload["items"]}
+    assert "/n/mproPpoq6O" in paths
+    assert "/n/Q1Vd5Ko85R" in paths
+    assert all(path.startswith("/n/") for path in paths)
+
+
+def test_hotspot_platform_catalog_discovers_multiple_sources_when_builtin_misses(monkeypatch) -> None:
     class FakeTopHubClient:
         async def fetch_category_platforms(self, category, *, limit=20):
             return [
@@ -176,12 +190,12 @@ def test_hotspot_platform_catalog_discovers_multiple_sources(monkeypatch) -> Non
     monkeypatch.setattr(hotspots, "TopHubClient", FakeTopHubClient)
     client = TestClient(_build_app())
 
-    response = client.get("/api/hotspots/platforms?categories=AI&categories=Finance&limit_per_category=2")
+    response = client.get("/api/hotspots/platforms?categories=Finance&limit_per_category=2")
 
     assert response.status_code == 200
     payload = response.json()
     assert payload["source"] == "tophub"
-    assert [item["path"] for item in payload["items"]] == ["/n/AI-a", "/n/shared", "/n/Finance-a"]
+    assert [item["path"] for item in payload["items"]] == ["/n/Finance-a", "/n/shared"]
 
 
 def test_hotspot_monitor_capture_accepts_multiple_platforms(monkeypatch, tmp_path) -> None:

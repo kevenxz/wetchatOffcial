@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from workflow.utils.tophub_client import TopHubClient, parse_hot_value
+from workflow.utils.tophub_client import TopHubClient, list_builtin_platforms, parse_hot_value
 
 
 def test_parse_hot_value_supports_plain_and_units() -> None:
@@ -11,6 +11,13 @@ def test_parse_hot_value_supports_plain_and_units() -> None:
     assert parse_hot_value("1.2万热度") == 12000
     assert parse_hot_value("8.5k") == 8500
     assert parse_hot_value("无热度") is None
+
+def test_list_builtin_platforms_returns_known_n_paths() -> None:
+    platforms = list_builtin_platforms(["科技", "AI"])
+
+    assert "/n/mproPpoq6O" in {item["path"] for item in platforms}
+    assert "/n/Q1Vd5Ko85R" in {item["path"] for item in platforms}
+    assert all(str(item["path"]).startswith("/n/") for item in platforms)
 
 
 @pytest.mark.asyncio

@@ -586,10 +586,12 @@ GET /api/hotspots/platforms?categories=科技&categories=AI&limit_per_category=1
 
 抓取有两种模式：
 
-* 自动发现：`platforms: []`，后端按 `categories` 到 TopHub 分类页发现多个平台，再并发抓取。
+* 自动发现：`platforms: []`，后端优先从内置 TopHub 平台目录匹配 `/n/...` 榜单地址，再并发抓取。
 * 指定多平台：`platforms` 传入多个 `{name,path,weight,enabled}`，后端只抓取 `enabled=true` 的平台。
 
 `weight` 会进入候选排序，适合把和账号定位更贴合的平台提高权重。例如技术账号可提高 36氪、知乎热榜、少数派等来源权重，财经账号可提高财联社、华尔街见闻等来源权重。
+
+注意：不要把中文分类直接拼成 `https://tophub.today/c/科技` 这类地址。TopHub 稳定抓取入口应使用具体平台榜单 `/n/...`，例如知乎热榜 `/n/mproPpoq6O`、微博热搜榜 `/n/KqndgxeLl9`、百度实时热点 `/n/Jb0vmloB1G`、36氪24小时热榜 `/n/Q1Vd5Ko85R`、虎嗅网热文 `/n/5VaobgvAj1`。
 
 当前热点监控页已提供“热点平台”多选框，默认选中目录接口返回的前 4 个平台；清空选择时仍会使用自动发现模式。
 

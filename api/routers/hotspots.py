@@ -22,7 +22,7 @@ from api.models import (
 )
 from api.store import create_topic, list_topics, topic_store, update_topic
 from workflow.agents.hotspot import capture_hot_topics_node
-from workflow.utils.tophub_client import TopHubClient
+from workflow.utils.tophub_client import TopHubClient, list_builtin_platforms
 
 router = APIRouter(prefix="/hotspots", tags=["hotspots"])
 logger = structlog.get_logger(__name__)
@@ -240,6 +240,26 @@ async def list_hotspot_platforms(
         if cleaned and cleaned not in normalized_categories:
             normalized_categories.append(cleaned)
     normalized_categories = normalized_categories[:8]
+
+    builtin_items = [
+        HotspotPlatformCatalogItem.model_validate(item)
+        for item in list_builtin_platforms(normalized_categories, limit=limit_per_category * max(1, len(normalized_categories)))
+    ]
+    if builtin_items:
+        logger.info(
+            "hotspot_platform_catalog_fetch",
+            source="tophub",
+            mode="builtin",
+            categories=normalized_categories,
+            limit_per_category=limit_per_category,
+            returned=len(builtin_items),
+            failed_categories=0,
+            sample=_platform_log_sample([item.model_dump(mode="python") for item in builtin_items]),
+        )
+        return HotspotPlatformCatalogResponse(
+            items=builtin_items,
+            updated_at=datetime.now(tz=timezone.utc),
+        )
 
     client = TopHubClient()
     discovered_results = await asyncio.gather(

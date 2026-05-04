@@ -14,6 +14,16 @@ from bs4 import BeautifulSoup
 logger = structlog.get_logger(__name__)
 
 TOPHUB_BASE_URL = "https://tophub.today"
+TOPHUB_PLATFORM_CATALOG: list[dict[str, Any]] = [
+    {"name": "知乎热榜", "path": "/n/mproPpoq6O", "category": "AI", "weight": 1.1, "enabled": True},
+    {"name": "微博热搜榜", "path": "/n/KqndgxeLl9", "category": "社会", "weight": 1.0, "enabled": True},
+    {"name": "百度实时热点", "path": "/n/Jb0vmloB1G", "category": "社会", "weight": 1.0, "enabled": True},
+    {"name": "36氪24小时热榜", "path": "/n/Q1Vd5Ko85R", "category": "科技", "weight": 1.2, "enabled": True},
+    {"name": "虎嗅网热文", "path": "/n/5VaobgvAj1", "category": "科技", "weight": 1.1, "enabled": True},
+    {"name": "澎湃新闻热榜", "path": "/n/wWmoO5Rd4E", "category": "社会", "weight": 1.0, "enabled": True},
+    {"name": "吾爱破解今日热帖", "path": "/n/NKGoRAzel6", "category": "科技", "weight": 0.9, "enabled": True},
+    {"name": "虎扑步行街热帖", "path": "/n/G47o8weMmN", "category": "社会", "weight": 0.8, "enabled": True},
+]
 DEFAULT_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -78,6 +88,23 @@ def _resolve_url(base_url: str, href: str) -> str:
     if href.startswith(("http://", "https://")):
         return href
     return urljoin(base_url, href)
+
+
+def list_builtin_platforms(categories: list[str] | None = None, *, limit: int | None = None) -> list[dict[str, Any]]:
+    """Return known TopHub platform pages without relying on category URL discovery."""
+    normalized_categories = {_clean_text(category).lower() for category in categories or [] if _clean_text(category)}
+    items: list[dict[str, Any]] = []
+    for platform in TOPHUB_PLATFORM_CATALOG:
+        category = _clean_text(str(platform.get("category", "")))
+        name = _clean_text(str(platform.get("name", "")))
+        if normalized_categories:
+            tokens = {category.lower(), name.lower()}
+            if not (tokens & normalized_categories):
+                continue
+        items.append(dict(platform))
+        if limit is not None and len(items) >= limit:
+            break
+    return items
 
 
 class TopHubClient:
