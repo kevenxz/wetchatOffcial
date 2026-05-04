@@ -822,6 +822,21 @@ class HotspotCaptureConfig(BaseModel):
         return _normalize_unique_strings(value)
 
 
+class HotspotPlatformCatalogItem(HotspotPlatformConfig):
+    category: str = Field(default="", max_length=100)
+
+    @field_validator("category")
+    @classmethod
+    def normalize_category(cls, value: str) -> str:
+        return value.strip()
+
+
+class HotspotPlatformCatalogResponse(BaseModel):
+    items: list[HotspotPlatformCatalogItem] = Field(default_factory=list)
+    updated_at: datetime
+    source: HotspotSource = Field(default=HotspotSource.tophub)
+
+
 class HotspotPreviewRequest(BaseModel):
     keywords: str = Field(default="热点预览", min_length=1, max_length=200)
     hotspot_capture: HotspotCaptureConfig = Field(default_factory=HotspotCaptureConfig)

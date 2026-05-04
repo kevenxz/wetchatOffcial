@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Empty, Progress, Switch, Tag, Tooltip, message } from 'antd'
+import { Button, Empty, Progress, Select, Switch, Tag, Tooltip, message } from 'antd'
 import {
   CheckCircleOutlined,
   DownOutlined,
@@ -17,10 +17,12 @@ import {
   captureHotspotMonitor,
   convertTopicToTask,
   getHotspotMonitor,
+  getHotspotPlatforms,
   ignoreTopic,
   type HotspotCaptureConfig,
   type HotspotMonitorItem,
   type HotspotMonitorStats,
+  type HotspotPlatformCatalogItem,
   type TopicStatus,
 } from '@/api'
 import styles from './TopicCenter.module.css'
@@ -144,6 +146,9 @@ export default function TopicCenter() {
   const [recommendedOnly, setRecommendedOnly] = useState(false)
   const [loading, setLoading] = useState(false)
   const [capturing, setCapturing] = useState(false)
+  const [platformLoading, setPlatformLoading] = useState(false)
+  const [platforms, setPlatforms] = useState<HotspotPlatformCatalogItem[]>([])
+  const [selectedPlatformPaths, setSelectedPlatformPaths] = useState<string[]>([])
   const [actionLoadingId, setActionLoadingId] = useState('')
   const [expandedId, setExpandedId] = useState('')
 
@@ -164,6 +169,27 @@ export default function TopicCenter() {
 
   useEffect(() => {
     void fetchTopics()
+  }, [])
+
+  useEffect(() => {
+    const fetchPlatforms = async () => {
+      setPlatformLoading(true)
+      try {
+        const data = await getHotspotPlatforms({
+          categories: defaultHotspotCapture.categories,
+          limit_per_category: 12,
+        })
+        setPlatforms(data.items)
+        setSelectedPlatformPaths(data.items.slice(0, 4).map((item) => item.path))
+      } catch {
+        setPlatforms([])
+        setSelectedPlatformPaths([])
+      } finally {
+        setPlatformLoading(false)
+      }
+    }
+
+    void fetchPlatforms()
   }, [])
 
   useEffect(() => {
@@ -205,12 +231,36 @@ export default function TopicCenter() {
     }
   }, [monitorStats, topics])
 
+  const platformOptions = useMemo(
+    () =>
+      platforms.map((platform) => ({
+        label: `${platform.name}${platform.category ? ` · ${platform.category}` : ''}`,
+        value: platform.path,
+      })),
+    [platforms],
+  )
+
+  const selectedPlatforms = useMemo(() => {
+    const selectedPaths = new Set(selectedPlatformPaths)
+    return platforms
+      .filter((platform) => selectedPaths.has(platform.path))
+      .map((platform) => ({
+        name: platform.name,
+        path: platform.path,
+        weight: platform.weight,
+        enabled: true,
+      }))
+  }, [platforms, selectedPlatformPaths])
+
   const handleCapture = async () => {
     setCapturing(true)
     try {
       const result = await captureHotspotMonitor({
         keywords: '热点监控',
-        hotspot_capture: defaultHotspotCapture,
+        hotspot_capture: {
+          ...defaultHotspotCapture,
+          platforms: selectedPlatforms,
+        },
       })
       const count = result.items.length
       message.success(count ? `已抓取 ${count} 条热点` : '抓取完成，暂无命中热点')
@@ -414,6 +464,19 @@ export default function TopicCenter() {
           ))}
         </div>
         <div className={styles.filterActions}>
+          <div className={styles.platformPicker}>
+            <span>热点平台</span>
+            <Select
+              mode="multiple"
+              allowClear
+              loading={platformLoading}
+              maxTagCount="responsive"
+              placeholder="自动发现平台"
+              value={selectedPlatformPaths}
+              options={platformOptions}
+              onChange={setSelectedPlatformPaths}
+            />
+          </div>
           <Switch checked={recommendedOnly} onChange={setRecommendedOnly} />
           <span>只看推荐</span>
           <Button icon={<ReloadOutlined />} onClick={() => void handleCapture()} loading={capturing}>

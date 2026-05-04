@@ -74,6 +74,19 @@ def _platform_category(platform: dict[str, Any], categories: list[str]) -> str:
     return categories[0] if categories else ""
 
 
+def _platform_log_sample(platforms: list[dict[str, Any]], limit: int = 10) -> list[dict[str, Any]]:
+    return [
+        {
+            "name": platform.get("name"),
+            "path": platform.get("path"),
+            "category": platform.get("category"),
+            "weight": platform.get("weight"),
+            "enabled": platform.get("enabled"),
+        }
+        for platform in platforms[:limit]
+    ]
+
+
 async def _discover_platforms_from_categories(
     client: TopHubClient,
     categories: list[str],
@@ -173,6 +186,15 @@ async def capture_hot_topics_node(state: WorkflowState) -> dict[str, Any]:
                 "selected_hotspot": None,
                 "hotspot_capture_error": "未找到可用的 TopHub 平台配置，已回退到 fallback_topics",
             }
+
+        logger.info(
+            "capture_hot_topics_platforms_resolved",
+            task_id=task_id,
+            source=config["source"],
+            categories=categories,
+            platform_count=len(platforms),
+            platforms=_platform_log_sample(platforms),
+        )
 
         fetch_results = await asyncio.gather(
             *[

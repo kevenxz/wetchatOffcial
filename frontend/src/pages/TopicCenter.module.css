@@ -88,7 +88,23 @@
 .filterActions {
   justify-content: flex-end;
   color: #475569;
+}
+
+.platformPicker {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 360px);
+  gap: 10px;
+  align-items: center;
+}
+
+.platformPicker > span {
+  color: #64748b;
+  font-size: 14px;
   white-space: nowrap;
+}
+
+.platformPicker :global(.ant-select) {
+  width: 100%;
 }
 
 .categoryButton {
@@ -298,6 +314,16 @@
     align-items: flex-start;
     flex-direction: column;
   }
+
+  .filterActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .platformPicker {
+    grid-template-columns: auto minmax(180px, 1fr);
+    width: 100%;
+  }
 }
 
 @media (max-width: 720px) {
@@ -312,5 +338,9 @@
 
   .hotScore {
     justify-items: start;
+  }
+
+  .platformPicker {
+    grid-template-columns: 1fr;
   }
 }

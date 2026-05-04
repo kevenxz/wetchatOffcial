@@ -1,13 +1,14 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, test, vi } from 'vitest'
-import type { HotspotMonitorResponse } from '@/api'
+import type { HotspotMonitorResponse, HotspotPlatformCatalogResponse } from '@/api'
 import TopicCenter from '@/pages/TopicCenter'
 
-const { captureHotspotMonitorMock, convertTopicToTaskMock, getHotspotMonitorMock, ignoreTopicMock } = vi.hoisted(() => ({
+const { captureHotspotMonitorMock, convertTopicToTaskMock, getHotspotMonitorMock, getHotspotPlatformsMock, ignoreTopicMock } = vi.hoisted(() => ({
   captureHotspotMonitorMock: vi.fn<() => Promise<HotspotMonitorResponse>>(),
   convertTopicToTaskMock: vi.fn(),
   getHotspotMonitorMock: vi.fn<() => Promise<HotspotMonitorResponse>>(),
+  getHotspotPlatformsMock: vi.fn<() => Promise<HotspotPlatformCatalogResponse>>(),
   ignoreTopicMock: vi.fn(),
 }))
 
@@ -18,6 +19,7 @@ vi.mock('@/api', async () => {
     captureHotspotMonitor: captureHotspotMonitorMock,
     convertTopicToTask: convertTopicToTaskMock,
     getHotspotMonitor: getHotspotMonitorMock,
+    getHotspotPlatforms: getHotspotPlatformsMock,
     ignoreTopic: ignoreTopicMock,
   }
 })
@@ -47,6 +49,7 @@ beforeEach(() => {
     }),
   })
   getHotspotMonitorMock.mockResolvedValue(buildMonitorResponse())
+  getHotspotPlatformsMock.mockResolvedValue(buildPlatformCatalogResponse())
   ignoreTopicMock.mockResolvedValue({
     topic_id: 'topic-1',
     source_cluster: [],
@@ -103,6 +106,17 @@ function buildMonitorResponse(items = [{
   }
 }
 
+function buildPlatformCatalogResponse(): HotspotPlatformCatalogResponse {
+  return {
+    items: [
+      { name: '36姘?', path: '/n/Q1Vd5Ko85R', category: '绉戞妧', weight: 1, enabled: true },
+      { name: '鐭ヤ箮鐑', path: '/n/mproPpoq6O', category: 'AI', weight: 1, enabled: true },
+    ],
+    updated_at: '2026-04-27T10:00:00Z',
+    source: 'tophub',
+  }
+}
+
 test('renders hotspot cards and converts a recommended topic to task', async () => {
   const user = userEvent.setup()
 
@@ -131,7 +145,14 @@ test('captures hotspots through the monitor endpoint and refreshes the list', as
     expect(captureHotspotMonitorMock).toHaveBeenCalledWith(
       expect.objectContaining({
         keywords: '热点监控',
-        hotspot_capture: expect.objectContaining({ enabled: true, source: 'tophub' }),
+        hotspot_capture: expect.objectContaining({
+          enabled: true,
+          source: 'tophub',
+          platforms: expect.arrayContaining([
+            expect.objectContaining({ path: '/n/Q1Vd5Ko85R' }),
+            expect.objectContaining({ path: '/n/mproPpoq6O' }),
+          ]),
+        }),
       }),
     )
   })

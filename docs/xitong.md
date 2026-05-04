@@ -563,6 +563,36 @@ POST /api/hotspots/monitor/capture
 
 如果 `platforms` 为空，系统会根据 `categories` 自动从 TopHub 分类里发现可用平台，再抓取各平台榜单。抓取结果经过去重、偏好关键词加权、排除关键词过滤、最低分过滤和排序后，写入候选池。
 
+### 6.3.1 多平台热点来源配置
+
+热点抓取支持多个平台同时作为输入源。前端可先调用平台目录接口：
+
+```http
+GET /api/hotspots/platforms?categories=科技&categories=AI&limit_per_category=12
+```
+
+返回结构：
+
+```json
+{
+  "source": "tophub",
+  "updated_at": "2026-04-27T10:00:00Z",
+  "items": [
+    {"name": "36氪", "path": "/n/Q1Vd5Ko85R", "category": "科技", "weight": 1.0, "enabled": true},
+    {"name": "知乎热榜", "path": "/n/mproPpoq6O", "category": "AI", "weight": 1.0, "enabled": true}
+  ]
+}
+```
+
+抓取有两种模式：
+
+* 自动发现：`platforms: []`，后端按 `categories` 到 TopHub 分类页发现多个平台，再并发抓取。
+* 指定多平台：`platforms` 传入多个 `{name,path,weight,enabled}`，后端只抓取 `enabled=true` 的平台。
+
+`weight` 会进入候选排序，适合把和账号定位更贴合的平台提高权重。例如技术账号可提高 36氪、知乎热榜、少数派等来源权重，财经账号可提高财联社、华尔街见闻等来源权重。
+
+当前热点监控页已提供“热点平台”多选框，默认选中目录接口返回的前 4 个平台；清空选择时仍会使用自动发现模式。
+
 ### 6.4 推荐与风险规则
 
 当前页面推荐规则：
@@ -607,6 +637,8 @@ display_sample=[{"topic_id":"hotspot-xxx","title":"OpenAI 新模型发布","hot_
 ```
 
 ---
+
+补充：多平台热点抓取新增两类日志：`hotspot_platform_catalog_fetch` 用于记录平台目录接口返回数量、失败分类和样例；`capture_hot_topics_platforms_resolved` 用于记录工作流实际确认抓取的平台数量和平台样例。
 
 # 六、Agent 体系设计
 

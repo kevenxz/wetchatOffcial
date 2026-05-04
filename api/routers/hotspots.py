@@ -1,6 +1,7 @@
 ﻿"""Hotspot preview routes."""
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import datetime, timezone
 
@@ -12,6 +13,8 @@ from api.models import (
     HotspotMonitorItem,
     HotspotMonitorResponse,
     HotspotMonitorStats,
+    HotspotPlatformCatalogItem,
+    HotspotPlatformCatalogResponse,
     HotspotPreviewRequest,
     HotspotPreviewResponse,
     TopicCandidate,
@@ -19,9 +22,11 @@ from api.models import (
 )
 from api.store import create_topic, list_topics, topic_store, update_topic
 from workflow.agents.hotspot import capture_hot_topics_node
+from workflow.utils.tophub_client import TopHubClient
 
 router = APIRouter(prefix="/hotspots", tags=["hotspots"])
 logger = structlog.get_logger(__name__)
+DEFAULT_MONITOR_CATEGORIES = ["科技", "AI", "财经", "军事", "国际", "社会", "汽车"]
 
 
 def _topic_id_from_hotspot(item: dict) -> str:
@@ -84,6 +89,21 @@ def _monitor_item_log_sample(items: list[HotspotMonitorItem], limit: int = 5) ->
         }
         for item in items[:limit]
     ]
+
+
+def _platform_log_sample(items: list[dict], limit: int = 10) -> list[dict]:
+    sample = []
+    for item in items[:limit]:
+        sample.append(
+            {
+                "name": item.get("name"),
+                "path": item.get("path"),
+                "category": item.get("category"),
+                "weight": item.get("weight"),
+                "enabled": item.get("enabled"),
+            }
+        )
+    return sample
 
 
 def _persist_hotspot_topics(items: list[dict]) -> dict[str, int]:
@@ -208,6 +228,60 @@ def _build_monitor_response(
     )
 
 
+@router.get("/platforms", response_model=HotspotPlatformCatalogResponse)
+async def list_hotspot_platforms(
+    categories: list[str] = Query(default_factory=list),
+    limit_per_category: int = Query(default=20, ge=1, le=50),
+) -> HotspotPlatformCatalogResponse:
+    """Return discoverable TopHub platforms grouped by configured categories."""
+    normalized_categories = []
+    for category in categories or DEFAULT_MONITOR_CATEGORIES:
+        cleaned = str(category).strip()
+        if cleaned and cleaned not in normalized_categories:
+            normalized_categories.append(cleaned)
+    normalized_categories = normalized_categories[:8]
+
+    client = TopHubClient()
+    discovered_results = await asyncio.gather(
+        *[
+            client.fetch_category_platforms(category, limit=limit_per_category)
+            for category in normalized_categories
+        ],
+        return_exceptions=True,
+    )
+
+    items: list[HotspotPlatformCatalogItem] = []
+    seen_paths: set[str] = set()
+    failed = 0
+    for result in discovered_results:
+        if isinstance(result, Exception):
+            failed += 1
+            continue
+        for item in result:
+            try:
+                catalog_item = HotspotPlatformCatalogItem.model_validate(item)
+            except Exception:  # noqa: BLE001
+                continue
+            if catalog_item.path in seen_paths:
+                continue
+            seen_paths.add(catalog_item.path)
+            items.append(catalog_item)
+
+    logger.info(
+        "hotspot_platform_catalog_fetch",
+        source="tophub",
+        categories=normalized_categories,
+        limit_per_category=limit_per_category,
+        returned=len(items),
+        failed_categories=failed,
+        sample=_platform_log_sample([item.model_dump(mode="python") for item in items]),
+    )
+    return HotspotPlatformCatalogResponse(
+        items=items,
+        updated_at=datetime.now(tz=timezone.utc),
+    )
+
+
 @router.get("/monitor", response_model=HotspotMonitorResponse)
 async def get_hotspot_monitor(
     status: TopicStatus | None = Query(default=TopicStatus.pending),
@@ -246,6 +320,7 @@ async def capture_hotspot_monitor(body: HotspotMonitorCaptureRequest) -> Hotspot
         source=capture_config.get("source"),
         categories=capture_config.get("categories"),
         platform_count=len(capture_config.get("platforms") or []),
+        platforms=_platform_log_sample(list(capture_config.get("platforms") or [])),
         filters=capture_config.get("filters"),
     )
     result = await capture_hot_topics_node(

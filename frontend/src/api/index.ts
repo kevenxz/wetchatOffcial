@@ -387,6 +387,16 @@ export interface HotspotPlatformConfig {
   enabled: boolean
 }
 
+export interface HotspotPlatformCatalogItem extends HotspotPlatformConfig {
+  category: string
+}
+
+export interface HotspotPlatformCatalogResponse {
+  items: HotspotPlatformCatalogItem[]
+  updated_at: string
+  source: HotspotSource
+}
+
 export interface HotspotCaptureConfig {
   enabled: boolean
   source: HotspotSource
@@ -519,6 +529,11 @@ export interface HotspotMonitorParams {
   limit?: number
 }
 
+export interface HotspotPlatformParams {
+  categories?: string[]
+  limit_per_category?: number
+}
+
 export interface HotspotMonitorCaptureRequest {
   keywords: string
   hotspot_capture: HotspotCaptureConfig
@@ -547,6 +562,14 @@ export const runScheduleNow = (scheduleId: string): Promise<ScheduleExecuteRespo
 
 export const previewHotspots = (data: HotspotPreviewRequest): Promise<HotspotPreviewResponse> =>
   http.post('/hotspots/preview', data)
+
+export const getHotspotPlatforms = (params: HotspotPlatformParams = {}): Promise<HotspotPlatformCatalogResponse> => {
+  const query = new URLSearchParams()
+  params.categories?.forEach((category) => query.append('categories', category))
+  if (params.limit_per_category) query.set('limit_per_category', String(params.limit_per_category))
+  const suffix = query.toString()
+  return http.get(`/hotspots/platforms${suffix ? `?${suffix}` : ''}`)
+}
 
 export const getHotspotMonitor = (params: HotspotMonitorParams = {}): Promise<HotspotMonitorResponse> => {
   const query = { ...params }
