@@ -2,7 +2,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, test, vi } from 'vitest'
-import type { StyleConfig, TaskResponse } from '@/api'
+import type { AccountConfig, StyleConfig, TaskResponse } from '@/api'
 import ArticleManage from '@/pages/ArticleManage'
 
 const {
@@ -10,13 +10,17 @@ const {
   getCustomThemesMock,
   getPresetThemesMock,
   getStyleConfigMock,
+  listAccountsMock,
   listArticlesMock,
+  pushArticleMock,
 } = vi.hoisted(() => ({
   deleteTaskMock: vi.fn(),
   getCustomThemesMock: vi.fn<() => Promise<Record<string, StyleConfig>>>(),
   getPresetThemesMock: vi.fn<() => Promise<Record<string, StyleConfig>>>(),
   getStyleConfigMock: vi.fn<() => Promise<StyleConfig>>(),
+  listAccountsMock: vi.fn<() => Promise<AccountConfig[]>>(),
   listArticlesMock: vi.fn<() => Promise<TaskResponse[]>>(),
+  pushArticleMock: vi.fn(),
 }))
 
 vi.mock('@/api', async () => {
@@ -27,7 +31,9 @@ vi.mock('@/api', async () => {
     getCustomThemes: getCustomThemesMock,
     getPresetThemes: getPresetThemesMock,
     getStyleConfig: getStyleConfigMock,
+    listAccounts: listAccountsMock,
     listArticles: listArticlesMock,
+    pushArticle: pushArticleMock,
   }
 })
 
@@ -37,7 +43,9 @@ beforeEach(() => {
   getStyleConfigMock.mockResolvedValue({})
   getPresetThemesMock.mockResolvedValue({})
   getCustomThemesMock.mockResolvedValue({})
+  listAccountsMock.mockResolvedValue([])
   deleteTaskMock.mockResolvedValue(undefined)
+  pushArticleMock.mockResolvedValue({ total: 1, success: 1, failed: 0, results: [] })
 
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
@@ -84,6 +92,18 @@ function mockArticleList() {
       push_records: [{ push_id: 'p-1', account_id: 'a-1', account_name: '公众号', platform: 'wechat_mp', pushed_at: '2026-04-12T01:00:00Z', status: 'success' }],
     },
   ])
+  listAccountsMock.mockResolvedValue([
+    {
+      account_id: 'wechat-1',
+      name: '测试公众号',
+      platform: 'wechat_mp',
+      app_id: 'appid',
+      app_secret: 'secret',
+      enabled: true,
+      created_at: '2026-04-01T00:00:00Z',
+      updated_at: null,
+    },
+  ])
 }
 
 function renderArticleManage() {
@@ -128,5 +148,26 @@ test('filters articles by status and keyword', async () => {
 
   await waitFor(() => {
     expect(screen.getByText('暂无文章')).toBeInTheDocument()
+  })
+})
+
+test('pushes an article to the selected wechat draft box', async () => {
+  const user = userEvent.setup()
+  mockArticleList()
+
+  renderArticleManage()
+
+  expect(await screen.findByText('首篇文章')).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: '推送到公众号草稿箱' }))
+
+  const dialog = await screen.findByRole('dialog')
+  expect(within(dialog).getByText('指定推送到微信公众号草稿箱')).toBeInTheDocument()
+  expect(within(dialog).getByText('测试公众号')).toBeInTheDocument()
+
+  await user.click(within(dialog).getByRole('button', { name: '推送到草稿箱' }))
+
+  await waitFor(() => {
+    expect(pushArticleMock).toHaveBeenCalledWith('article-1', ['wechat-1'], '__current__')
   })
 })

@@ -5,6 +5,7 @@ import {
   EditOutlined,
   EyeOutlined,
   FileTextOutlined,
+  SendOutlined,
   SearchOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -16,7 +17,10 @@ import {
   getCustomThemes,
   getPresetThemes,
   getStyleConfig,
+  listAccounts,
   listArticles,
+  pushArticle,
+  type AccountConfig,
   type StyleConfig,
   type TaskResponse,
 } from '@/api'
@@ -205,6 +209,10 @@ export default function ArticleManage() {
   const [presetThemes, setPresetThemes] = useState<Record<string, StyleConfig>>({})
   const [customThemes, setCustomThemes] = useState<Record<string, StyleConfig>>({})
   const [previewArticle, setPreviewArticle] = useState<TaskResponse | null>(null)
+  const [accounts, setAccounts] = useState<AccountConfig[]>([])
+  const [pushArticleTask, setPushArticleTask] = useState<TaskResponse | null>(null)
+  const [pushAccountIds, setPushAccountIds] = useState<string[]>([])
+  const [pushing, setPushing] = useState(false)
   const navigate = useNavigate()
 
   const themeConfigMap: Record<string, StyleConfig> = {
@@ -216,14 +224,16 @@ export default function ArticleManage() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [articleList, currentConfig, preset, custom] = await Promise.all([
+      const [articleList, currentConfig, preset, custom, accountList] = await Promise.all([
         listArticles(),
         getStyleConfig(),
         getPresetThemes(),
         getCustomThemes(),
+        listAccounts(),
       ])
 
       setArticles(articleList)
+      setAccounts(accountList)
       setCurrentTheme(currentConfig)
       setPresetThemes(preset)
       setCustomThemes(custom)
@@ -263,6 +273,37 @@ export default function ArticleManage() {
       await fetchData()
     } catch (error) {
       message.error(error instanceof Error ? error.message : '删除文章失败')
+    }
+  }
+
+  const wechatAccountOptions = accounts
+    .filter((item) => item.platform === 'wechat_mp' && item.enabled)
+    .map((item) => ({ label: item.name, value: item.account_id }))
+
+  const openPushModal = (article: TaskResponse) => {
+    setPushArticleTask(article)
+    setPushAccountIds(wechatAccountOptions.length === 1 ? [wechatAccountOptions[0].value] : [])
+  }
+
+  const submitPush = async () => {
+    if (!pushArticleTask) return
+
+    if (pushAccountIds.length === 0) {
+      message.warning('请先选择微信公众号')
+      return
+    }
+
+    setPushing(true)
+    try {
+      const result = await pushArticle(pushArticleTask.task_id, pushAccountIds, pushArticleTask.article_theme || CURRENT_THEME_KEY)
+      message.success(`已推送到草稿箱：成功 ${result.success}，失败 ${result.failed}`)
+      setPushArticleTask(null)
+      setPushAccountIds([])
+      await fetchData()
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '推送到微信公众号草稿箱失败')
+    } finally {
+      setPushing(false)
     }
   }
 
@@ -361,6 +402,14 @@ export default function ArticleManage() {
                         onClick={() => navigate(`/task/${article.task_id}`)}
                       />
                     </Tooltip>
+                    <Tooltip title="推送到公众号草稿箱">
+                      <Button
+                        type="text"
+                        icon={<SendOutlined />}
+                        aria-label="推送到公众号草稿箱"
+                        onClick={() => openPushModal(article)}
+                      />
+                    </Tooltip>
                     <Popconfirm
                       title="确认删除"
                       description="确定要删除这篇文章吗？"
@@ -399,6 +448,37 @@ export default function ArticleManage() {
               ))}
             </div>
           ) : null}
+        </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(pushArticleTask)}
+        title="指定推送到微信公众号草稿箱"
+        okText="推送到草稿箱"
+        cancelText="取消"
+        confirmLoading={pushing}
+        onOk={submitPush}
+        onCancel={() => {
+          setPushArticleTask(null)
+          setPushAccountIds([])
+        }}
+        destroyOnHidden
+      >
+        <div className={styles.pushModalBody}>
+          <div>
+            <span>文章</span>
+            <strong>{pushArticleTask ? getArticleTitle(pushArticleTask) : ''}</strong>
+          </div>
+          <Select
+            mode="multiple"
+            allowClear
+            placeholder="选择微信公众号"
+            value={pushAccountIds}
+            options={wechatAccountOptions}
+            onChange={setPushAccountIds}
+            notFoundContent="暂无可用微信公众号"
+          />
+          <p>确认后会将当前文章渲染为微信样式 HTML，并写入所选公众号的草稿箱。</p>
         </div>
       </Modal>
     </div>

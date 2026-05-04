@@ -169,6 +169,33 @@
   font-size: 12px;
 }
 
+.pushModalBody {
+  display: grid;
+  gap: 14px;
+}
+
+.pushModalBody > div {
+  display: grid;
+  gap: 4px;
+}
+
+.pushModalBody span {
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.pushModalBody strong {
+  color: #10203a;
+  font-size: 16px;
+}
+
+.pushModalBody p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 @media (max-width: 900px) {
   .toolbar,
   .articleCard {
