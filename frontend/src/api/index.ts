@@ -477,6 +477,53 @@ export interface HotspotPreviewResponse {
   hotspot_capture_error?: string | null
 }
 
+export interface HotspotMonitorItem {
+  topic_id: string
+  title: string
+  summary: string
+  source: string
+  url?: string | null
+  category: string
+  tags: string[]
+  status: TopicStatus
+  task_id?: string | null
+  hot_score: number
+  account_fit_score: number
+  risk_score: number
+  channel_count: number
+  recommended: boolean
+  captured_at?: string | null
+  updated_at?: string | null
+  metadata: Record<string, any>
+}
+
+export interface HotspotMonitorStats {
+  total: number
+  recommended: number
+  high_risk: number
+  source_count: number
+  latest_captured_at?: string | null
+}
+
+export interface HotspotMonitorResponse {
+  items: HotspotMonitorItem[]
+  stats: HotspotMonitorStats
+  updated_at: string
+  capture_error?: string | null
+}
+
+export interface HotspotMonitorParams {
+  status?: TopicStatus | 'all'
+  category?: string
+  recommended_only?: boolean
+  limit?: number
+}
+
+export interface HotspotMonitorCaptureRequest {
+  keywords: string
+  hotspot_capture: HotspotCaptureConfig
+}
+
 export const listSchedules = (): Promise<ScheduleConfig[]> =>
   http.get('/schedules')
 
@@ -500,6 +547,15 @@ export const runScheduleNow = (scheduleId: string): Promise<ScheduleExecuteRespo
 
 export const previewHotspots = (data: HotspotPreviewRequest): Promise<HotspotPreviewResponse> =>
   http.post('/hotspots/preview', data)
+
+export const getHotspotMonitor = (params: HotspotMonitorParams = {}): Promise<HotspotMonitorResponse> => {
+  const query = { ...params }
+  if (query.status === 'all') delete query.status
+  return http.get('/hotspots/monitor', { params: query })
+}
+
+export const captureHotspotMonitor = (data: HotspotMonitorCaptureRequest): Promise<HotspotMonitorResponse> =>
+  http.post('/hotspots/monitor/capture', data)
 
 export type TopicStatus = 'pending' | 'ignored' | 'converted'
 

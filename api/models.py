@@ -844,6 +844,54 @@ class HotspotPreviewResponse(BaseModel):
     hotspot_capture_error: Optional[str] = None
 
 
+class HotspotMonitorItem(BaseModel):
+    topic_id: str
+    title: str
+    summary: str = ""
+    source: str = ""
+    url: Optional[str] = None
+    category: str = ""
+    tags: list[str] = Field(default_factory=list)
+    status: TopicStatus = Field(default=TopicStatus.pending)
+    task_id: Optional[str] = None
+    hot_score: int = Field(default=0, ge=0, le=100)
+    account_fit_score: int = Field(default=0, ge=0, le=100)
+    risk_score: int = Field(default=0, ge=0, le=100)
+    channel_count: int = Field(default=1, ge=0)
+    recommended: bool = False
+    captured_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class HotspotMonitorStats(BaseModel):
+    total: int = 0
+    recommended: int = 0
+    high_risk: int = 0
+    source_count: int = 0
+    latest_captured_at: Optional[datetime] = None
+
+
+class HotspotMonitorResponse(BaseModel):
+    items: list[HotspotMonitorItem] = Field(default_factory=list)
+    stats: HotspotMonitorStats = Field(default_factory=HotspotMonitorStats)
+    updated_at: datetime
+    capture_error: Optional[str] = None
+
+
+class HotspotMonitorCaptureRequest(BaseModel):
+    keywords: str = Field(default="热点监控", min_length=1, max_length=200)
+    hotspot_capture: HotspotCaptureConfig = Field(default_factory=HotspotCaptureConfig)
+
+    @field_validator("keywords")
+    @classmethod
+    def keywords_not_blank(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("keywords cannot be blank")
+        return cleaned
+
+
 class ScheduleConfig(BaseModel):
     schedule_id: str
     name: str = Field(..., min_length=1, max_length=100)

@@ -14,12 +14,13 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import {
+  captureHotspotMonitor,
   convertTopicToTask,
+  getHotspotMonitor,
   ignoreTopic,
-  listTopics,
-  previewHotspots,
   type HotspotCaptureConfig,
-  type TopicCandidate,
+  type HotspotMonitorItem,
+  type HotspotMonitorStats,
   type TopicStatus,
 } from '@/api'
 import styles from './TopicCenter.module.css'
@@ -60,7 +61,7 @@ const statusText: Record<TopicStatus, string> = {
   converted: '已转任务',
 }
 
-function topicMeta(topic: TopicCandidate): TopicMeta {
+function topicMeta(topic: HotspotMonitorItem): TopicMeta {
   return topic.metadata ?? {}
 }
 
@@ -79,37 +80,33 @@ function listValue(value: unknown) {
   return value.map((item) => String(item).trim()).filter(Boolean)
 }
 
-function getCategory(topic: TopicCandidate) {
+function getCategory(topic: HotspotMonitorItem) {
   const meta = topicMeta(topic)
   return topic.category || textValue(meta.category) || topic.tags?.[0] || '科技'
 }
 
-function getHotScore(topic: TopicCandidate) {
-  const meta = topicMeta(topic)
-  return numberValue(topic.hot_score ?? topic.score ?? meta.selection_score ?? meta.hot_value, 0)
+function getHotScore(topic: HotspotMonitorItem) {
+  return numberValue(topic.hot_score, 0)
 }
 
-function getFitScore(topic: TopicCandidate) {
-  const meta = topicMeta(topic)
-  return numberValue(topic.account_fit_score ?? meta.account_fit_score ?? meta.selection_score, 0)
+function getFitScore(topic: HotspotMonitorItem) {
+  return numberValue(topic.account_fit_score, 0)
 }
 
-function getRiskScore(topic: TopicCandidate) {
-  const meta = topicMeta(topic)
-  return numberValue(topic.risk_score ?? meta.risk_score, 0)
+function getRiskScore(topic: HotspotMonitorItem) {
+  return numberValue(topic.risk_score, 0)
 }
 
-function getSource(topic: TopicCandidate) {
+function getSource(topic: HotspotMonitorItem) {
   const meta = topicMeta(topic)
   return topic.source || textValue(meta.platform_name) || textValue(meta.source, '热点源')
 }
 
-function getChannelCount(topic: TopicCandidate) {
-  const meta = topicMeta(topic)
-  return numberValue(meta.channel_count ?? meta.channelCount ?? topic.source_cluster?.length, 1)
+function getChannelCount(topic: HotspotMonitorItem) {
+  return numberValue(topic.channel_count, 1)
 }
 
-function getTags(topic: TopicCandidate) {
+function getTags(topic: HotspotMonitorItem) {
   const meta = topicMeta(topic)
   const tags = [
     ...(topic.tags ?? []),
@@ -126,8 +123,8 @@ function riskTone(score: number) {
   return { label: `低风险 (${score})`, className: styles.riskLow }
 }
 
-function isRecommended(topic: TopicCandidate) {
-  return topic.status === 'pending' && getFitScore(topic) >= 70 && getRiskScore(topic) < 40
+function isRecommended(topic: HotspotMonitorItem) {
+  return topic.recommended
 }
 
 function formatRelativeTime(value?: string | null) {
@@ -141,7 +138,8 @@ function formatRelativeTime(value?: string | null) {
 }
 
 export default function TopicCenter() {
-  const [topics, setTopics] = useState<TopicCandidate[]>([])
+  const [topics, setTopics] = useState<HotspotMonitorItem[]>([])
+  const [monitorStats, setMonitorStats] = useState<HotspotMonitorStats | null>(null)
   const [category, setCategory] = useState<TopicFilter>('all')
   const [recommendedOnly, setRecommendedOnly] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -152,10 +150,12 @@ export default function TopicCenter() {
   const fetchTopics = async () => {
     setLoading(true)
     try {
-      const data = await listTopics({ status: 'pending', limit: 80 })
-      setTopics(Array.isArray(data) ? data : [])
+      const data = await getHotspotMonitor({ status: 'pending', limit: 80 })
+      setTopics(data.items)
+      setMonitorStats(data.stats)
     } catch (error) {
       setTopics([])
+      setMonitorStats(null)
       message.error(error instanceof Error ? error.message : '获取热点列表失败')
     } finally {
       setLoading(false)
@@ -180,10 +180,19 @@ export default function TopicCenter() {
   }, [category, recommendedOnly, topics])
 
   const stats = useMemo(() => {
+    if (monitorStats) {
+      return {
+        total: monitorStats.total,
+        recommended: monitorStats.recommended,
+        highRisk: monitorStats.high_risk,
+        sourceCount: monitorStats.source_count,
+        latestText: monitorStats.latest_captured_at ? formatRelativeTime(monitorStats.latest_captured_at) : '尚未抓取',
+      }
+    }
     const highRisk = topics.filter((topic) => getRiskScore(topic) >= 70).length
     const recommended = topics.filter(isRecommended).length
     const sortedTimes = topics
-      .map((topic) => topic.updated_at || topic.created_at)
+      .map((topic) => topic.updated_at || topic.captured_at)
       .filter(Boolean)
       .sort()
     const latest = sortedTimes[sortedTimes.length - 1]
@@ -194,18 +203,19 @@ export default function TopicCenter() {
       sourceCount: new Set(topics.map(getSource)).size,
       latestText: latest ? formatRelativeTime(latest) : '尚未抓取',
     }
-  }, [topics])
+  }, [monitorStats, topics])
 
   const handleCapture = async () => {
     setCapturing(true)
     try {
-      const result = await previewHotspots({
+      const result = await captureHotspotMonitor({
         keywords: '热点监控',
         hotspot_capture: defaultHotspotCapture,
       })
-      const count = result.hotspot_candidates?.length ?? 0
+      const count = result.items.length
       message.success(count ? `已抓取 ${count} 条热点` : '抓取完成，暂无命中热点')
-      await fetchTopics()
+      setTopics(result.items)
+      setMonitorStats(result.stats)
     } catch (error) {
       message.error(error instanceof Error ? error.message : '热点抓取失败')
     } finally {
@@ -231,7 +241,7 @@ export default function TopicCenter() {
     }
   }
 
-  const renderTopic = (topic: TopicCandidate, index: number) => {
+  const renderTopic = (topic: HotspotMonitorItem, index: number) => {
     const hotScore = getHotScore(topic)
     const fitScore = getFitScore(topic)
     const riskScore = getRiskScore(topic)
@@ -239,7 +249,7 @@ export default function TopicCenter() {
     const expanded = expandedId === topic.topic_id
     const recommended = isRecommended(topic)
     const source = getSource(topic)
-    const createdText = formatRelativeTime(topic.created_at)
+    const createdText = formatRelativeTime(topic.captured_at)
     const channelCount = getChannelCount(topic)
     const summary = topic.summary || textValue(topicMeta(topic).extra_text, '暂无摘要')
 
