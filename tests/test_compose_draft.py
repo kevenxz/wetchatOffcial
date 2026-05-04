@@ -18,7 +18,12 @@ async def test_compose_draft_generates_article_from_blueprint_and_evidence() -> 
         "research_state": {"evidence_pack": {"confirmed_facts": [{"claim": "融资升温"}]}},
     }
 
-    result = await compose_draft_node(state)
+    with patch("workflow.agents.writer.get_model_config") as mock_get_model_config:
+        model_config = MagicMock()
+        model_config.text.api_key = ""
+        mock_get_model_config.return_value = model_config
+
+        result = await compose_draft_node(state)
 
     assert result["writing_state"]["draft"]["title"]
     assert "趋势判断" in result["writing_state"]["draft"]["content"]

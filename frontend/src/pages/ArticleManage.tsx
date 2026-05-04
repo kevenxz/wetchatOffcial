@@ -1,36 +1,45 @@
-import { useEffect, useState } from 'react'
-import type { Key } from 'react'
-import { Button, Card, Empty, Modal, Select, Space, Table, Tag, Typography, message } from 'antd'
-import type { TableProps } from 'antd'
+import { useEffect, useMemo, useState } from 'react'
+import { Button, Empty, Input, Modal, Popconfirm, Select, Tag, Tooltip, message } from 'antd'
+import {
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  FileTextOutlined,
+  SearchOutlined,
+} from '@ant-design/icons'
 import dayjs from 'dayjs'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
+import { useNavigate } from 'react-router-dom'
 import {
-  batchPushArticles,
+  deleteTask,
   getCustomThemes,
   getPresetThemes,
   getStyleConfig,
-  listAccounts,
   listArticles,
-  pushArticle,
-  updateArticleTheme,
-  type AccountConfig,
-  type PushRecord,
   type StyleConfig,
   type TaskResponse,
 } from '@/api'
-import { HeroPanel } from '@/components/workbench'
+import styles from './ArticleManage.module.css'
 
-const { Paragraph, Text, Title } = Typography
 const CURRENT_THEME_KEY = '__current__'
-const ARTICLE_LAYOUT_BREAKPOINT = 1100
 
-function getInitialLayoutMode() {
-  if (typeof window === 'undefined') {
-    return false
-  }
+type ArticleFilter = 'all' | 'published' | 'review' | 'draft'
 
-  return window.innerWidth < ARTICLE_LAYOUT_BREAKPOINT
+const filterOptions: Array<{ label: string; value: ArticleFilter }> = [
+  { label: '全部', value: 'all' },
+  { label: '已发布', value: 'published' },
+  { label: '审核中', value: 'review' },
+  { label: '草稿', value: 'draft' },
+]
+
+const categoryColors: Record<string, string> = {
+  AI: 'purple',
+  科技: 'blue',
+  财经: 'green',
+  汽车: 'orange',
+  国际: 'cyan',
+  军事: 'red',
 }
 
 function mergeStyle(existing: string | null, next: string) {
@@ -118,45 +127,85 @@ function collectImageRefs(article: Record<string, any> | undefined) {
   return refs
 }
 
-function getPushedAccountNames(pushRecords: PushRecord[] | undefined): string[] {
-  const records = pushRecords ?? []
-  const names = records
-    .filter((item) => item.status === 'success')
-    .map((item) => item.account_name)
-  return Array.from(new Set(names))
+function articleBody(task: TaskResponse) {
+  return (task.final_article || task.generated_article || {}) as Record<string, any>
+}
+
+function textValue(value: unknown, fallback = '') {
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback
+}
+
+function getArticleTitle(task: TaskResponse) {
+  return textValue(articleBody(task).title, task.keywords || '未命名文章')
+}
+
+function getArticleSummary(task: TaskResponse) {
+  const article = articleBody(task)
+  const summary = textValue(article.summary) || textValue(article.description)
+  if (summary) return summary
+  return String(article.content || '').replace(/[#>*_`[\]()]/g, '').replace(/\s+/g, ' ').trim().slice(0, 72)
+}
+
+function getArticleCategory(task: TaskResponse) {
+  const topic = task.selected_topic ?? {}
+  const category =
+    textValue(topic.category) ||
+    textValue(topic.metadata?.category) ||
+    textValue(task.selected_hotspot?.category) ||
+    task.generation_config.account_profile?.fit_tags?.[0] ||
+    '科技'
+  return category
+}
+
+function getTemplateName(task: TaskResponse) {
+  const template = task.generation_config.content_template?.name
+  if (template && template !== '自动选择') return template
+  const strategy = task.generation_config.article_strategy
+  if (strategy === 'tech_breakdown') return '热点解读型'
+  if (strategy === 'application_review') return '产品评测型'
+  if (strategy === 'trend_outlook') return '趋势分析型'
+  return '热点解读型'
+}
+
+function getArticleStatus(task: TaskResponse): ArticleFilter {
+  if ((task.push_records ?? []).some((record) => record.status === 'success')) return 'published'
+  if (task.human_review_required || task.status === 'running') return 'review'
+  return 'draft'
+}
+
+function statusLabel(status: ArticleFilter) {
+  if (status === 'published') return { label: '已发布', color: 'success' }
+  if (status === 'review') return { label: '审核中', color: 'warning' }
+  return { label: '草稿', color: 'processing' }
+}
+
+function reviewText(task: TaskResponse) {
+  if (task.status === 'failed') return { label: '审核：被拒', className: styles.reviewRejected }
+  if (task.human_review_required || task.status === 'running') return { label: '审核：待审核', className: styles.reviewPending }
+  return { label: '审核：已通过', className: styles.reviewPassed }
+}
+
+function countWords(task: TaskResponse) {
+  const content = String(articleBody(task).content || '')
+  const compact = content.replace(/\s+/g, '')
+  return compact.length || Number(articleBody(task).word_count || 0)
+}
+
+function displayId(index: number) {
+  return `A-${String(1024 - index)}`
 }
 
 export default function ArticleManage() {
   const [articles, setArticles] = useState<TaskResponse[]>([])
-  const [accounts, setAccounts] = useState<AccountConfig[]>([])
   const [loading, setLoading] = useState(false)
-  const [pushing, setPushing] = useState(false)
-  const [selectedArticleKeys, setSelectedArticleKeys] = useState<Key[]>([])
-  const [defaultAccountIds, setDefaultAccountIds] = useState<string[]>([])
-
+  const [keyword, setKeyword] = useState('')
+  const [filter, setFilter] = useState<ArticleFilter>('all')
+  const [category, setCategory] = useState('all')
   const [currentTheme, setCurrentTheme] = useState<StyleConfig>({})
   const [presetThemes, setPresetThemes] = useState<Record<string, StyleConfig>>({})
   const [customThemes, setCustomThemes] = useState<Record<string, StyleConfig>>({})
-  const [articleThemes, setArticleThemes] = useState<Record<string, string>>({})
-
   const [previewArticle, setPreviewArticle] = useState<TaskResponse | null>(null)
-  const [pushTargetTaskId, setPushTargetTaskId] = useState<string | null>(null)
-  const [pushAccountIds, setPushAccountIds] = useState<string[]>([])
-  const [singlePushThemeName, setSinglePushThemeName] = useState<string>(CURRENT_THEME_KEY)
-  const [isNarrowLayout, setIsNarrowLayout] = useState(getInitialLayoutMode)
-
-  const wechatAccounts = accounts.filter((item) => item.platform === 'wechat_mp' && item.enabled)
-
-  const accountOptions = wechatAccounts.map((item) => ({
-    label: item.name,
-    value: item.account_id,
-  }))
-
-  const themeOptions = [
-    { label: '当前配置', value: CURRENT_THEME_KEY },
-    ...Object.keys(presetThemes).map((name) => ({ label: `内置 · ${name}`, value: name })),
-    ...Object.keys(customThemes).map((name) => ({ label: `自定义 · ${name}`, value: name })),
-  ]
+  const navigate = useNavigate()
 
   const themeConfigMap: Record<string, StyleConfig> = {
     [CURRENT_THEME_KEY]: currentTheme,
@@ -167,25 +216,17 @@ export default function ArticleManage() {
   const fetchData = async () => {
     setLoading(true)
     try {
-      const [articleList, accountList, currentConfig, preset, custom] = await Promise.all([
+      const [articleList, currentConfig, preset, custom] = await Promise.all([
         listArticles(),
-        listAccounts(),
         getStyleConfig(),
         getPresetThemes(),
         getCustomThemes(),
       ])
 
       setArticles(articleList)
-      setAccounts(accountList)
       setCurrentTheme(currentConfig)
       setPresetThemes(preset)
       setCustomThemes(custom)
-
-      const nextThemes: Record<string, string> = {}
-      articleList.forEach((item) => {
-        nextThemes[item.task_id] = item.article_theme || CURRENT_THEME_KEY
-      })
-      setArticleThemes(nextThemes)
     } catch (error) {
       message.error(error instanceof Error ? error.message : '获取文章列表失败')
     } finally {
@@ -197,356 +238,168 @@ export default function ArticleManage() {
     void fetchData()
   }, [])
 
-  useEffect(() => {
-    const updateLayoutMode = () => {
-      setIsNarrowLayout(window.innerWidth < ARTICLE_LAYOUT_BREAKPOINT)
-    }
+  const categories = useMemo(() => {
+    return Array.from(new Set(articles.map(getArticleCategory))).map((item) => ({ label: item, value: item }))
+  }, [articles])
 
-    updateLayoutMode()
-    window.addEventListener('resize', updateLayoutMode)
-
-    return () => {
-      window.removeEventListener('resize', updateLayoutMode)
-    }
-  }, [])
-
-  const openSinglePushModal = (taskId: string) => {
-    setPushTargetTaskId(taskId)
-    setPushAccountIds(defaultAccountIds)
-    setSinglePushThemeName(articleThemes[taskId] || CURRENT_THEME_KEY)
-  }
-
-  const handleThemeChange = async (taskId: string, themeName: string) => {
-    setArticleThemes((prev) => ({ ...prev, [taskId]: themeName }))
-    try {
-      const updated = await updateArticleTheme(taskId, themeName)
-      setArticles((prev) =>
-        prev.map((item) =>
-          item.task_id === updated.task_id ? { ...item, article_theme: updated.article_theme } : item,
-        ),
+  const filteredArticles = useMemo(() => {
+    const lowerKeyword = keyword.toLowerCase()
+    return articles.filter((item) => {
+      const status = getArticleStatus(item)
+      const articleCategory = getArticleCategory(item)
+      const text = `${getArticleTitle(item)} ${getArticleSummary(item)} ${item.keywords} ${articleCategory}`.toLowerCase()
+      return (
+        (filter === 'all' || status === filter) &&
+        (category === 'all' || articleCategory === category) &&
+        (!keyword || text.includes(lowerKeyword))
       )
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '保存主题失败')
-      setArticleThemes((prev) => ({ ...prev, [taskId]: CURRENT_THEME_KEY }))
-    }
-  }
-
-  const submitSinglePush = async () => {
-    if (!pushTargetTaskId) return
-
-    if (pushAccountIds.length === 0) {
-      message.warning('请先选择至少一个公众号')
-      return
-    }
-
-    setPushing(true)
-    try {
-      const result = await pushArticle(pushTargetTaskId, pushAccountIds, singlePushThemeName)
-      message.success(`推送完成：成功 ${result.success}，失败 ${result.failed}`)
-      setPushTargetTaskId(null)
-      await fetchData()
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '推送失败')
-    } finally {
-      setPushing(false)
-    }
-  }
-
-  const submitBatchPush = async () => {
-    const taskIds = selectedArticleKeys.map((key) => String(key))
-
-    if (taskIds.length === 0) {
-      message.warning('请先勾选要批量推送的文章')
-      return
-    }
-
-    if (defaultAccountIds.length === 0) {
-      message.warning('请先选择目标公众号')
-      return
-    }
-
-    const taskThemes: Record<string, string> = {}
-    taskIds.forEach((taskId) => {
-      taskThemes[taskId] = articleThemes[taskId] || CURRENT_THEME_KEY
     })
+  }, [articles, category, filter, keyword])
 
-    setPushing(true)
+  const handleDelete = async (taskId: string) => {
     try {
-      const result = await batchPushArticles(taskIds, defaultAccountIds, taskThemes)
-      message.success(`批量推送完成：成功 ${result.success}，失败 ${result.failed}`)
+      await deleteTask(taskId)
+      message.success('已删除文章')
       await fetchData()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '批量推送失败')
-    } finally {
-      setPushing(false)
+      message.error(error instanceof Error ? error.message : '删除文章失败')
     }
   }
 
-  const previewThemeName = previewArticle
-    ? articleThemes[previewArticle.task_id] || CURRENT_THEME_KEY
-    : CURRENT_THEME_KEY
-
-  const columns: TableProps<TaskResponse>['columns'] = [
-    {
-      title: '文章标题',
-      dataIndex: 'generated_article',
-      key: 'title',
-      render: (article: TaskResponse['generated_article']) => article?.title ?? '未命名文章',
-    },
-    {
-      title: '关键词',
-      dataIndex: 'keywords',
-      key: 'keywords',
-      width: 220,
-      ellipsis: true,
-    },
-    {
-      title: '主题',
-      key: 'theme',
-      width: 220,
-      render: (_, record) => (
-        <Select
-          style={{ width: '100%' }}
-          value={articleThemes[record.task_id] || CURRENT_THEME_KEY}
-          options={themeOptions}
-          onChange={(value) => handleThemeChange(record.task_id, value)}
-        />
-      ),
-    },
-    {
-      title: '已推送公众号',
-      dataIndex: 'push_records',
-      key: 'push_records',
-      render: (records: PushRecord[] | undefined) => {
-        const names = getPushedAccountNames(records)
-
-        if (names.length === 0) {
-          return <Text type="secondary">暂无</Text>
-        }
-
-        return (
-          <Space size={[4, 8]} wrap>
-            {names.map((name) => (
-              <Tag color="success" key={name}>
-                {name}
-              </Tag>
-            ))}
-          </Space>
-        )
-      },
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 180,
-      render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm:ss'),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 190,
-      render: (_, record) => (
-        <Space>
-          <Button size="small" onClick={() => setPreviewArticle(record)}>
-            查看
-          </Button>
-          <Button size="small" type="primary" onClick={() => openSinglePushModal(record.task_id)}>
-            指定推送
-          </Button>
-        </Space>
-      ),
-    },
-  ]
-
-  const previewGeneratedArticle = previewArticle?.final_article || previewArticle?.generated_article
-  const previewTitle = previewGeneratedArticle?.title ?? '请选择一篇文章查看预览'
+  const previewGeneratedArticle = previewArticle ? articleBody(previewArticle) : undefined
+  const previewTitle = previewArticle ? getArticleTitle(previewArticle) : '文章预览'
   const previewContent = previewArticle ? String(previewGeneratedArticle?.content || '') : ''
   const previewCoverImage = normalizeImageSrc(String(previewGeneratedArticle?.cover_image || ''))
-  const previewImageRefs = collectImageRefs(previewGeneratedArticle as Record<string, any> | undefined)
+  const previewImageRefs = collectImageRefs(previewGeneratedArticle)
   const previewHtmlContent = String(previewGeneratedArticle?.html_content || '')
   const previewHtmlHasImages = /<img\s/i.test(previewHtmlContent)
   const previewHtml = previewArticle
     ? buildPreviewHtml(
         previewContent,
-        themeConfigMap[previewThemeName],
+        themeConfigMap[previewArticle.article_theme || CURRENT_THEME_KEY],
         previewGeneratedArticle?.illustrations as string[] | undefined,
         previewHtmlHasImages ? previewHtmlContent : '',
       )
     : ''
 
   return (
-    <div className="backstage-page">
-      <HeroPanel
-        eyebrow="Publishing Assets"
-        title="文章库"
-        description="在统一资产视图里完成文章筛选、主题配置、预览校对和批量推送。"
-      >
-        <Space wrap style={{ marginTop: 12, justifyContent: 'space-between', width: '100%' }}>
-          <Space wrap>
-            <Tag bordered={false} color="blue">
-              文章 {articles.length}
-            </Tag>
-            <Tag bordered={false} color="gold">
-              已选 {selectedArticleKeys.length}
-            </Tag>
-            <Tag bordered={false} color="green">
-              公众号 {wechatAccounts.length}
-            </Tag>
-          </Space>
-          <Space wrap>
-            <Select
-              mode="multiple"
-              allowClear
-              style={{ width: 360, maxWidth: '100%' }}
-              placeholder="选择批量推送目标公众号"
-              value={defaultAccountIds}
-              onChange={setDefaultAccountIds}
-              options={accountOptions}
-            />
-            <Button type="primary" loading={pushing} onClick={submitBatchPush}>
-              批量推送
+    <div className={styles.page}>
+      <div className={styles.toolbar}>
+        <Input
+          size="large"
+          prefix={<SearchOutlined />}
+          placeholder="搜索文章..."
+          allowClear
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+        />
+        <div className={styles.filters}>
+          {filterOptions.map((item) => (
+            <Button
+              key={item.value}
+              className={`${styles.filterButton} ${filter === item.value ? styles.filterButtonActive : ''}`.trim()}
+              onClick={() => setFilter(item.value)}
+            >
+              {item.label}
             </Button>
-          </Space>
-        </Space>
-      </HeroPanel>
-
-      <div
-        data-testid="article-manage-grid"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: isNarrowLayout ? 'minmax(0, 1fr)' : 'minmax(0, 1.4fr) minmax(320px, 0.9fr)',
-          gap: 16,
-          alignItems: 'start',
-        }}
-      >
-        <Card className="backstage-surface-card">
-          <Table
-            rowKey="task_id"
-            loading={loading}
-            columns={columns}
-            dataSource={articles}
-            rowSelection={{
-              selectedRowKeys: selectedArticleKeys,
-              onChange: setSelectedArticleKeys,
-            }}
-            pagination={{ pageSize: 10 }}
-            size="middle"
+          ))}
+          <Select
+            size="large"
+            value={category}
+            className={styles.categorySelect}
+            options={[{ label: '全部分类', value: 'all' }, ...categories]}
+            onChange={setCategory}
           />
-        </Card>
+        </div>
+      </div>
 
-        <Card className="backstage-surface-card">
-          <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <div>
-              <Title level={3} style={{ marginBottom: 8 }}>
-                文章预览
-              </Title>
-              {previewArticle ? (
-                <Space wrap>
-                  <Tag color="blue">主题</Tag>
-                  <Text>{themeOptions.find((item) => item.value === previewThemeName)?.label || '当前配置'}</Text>
-                </Space>
-              ) : (
-                <Text type="secondary">选择一篇文章查看预览</Text>
-              )}
-            </div>
+      <div className={styles.articleList} aria-busy={loading}>
+        {filteredArticles.length === 0 && !loading ? (
+          <Empty description="暂无文章" style={{ padding: 72 }} />
+        ) : (
+          filteredArticles.map((article, index) => {
+            const categoryName = getArticleCategory(article)
+            const status = statusLabel(getArticleStatus(article))
+            const review = reviewText(article)
+            const imageCount = collectImageRefs(articleBody(article)).length
 
-            {previewGeneratedArticle ? (
-              <div
-                style={{
-                  maxHeight: 720,
-                  padding: '20px 18px',
-                  overflow: 'auto',
-                  background: '#fff',
-                  border: '1px solid #e5e7eb',
-                  boxShadow: '0 12px 30px rgba(15, 23, 42, 0.08)',
-                }}
-              >
-                <Title level={4} style={{ marginTop: 0 }}>
-                  {previewTitle}
-                </Title>
-                {previewCoverImage ? (
-                  <img
-                    src={previewCoverImage}
-                    alt={previewTitle}
-                    style={{
-                      display: 'block',
-                      width: '100%',
-                      maxHeight: 280,
-                      objectFit: 'cover',
-                      borderRadius: 12,
-                      marginBottom: 18,
-                    }}
-                  />
-                ) : null}
-                <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
-                {previewImageRefs.length ? (
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                      gap: 12,
-                      marginTop: 18,
-                      paddingTop: 16,
-                      borderTop: '1px solid #e5e7eb',
-                    }}
-                  >
-                    {previewImageRefs.map((image) => (
-                      <figure key={`${image.role}-${image.src}`} style={{ margin: 0 }}>
-                        <img
-                          src={image.src}
-                          alt={image.role}
-                          style={{
-                            display: 'block',
-                            width: '100%',
-                            aspectRatio: '16 / 10',
-                            objectFit: 'cover',
-                            borderRadius: 10,
-                          }}
-                        />
-                        <figcaption style={{ marginTop: 6, color: '#64748b', fontSize: 12 }}>
-                          {image.role}
-                        </figcaption>
-                      </figure>
-                    ))}
+            return (
+              <article className={styles.articleCard} key={article.task_id}>
+                <div className={styles.articleInfo}>
+                  <div className={styles.metaTop}>
+                    <span>{displayId(index)}</span>
+                    <Tag color={categoryColors[categoryName] ?? 'blue'}>{categoryName}</Tag>
+                    <span>{getTemplateName(article)}</span>
                   </div>
-                ) : null}
-              </div>
-            ) : (
-              <Empty description="选择一篇文章查看预览" />
-            )}
-          </Space>
-        </Card>
+                  <h2>{getArticleTitle(article)}</h2>
+                  <p>{getArticleSummary(article)}</p>
+                  <div className={styles.metaBottom}>
+                    <span>{countWords(article)} 字</span>
+                    <span>{imageCount || 0} 张图</span>
+                    <span>{dayjs(article.created_at).format('YYYY-MM-DD HH:mm')}</span>
+                    <span className={review.className}>{review.label}</span>
+                  </div>
+                </div>
+                <div className={styles.articleActions}>
+                  <Tag className={styles.statusTag} color={status.color} icon={<FileTextOutlined />}>
+                    {status.label}
+                  </Tag>
+                  <div>
+                    <Tooltip title="预览">
+                      <Button
+                        type="text"
+                        icon={<EyeOutlined />}
+                        aria-label="预览文章"
+                        onClick={() => setPreviewArticle(article)}
+                      />
+                    </Tooltip>
+                    <Tooltip title="编辑">
+                      <Button
+                        type="text"
+                        icon={<EditOutlined />}
+                        aria-label="编辑文章"
+                        onClick={() => navigate(`/task/${article.task_id}`)}
+                      />
+                    </Tooltip>
+                    <Popconfirm
+                      title="确认删除"
+                      description="确定要删除这篇文章吗？"
+                      okText="删除"
+                      cancelText="取消"
+                      onConfirm={() => handleDelete(article.task_id)}
+                    >
+                      <Button type="text" icon={<DeleteOutlined />} aria-label="删除文章" />
+                    </Popconfirm>
+                  </div>
+                </div>
+              </article>
+            )
+          })
+        )}
       </div>
 
       <Modal
-        open={Boolean(pushTargetTaskId)}
-        onCancel={() => setPushTargetTaskId(null)}
-        title="指定公众号推送"
-        onOk={submitSinglePush}
-        confirmLoading={pushing}
+        open={Boolean(previewArticle)}
+        title={previewTitle}
+        width={920}
+        footer={null}
+        onCancel={() => setPreviewArticle(null)}
+        destroyOnHidden
       >
-        <Space direction="vertical" style={{ width: '100%' }} size={12}>
-          <Select
-            mode="multiple"
-            allowClear
-            style={{ width: '100%' }}
-            placeholder="选择目标公众号"
-            value={pushAccountIds}
-            onChange={setPushAccountIds}
-            options={accountOptions}
-          />
-          <Select
-            style={{ width: '100%' }}
-            value={singlePushThemeName}
-            onChange={setSinglePushThemeName}
-            options={themeOptions}
-            placeholder="选择推送主题"
-          />
-          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            推送时将使用所选主题把 Markdown 渲染成微信样式 HTML。
-          </Paragraph>
-        </Space>
+        <div className={styles.previewFrame}>
+          {previewCoverImage ? <img src={previewCoverImage} alt={previewTitle} className={styles.coverImage} /> : null}
+          <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+          {previewImageRefs.length ? (
+            <div className={styles.imageGrid}>
+              {previewImageRefs.map((image) => (
+                <figure key={`${image.role}-${image.src}`}>
+                  <img src={image.src} alt={image.role} />
+                  <figcaption>{image.role}</figcaption>
+                </figure>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </Modal>
     </div>
   )
