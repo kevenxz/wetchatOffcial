@@ -351,7 +351,39 @@ def _build_fallback_blueprint(
     article_type: dict[str, Any],
     evidence_pack: dict[str, Any],
     search_materials: list[dict[str, str]],
+    selected_skill: dict[str, Any] | None = None,
 ) -> BlueprintOutput:
+    selected_skill = dict(selected_skill or {})
+    if selected_skill.get("skill_id") == "quantum_tech_explainer":
+        sections = [
+            {"heading": "先把这项量子技术到底是什么讲清楚", "goal": "用准确但可读的方式解释核心概念和常见误解", "shape": "hook"},
+            {"heading": "真正的新进展发生在工程指标上", "goal": "围绕硬件、纠错、相干时间、保真度或通信链路拆解变化", "shape": "evidence"},
+            {"heading": "它距离产业应用还有哪几道门槛", "goal": "连接安全通信、材料计算、药物模拟或优化问题等应用场景", "shape": "drivers"},
+            {"heading": "哪些结论现在还不能写得太满", "goal": "交代实验室指标、规模化、成本和商业化周期的证据边界", "shape": "risks"},
+        ]
+        if search_materials:
+            source_sections = _build_source_driven_sections(topic, search_materials)
+            sections = (source_sections[:3] + sections)[0:6]
+        return BlueprintOutput(
+            framework=str(selected_skill.get("framework") or "量子科技深度解读"),
+            title_candidates=[
+                f"{topic}：真正值得看的不是概念，而是这些工程指标",
+                f"{topic}背后，量子科技走到了哪一步",
+                f"别把{topic}写玄了：进展、边界和产业信号",
+            ],
+            thesis=f"{topic}的关键不在于概念热度，而在于科学原理、工程指标和商业化边界是否同时站得住。",
+            reader_value="帮助读者区分量子科技的真实进展、工程门槛和产业化想象。",
+            sections=sections[:6],
+            must_cover_points=[
+                "区分科学原理、工程样机和商业化产品",
+                "解释关键术语并说明验证指标",
+                "保留证据边界和不确定性",
+            ],
+            drop_points=["量子玄学化表达", "马上取代经典计算的夸张判断"],
+            source_driven_framework=sections[:6],
+            evidence_map=_build_evidence_map(sections[:6], search_materials),
+        )
+
     profile = _topic_profile(topic)
     research_gaps = list(evidence_pack.get("research_gaps") or [])
     quality_summary = dict(evidence_pack.get("quality_summary") or {})
@@ -487,6 +519,7 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
     """Create a dynamic section plan for the current article."""
     planning_state = dict(state.get("planning_state") or {})
     article_type = dict(planning_state.get("article_type") or {})
+    selected_skill = dict(planning_state.get("selected_skill") or {})
     selected_topic = dict(state.get("selected_topic") or {})
     topic = str(selected_topic.get("title") or state.get("task_brief", {}).get("topic", "")).strip()
     research_state = dict(state.get("research_state") or {})
@@ -495,7 +528,7 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
 
     text_model_config = get_model_config().text
     if not text_model_config.api_key or not state.get("task_id"):
-        blueprint = _build_fallback_blueprint(topic, article_type, evidence_pack, search_materials)
+        blueprint = _build_fallback_blueprint(topic, article_type, evidence_pack, search_materials, selected_skill)
     else:
         system_prompt = (
             "You are a planning agent for Chinese long-form content. "
@@ -506,6 +539,7 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
             "Section headings should be content-specific, topic-specific, and publication-ready instead of generic placeholders. "
             "Keep 4 to 6 H2 sections. Always include one risk-boundary section. "
             "Use source_context and search_materials to decide the article framework before using any generic topic template. "
+            "If selected_skill is provided, use it as the specialized editorial skill for framework, tone, evidence policy, and forbidden patterns. "
             "Each section should map to at least one concrete source signal when possible. "
             "Do not output a fixed template."
         )
@@ -513,6 +547,7 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
             "topic:\n{topic}\n\n"
             "article_type:\n{article_type}\n\n"
             "source_context:\n{source_context}\n\n"
+            "selected_skill:\n{selected_skill}\n\n"
             "search_materials:\n{search_materials}\n\n"
             "evidence_pack:\n{evidence_pack}\n"
         )
@@ -535,6 +570,7 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
             },
             "search_materials": _build_search_materials_summary(search_materials),
             "source_context": _build_source_context(search_materials, evidence_pack),
+            "selected_skill": selected_skill,
             "evidence_pack": _build_evidence_summary(evidence_pack),
         }
         model_context = build_model_context(
@@ -573,9 +609,12 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
                 task_id=str(state.get("task_id") or ""),
                 error=str(exc),
             )
-            blueprint = _build_fallback_blueprint(topic, article_type, evidence_pack, search_materials)
+            blueprint = _build_fallback_blueprint(topic, article_type, evidence_pack, search_materials, selected_skill)
 
-    planning_state["article_blueprint"] = blueprint.model_dump()
+    blueprint_payload = blueprint.model_dump()
+    if selected_skill:
+        blueprint_payload["selected_skill"] = selected_skill
+    planning_state["article_blueprint"] = blueprint_payload
     return {
         "status": "running",
         "current_skill": "plan_article_angle",

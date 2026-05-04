@@ -49,6 +49,31 @@ async def test_plan_article_angle_builds_different_section_shapes_for_different_
 
 
 @pytest.mark.asyncio
+async def test_plan_article_angle_uses_quantum_skill_fallback_framework() -> None:
+    state = {
+        "task_brief": {"topic": "量子计算芯片突破"},
+        "planning_state": {
+            "article_type": {"type_id": "trend_analysis"},
+            "selected_skill": {
+                "skill_id": "quantum_tech_explainer",
+                "name": "量子科技深度解读",
+                "framework": "量子科技深度解读",
+            },
+        },
+        "research_state": {"evidence_pack": {"confirmed_facts": [{"claim": "量子芯片保真度提升"}]}},
+    }
+
+    result = await plan_article_angle_node(state)
+    blueprint = result["planning_state"]["article_blueprint"]
+    headings = [section["heading"] for section in blueprint["sections"]]
+
+    assert blueprint["selected_skill"]["skill_id"] == "quantum_tech_explainer"
+    assert "量子" in blueprint["framework"]
+    assert any("工程指标" in heading or "量子技术" in heading for heading in headings)
+    assert "量子玄学化表达" in blueprint["drop_points"]
+
+
+@pytest.mark.asyncio
 async def test_plan_article_angle_avoids_fixed_wechat_headings_for_general_topics() -> None:
     state = {
         "planning_state": {

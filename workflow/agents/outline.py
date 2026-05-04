@@ -45,6 +45,7 @@ def _normalize_outline(blueprint: dict[str, Any], research_state: dict[str, Any]
     inline_count = sum(1 for item in outline if item.get("image_hint") == "inline")
     return {
         "framework": str(blueprint.get("framework") or "AI 自主判定结构").strip(),
+        "selected_skill": dict(blueprint.get("selected_skill") or {}),
         "title_candidates": list(blueprint.get("title_candidates") or []),
         "thesis": str(blueprint.get("thesis") or "").strip(),
         "reader_value": str(blueprint.get("reader_value") or "").strip(),
@@ -66,6 +67,8 @@ async def outline_planner_node(state: WorkflowState) -> dict[str, Any]:
     planning_state = dict(result.get("planning_state") or {})
     research_state = dict(state.get("research_state") or {})
     outline_result = _normalize_outline(dict(planning_state.get("article_blueprint") or {}), research_state)
+    if planning_state.get("selected_skill"):
+        outline_result["selected_skill"] = dict(planning_state.get("selected_skill") or {})
     planning_state["outline_result"] = outline_result
     return {
         **result,

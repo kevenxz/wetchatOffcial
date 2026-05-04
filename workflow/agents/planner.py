@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from workflow.article_skills import list_article_skills, select_article_skill
 from workflow.state import WorkflowState
 from workflow.utils.article_type_registry import get_article_type_registry
 
@@ -79,10 +80,36 @@ async def planner_agent_node(state: WorkflowState) -> dict[str, Any]:
     research_state = dict(state.get("research_state") or {})
     registry = get_article_type_registry()
     article_goal = str(brief.get("article_goal") or "").strip()
+    generation_config = dict(config_snapshot.get("generation") or state.get("generation_config") or {})
+    selected_hotspot = dict(brief.get("selected_hotspot") or state.get("selected_hotspot") or {})
+    hotspot_titles = [
+        str(item.get("title") or "").strip()
+        for item in list(state.get("hotspot_candidates") or [])
+        if isinstance(item, dict) and str(item.get("title") or "").strip()
+    ][:8]
+    selected_skill = select_article_skill(
+        {
+            "topic": brief.get("topic") or state.get("keywords"),
+            "article_goal": article_goal,
+            "style_hint": generation_config.get("style_hint"),
+            "audience_roles": brief.get("audience_roles"),
+            "hotspot_titles": [selected_hotspot.get("title"), *hotspot_titles],
+        }
+    )
     article_type = _resolve_article_type(article_goal, registry)
     angles, coverage_targets = _prioritize_angles(research_state)
     planning_state = {
         "article_type": article_type,
+        "available_skills": [
+            {
+                "skill_id": skill.get("skill_id"),
+                "name": skill.get("name"),
+                "description": skill.get("description"),
+                "decision_rule": skill.get("decision_rule"),
+            }
+            for skill in list_article_skills()
+        ],
+        "selected_skill": selected_skill,
         "account_profile": account_profile,
         "content_template": content_template,
         "review_policy": review_policy,
@@ -95,7 +122,7 @@ async def planner_agent_node(state: WorkflowState) -> dict[str, Any]:
         "visual_plan": {
             "asset_roles": _visual_roles(article_type, image_policy),
             "quality_threshold": 75,
-            "style": image_policy.get("style", ""),
+            "style": image_policy.get("style") or selected_skill.get("visual_style", ""),
             "brand_colors": list(image_policy.get("brand_colors") or []),
             "title_safe_area": bool(image_policy.get("title_safe_area", True)),
         },

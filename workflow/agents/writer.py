@@ -160,6 +160,7 @@ def _build_fallback_draft(topic: str, blueprint: dict[str, Any], evidence_pack: 
 async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
     """Generate the first article draft from blueprint and research evidence."""
     planning_state = dict(state.get("planning_state") or {})
+    selected_skill = dict(planning_state.get("selected_skill") or {})
     blueprint = dict(planning_state.get("article_blueprint") or {})
     outline_result = dict(state.get("outline_result") or planning_state.get("outline_result") or {})
     if outline_result:
@@ -209,6 +210,7 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
         "Write a clean Markdown article draft from the provided thesis, sections, and evidence pack. "
         "The content type is explicitly a WeChat public account article: it needs a strong title, opening hook, readable H2 subtitles, complete paragraphs, transitions, and a clear ending. "
         "The article framework must follow the source_driven_framework and evidence_map in the blueprint when they are present. "
+        "If selected_skill is provided, follow its tone, framework, evidence_policy, writing_constraints, and title guidance. "
         "The article must strictly follow outline_result when present: title candidates, section order, section goals, source_refs, key_points, must_use_facts, and risk_boundaries. "
         "Do not replace a search-driven framework with a generic template. "
         "Every major H2 section should be grounded in the searched source signals or explicitly state the evidence boundary. "
@@ -228,6 +230,7 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
         "evidence_pack:\n{evidence_pack}\n\n"
         "account_profile:\n{account_profile}\n\n"
         "content_template:\n{content_template}\n\n"
+        "selected_skill:\n{selected_skill}\n\n"
         "revision_brief:\n{revision_brief}\n"
     )
 
@@ -250,6 +253,7 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
         "revision_brief": revision_brief,
         "account_profile": dict(config_snapshot.get("account_profile") or {}),
         "content_template": dict(config_snapshot.get("content_template") or {}),
+        "selected_skill": selected_skill,
     }
     model_context = build_model_context(
         model=text_model_config.model,

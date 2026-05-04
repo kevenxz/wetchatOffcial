@@ -30,6 +30,60 @@ async def test_compose_draft_generates_article_from_blueprint_and_evidence() -> 
 
 
 @pytest.mark.asyncio
+async def test_compose_draft_passes_selected_skill_to_model_prompt() -> None:
+    state = {
+        "task_id": "task-quantum-writer",
+        "task_brief": {"topic": "量子计算芯片突破"},
+        "planning_state": {
+            "selected_skill": {
+                "skill_id": "quantum_tech_explainer",
+                "name": "量子科技深度解读",
+                "writing_constraints": ["必须区分科学原理、工程样机和商业化产品"],
+            },
+            "article_type": {"type_id": "trend_analysis"},
+            "article_blueprint": {
+                "thesis": "量子计算芯片突破需要看工程指标",
+                "sections": [
+                    {"heading": "工程指标为什么重要", "goal": "解释量子技术验证边界"},
+                    {"heading": "风险边界在哪里", "goal": "说明不确定性"},
+                ],
+            },
+        },
+        "research_state": {"evidence_pack": {"confirmed_facts": [{"claim": "保真度指标提升"}]}},
+    }
+
+    with patch("workflow.agents.writer.get_model_config") as mock_get_model_config:
+        with patch("workflow.agents.writer.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.agents.writer.ChatOpenAI") as mock_chat_openai:
+                model_config = MagicMock()
+                model_config.text.api_key = "text-key"
+                model_config.text.base_url = "https://text.example.com/v1"
+                model_config.text.model = "text-model"
+                mock_get_model_config.return_value = model_config
+
+                prompt = MagicMock()
+                chain = AsyncMock()
+                llm = MagicMock()
+                llm.with_structured_output.return_value = MagicMock(name="structured-llm")
+                mock_prompt_class.from_messages.return_value = prompt
+                prompt.__or__.return_value = chain
+                mock_chat_openai.return_value = llm
+                chain.ainvoke.return_value = {
+                    "title": "量子计算芯片突破，先看工程指标",
+                    "alt_titles": [],
+                    "content": "开头\n\n## 工程指标为什么重要\n\n正文足够长。" * 80,
+                    "summary": "解释量子技术边界",
+                }
+
+                await compose_draft_node(state)
+
+    payload = chain.ainvoke.await_args.args[0]
+    assert payload["selected_skill"]["skill_id"] == "quantum_tech_explainer"
+    messages = mock_prompt_class.from_messages.call_args.args[0]
+    assert "selected_skill" in messages[1][1]
+
+
+@pytest.mark.asyncio
 async def test_compose_draft_fallback_writes_complete_wechat_article_from_outline() -> None:
     state = {
         "task_brief": {"topic": "AI 搜索产品"},

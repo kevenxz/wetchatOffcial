@@ -20,6 +20,8 @@ async def test_planner_agent_creates_type_search_and_visual_plan() -> None:
     result = await planner_agent_node(state)
 
     assert result["planning_state"]["article_type"]["type_id"]
+    assert result["planning_state"]["available_skills"]
+    assert result["planning_state"]["selected_skill"]["skill_id"]
     assert result["planning_state"]["search_plan"]["angles"]
     assert result["planning_state"]["visual_plan"]["asset_roles"]
 
@@ -50,3 +52,24 @@ async def test_planner_agent_prioritizes_angles_from_research_gaps() -> None:
     assert search_plan["angles"][:2] == ["fact", "data"]
     assert "official" in search_plan["coverage_targets"]
     assert "dataset" in search_plan["coverage_targets"]
+
+
+@pytest.mark.asyncio
+async def test_planner_agent_selects_quantum_tech_skill() -> None:
+    state = {
+        "task_id": "task-quantum",
+        "keywords": "量子计算芯片突破",
+        "generation_config": {"style_hint": "量子科技风格，解释 qubit 和纠错边界"},
+        "task_brief": {
+            "topic": "量子计算芯片突破",
+            "audience_roles": ["科技读者"],
+            "article_goal": "解释量子科技进展",
+        },
+        "research_state": {},
+    }
+
+    result = await planner_agent_node(state)
+
+    selected_skill = result["planning_state"]["selected_skill"]
+    assert selected_skill["skill_id"] == "quantum_tech_explainer"
+    assert "量子" in selected_skill["name"]
