@@ -4,6 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
+import structlog
 from fastapi import APIRouter, Query
 
 from api.models import (
@@ -20,6 +21,7 @@ from api.store import create_topic, list_topics, topic_store, update_topic
 from workflow.agents.hotspot import capture_hot_topics_node
 
 router = APIRouter(prefix="/hotspots", tags=["hotspots"])
+logger = structlog.get_logger(__name__)
 
 
 def _topic_id_from_hotspot(item: dict) -> str:
@@ -52,11 +54,45 @@ def _item_score(item: dict) -> float:
         return 0
 
 
-def _persist_hotspot_topics(items: list[dict]) -> None:
+def _hotspot_log_sample(items: list[dict], limit: int = 5) -> list[dict]:
+    sample = []
+    for item in items[:limit]:
+        sample.append(
+            {
+                "title": item.get("title"),
+                "source": item.get("source") or item.get("platform_name"),
+                "category": item.get("category"),
+                "score": _item_score(item),
+                "risk_score": item.get("risk_score") or item.get("risk"),
+                "url": item.get("url"),
+            }
+        )
+    return sample
+
+
+def _monitor_item_log_sample(items: list[HotspotMonitorItem], limit: int = 5) -> list[dict]:
+    return [
+        {
+            "topic_id": item.topic_id,
+            "title": item.title,
+            "source": item.source,
+            "category": item.category,
+            "hot_score": item.hot_score,
+            "account_fit_score": item.account_fit_score,
+            "risk_score": item.risk_score,
+            "recommended": item.recommended,
+        }
+        for item in items[:limit]
+    ]
+
+
+def _persist_hotspot_topics(items: list[dict]) -> dict[str, int]:
     now = datetime.now(tz=timezone.utc)
+    stats = {"received": len(items), "created": 0, "updated": 0, "skipped": 0}
     for item in items:
         title = str(item.get("title") or "").strip()
         if not title:
+            stats["skipped"] += 1
             continue
         topic_id = _topic_id_from_hotspot(item)
         score = _item_score(item)
@@ -73,8 +109,9 @@ def _persist_hotspot_topics(items: list[dict]) -> None:
         if topic_id in topic_store:
             try:
                 update_topic(topic_id, patch)
+                stats["updated"] += 1
             except ValueError:
-                pass
+                stats["skipped"] += 1
             continue
         create_topic(
             TopicCandidate(
@@ -89,6 +126,8 @@ def _persist_hotspot_topics(items: list[dict]) -> None:
                 created_at=now,
             )
         )
+        stats["created"] += 1
+    return stats
 
 
 def _monitor_item_from_topic(topic: TopicCandidate) -> HotspotMonitorItem:
@@ -177,33 +216,67 @@ async def get_hotspot_monitor(
     limit: int = Query(default=80, ge=1, le=200),
 ) -> HotspotMonitorResponse:
     """Return normalized hotspot monitor data for the dashboard page."""
-    return _build_monitor_response(
+    response = _build_monitor_response(
         status=status,
         category=category,
         recommended_only=recommended_only,
         limit=limit,
     )
+    logger.info(
+        "hotspot_monitor_list",
+        status=status.value if status else "all",
+        category=category,
+        recommended_only=recommended_only,
+        limit=limit,
+        returned=len(response.items),
+        stats=response.stats.model_dump(mode="json"),
+        sample=_monitor_item_log_sample(response.items),
+    )
+    return response
 
 
 @router.post("/monitor/capture", response_model=HotspotMonitorResponse)
 async def capture_hotspot_monitor(body: HotspotMonitorCaptureRequest) -> HotspotMonitorResponse:
     """Capture fresh hotspots, persist them and return monitor data."""
     original_keywords = body.keywords
+    capture_config = body.hotspot_capture.model_dump(mode="python")
+    logger.info(
+        "hotspot_monitor_capture_start",
+        keywords=original_keywords,
+        source=capture_config.get("source"),
+        categories=capture_config.get("categories"),
+        platform_count=len(capture_config.get("platforms") or []),
+        filters=capture_config.get("filters"),
+    )
     result = await capture_hot_topics_node(
         {
             "task_id": f"monitor-{uuid.uuid4()}",
             "keywords": original_keywords,
             "original_keywords": original_keywords,
-            "hotspot_capture_config": body.hotspot_capture.model_dump(mode="python"),
+            "hotspot_capture_config": capture_config,
         }
     )
     hotspot_candidates = list(result.get("hotspot_candidates") or [])
-    _persist_hotspot_topics([item for item in hotspot_candidates if isinstance(item, dict)])
-    return _build_monitor_response(
+    candidate_dicts = [item for item in hotspot_candidates if isinstance(item, dict)]
+    persist_stats = _persist_hotspot_topics(candidate_dicts)
+    response = _build_monitor_response(
         status=TopicStatus.pending,
         limit=80,
         capture_error=result.get("hotspot_capture_error"),
     )
+    logger.info(
+        "hotspot_monitor_capture_done",
+        keywords=str(result.get("keywords") or original_keywords),
+        candidate_count=len(candidate_dicts),
+        persist_stats=persist_stats,
+        returned=len(response.items),
+        stats=response.stats.model_dump(mode="json"),
+        selected_hotspot=result.get("selected_hotspot"),
+        capture_error=result.get("hotspot_capture_error"),
+        raw_sample=_hotspot_log_sample(candidate_dicts),
+        display_sample=_monitor_item_log_sample(response.items),
+    )
+    return response
 
 
 @router.post("/preview", response_model=HotspotPreviewResponse)
@@ -219,7 +292,17 @@ async def preview_hotspots(body: HotspotPreviewRequest) -> HotspotPreviewRespons
         }
     )
     hotspot_candidates = list(result.get("hotspot_candidates") or [])
-    _persist_hotspot_topics([item for item in hotspot_candidates if isinstance(item, dict)])
+    candidate_dicts = [item for item in hotspot_candidates if isinstance(item, dict)]
+    persist_stats = _persist_hotspot_topics(candidate_dicts)
+    logger.info(
+        "hotspot_preview_capture_done",
+        keywords=str(result.get("keywords") or original_keywords),
+        candidate_count=len(candidate_dicts),
+        persist_stats=persist_stats,
+        selected_hotspot=result.get("selected_hotspot"),
+        capture_error=result.get("hotspot_capture_error"),
+        raw_sample=_hotspot_log_sample(candidate_dicts),
+    )
     return HotspotPreviewResponse(
         keywords=str(result.get("keywords") or original_keywords),
         original_keywords=original_keywords,

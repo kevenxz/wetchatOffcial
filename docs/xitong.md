@@ -448,6 +448,166 @@ Hotspot Source Adapters
 
 ---
 
+## 6. 当前热点监控接口方案
+
+当前后台“热点监控”页面不直接读取外部热榜，也不再把预览接口当正式数据源。页面只消费后端归一化后的监控接口，后端负责抓取、清洗、评分、入库和展示数据组装。
+
+### 6.1 页面数据接口
+
+```http
+GET /api/hotspots/monitor
+```
+
+用途：
+
+* 页面初始化。
+* 页面刷新。
+* 按状态、分类、推荐条件读取热点候选池。
+
+查询参数：
+
+| 参数 | 含义 |
+| --- | --- |
+| `status` | 热点状态，默认 `pending`。可为空读取全部。 |
+| `category` | 分类筛选，例如 `科技`、`AI`、`财经`。 |
+| `recommended_only` | 是否只返回推荐热点。 |
+| `limit` | 返回数量，默认 80，最大 200。 |
+
+返回结构：
+
+```json
+{
+  "items": [
+    {
+      "topic_id": "hotspot-xxx",
+      "title": "OpenAI 新模型发布",
+      "summary": "模型能力更新",
+      "source": "知乎热榜",
+      "url": "https://example.com/openai",
+      "category": "AI",
+      "tags": ["AI", "大模型"],
+      "status": "pending",
+      "task_id": null,
+      "hot_score": 92,
+      "account_fit_score": 92,
+      "risk_score": 8,
+      "channel_count": 5,
+      "recommended": true,
+      "captured_at": "2026-05-04T10:00:00Z",
+      "updated_at": null,
+      "metadata": {}
+    }
+  ],
+  "stats": {
+    "total": 47,
+    "recommended": 12,
+    "high_risk": 5,
+    "source_count": 8,
+    "latest_captured_at": "2026-05-04T10:00:00Z"
+  },
+  "updated_at": "2026-05-04T10:01:00Z",
+  "capture_error": null
+}
+```
+
+### 6.2 主动抓取接口
+
+```http
+POST /api/hotspots/monitor/capture
+```
+
+用途：
+
+* 后台页面点击“立即抓取”。
+* 后端执行热点抓取并写入候选池。
+* 返回抓取后的最新监控页面数据。
+
+请求结构：
+
+```json
+{
+  "keywords": "热点监控",
+  "hotspot_capture": {
+    "enabled": true,
+    "source": "tophub",
+    "categories": ["科技", "财经", "军事", "国际", "社会", "汽车"],
+    "platforms": [],
+    "filters": {
+      "top_n_per_platform": 10,
+      "min_selection_score": 45,
+      "exclude_keywords": [],
+      "prefer_keywords": ["AI", "芯片", "大模型", "利率", "新能源"]
+    },
+    "fallback_topics": ["AI 产业趋势", "半导体供应链", "全球科技政策"]
+  }
+}
+```
+
+返回结构与 `GET /api/hotspots/monitor` 一致。
+
+### 6.3 当前抓取来源与处理链路
+
+当前版本的抓取来源为 TopHub：
+
+```text
+前端点击立即抓取
+  -> POST /api/hotspots/monitor/capture
+  -> api/routers/hotspots.py
+  -> workflow/agents/hotspot.py::capture_hot_topics_node
+  -> workflow/utils/tophub_client.py
+  -> workflow/utils/hotspot_ranker.py
+  -> 写入 data/topics.json
+  -> 返回 HotspotMonitorResponse
+  -> 前端 TopicCenter 展示
+```
+
+如果 `platforms` 为空，系统会根据 `categories` 自动从 TopHub 分类里发现可用平台，再抓取各平台榜单。抓取结果经过去重、偏好关键词加权、排除关键词过滤、最低分过滤和排序后，写入候选池。
+
+### 6.4 推荐与风险规则
+
+当前页面推荐规则：
+
+```text
+status == pending
+account_fit_score >= 70
+risk_score < 40
+```
+
+当前高风险统计规则：
+
+```text
+risk_score >= 70
+```
+
+这些规则目前在接口层归一化，后续可以迁移为配置中心参数。
+
+### 6.5 抓取日志方案
+
+热点抓取接口需要输出结构化日志，方便排查“抓到了什么、入库了多少、页面为什么展示这些数据”。
+
+日志事件：
+
+| 事件 | 触发时机 | 关键字段 |
+| --- | --- | --- |
+| `hotspot_monitor_capture_start` | 开始抓取 | `keywords`、`source`、`categories`、`platform_count`、`filters` |
+| `hotspot_monitor_capture_done` | 抓取结束 | `candidate_count`、`persist_stats`、`returned`、`stats`、`selected_hotspot`、`capture_error`、`raw_sample`、`display_sample` |
+| `hotspot_monitor_list` | 页面读取列表 | `status`、`category`、`recommended_only`、`returned`、`stats`、`sample` |
+| `hotspot_preview_capture_done` | 预览抓取结束 | `candidate_count`、`persist_stats`、`selected_hotspot`、`capture_error`、`raw_sample` |
+
+示例日志：
+
+```text
+hotspot_monitor_capture_done
+candidate_count=12
+persist_stats={"received":12,"created":8,"updated":4,"skipped":0}
+returned=8
+stats={"total":8,"recommended":3,"high_risk":1,"source_count":4}
+raw_sample=[{"title":"OpenAI 新模型发布","source":"知乎热榜","category":"AI","score":92}]
+display_sample=[{"topic_id":"hotspot-xxx","title":"OpenAI 新模型发布","hot_score":92,"recommended":true}]
+```
+
+---
+
 # 六、Agent 体系设计
 
 建议你用 4 个核心 Agent。
