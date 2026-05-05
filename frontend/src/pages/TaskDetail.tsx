@@ -7,8 +7,10 @@ import { marked } from 'marked'
 import {
   ARTICLE_STRATEGY_LABELS,
   getTask,
+  listWorkflowRunSteps,
   retryTask,
   type TaskResponse,
+  type WorkflowRunStepRecord,
 } from '@/api'
 import { HeroPanel, SectionBlock, StatusRail, type StatusRailStep } from '@/components/workbench'
 import styles from './TaskDetail.module.css'
@@ -33,6 +35,8 @@ const SKILL_STEPS: StatusRailStep[] = [
 
 interface WsPayload {
   task_id: string
+  run_id?: string
+  run_step_id?: string
   status: string
   current_skill: string
   progress: number
@@ -130,8 +134,25 @@ export default function TaskDetail() {
   const [currentSkill, setCurrentSkill] = useState<string>('')
   const [progress, setProgress] = useState<number>(0)
   const [statusMessage, setStatusMessage] = useState<string>('正在连接...')
+  const [workflowSteps, setWorkflowSteps] = useState<WorkflowRunStepRecord[]>([])
 
   const wsRef = useRef<WebSocket | null>(null)
+
+  const refreshWorkflowSteps = async () => {
+    if (!taskId) return
+    try {
+      const steps = await listWorkflowRunSteps({ task_id: taskId })
+      setWorkflowSteps(
+        [...steps].sort((left, right) => {
+          const leftTime = new Date(left.started_at || left.created_at).getTime()
+          const rightTime = new Date(right.started_at || right.created_at).getTime()
+          return leftTime - rightTime
+        }),
+      )
+    } catch {
+      // Step tracing is diagnostic; the task detail should still render if it fails.
+    }
+  }
 
   const handleRetry = async () => {
     if (!taskId) return
@@ -162,6 +183,7 @@ export default function TaskDetail() {
         }
       })
       .catch(() => undefined)
+    refreshWorkflowSteps()
   }, [taskId])
 
   useEffect(() => {
@@ -183,6 +205,9 @@ export default function TaskDetail() {
         setCurrentSkill(data.current_skill)
         setProgress(data.progress)
         setStatusMessage(data.message)
+        if (data.run_step_id || data.status === 'done' || data.status === 'failed') {
+          refreshWorkflowSteps()
+        }
 
         setTask((prev) => {
           if (!prev) return prev
@@ -260,6 +285,18 @@ export default function TaskDetail() {
   const outlineResult = task?.outline_result || task?.planning_state?.outline_result || finalArticle?.outline_result
   const qualityReport = task?.quality_report || task?.quality_state?.quality_report
   const hotspotCandidates = task?.hotspot_candidates || []
+  const searchContract = task?.planning_state?.search_contract || task?.research_state?.search_contract
+  const searchEvaluation = task?.research_state?.search_evaluation || task?.research_state?.evidence_pack?.search_evaluation
+  const searchRuns = task?.research_state?.search_runs || []
+  const citations = task?.research_state?.evidence_pack?.citations || []
+  const stepByName = workflowSteps.reduce<Record<string, WorkflowRunStepRecord[]>>((acc, step) => {
+    acc[step.step_name] = [...(acc[step.step_name] || []), step]
+    return acc
+  }, {})
+  const orderedWorkflowSteps = [
+    ...SKILL_STEPS.flatMap((step) => stepByName[step.key] || []),
+    ...workflowSteps.filter((step) => !SKILL_STEPS.some((known) => known.key === step.step_name)),
+  ]
   const metaItems = task
     ? [
         { label: '任务 ID', value: task.task_id },
@@ -425,6 +462,44 @@ export default function TaskDetail() {
             <SectionBlock title="结构信号">
               <div className={styles.signalStack}>
                 <div className={styles.signalCard}>
+                  <span>步骤输入输出</span>
+                  {orderedWorkflowSteps.length ? (
+                    <div className={styles.stepTraceList}>
+                      {orderedWorkflowSteps.map((step, index) => (
+                        <details key={step.run_step_id} className={styles.stepTraceItem}>
+                          <summary>
+                            <strong>{`${index + 1}. ${step.step_name}`}</strong>
+                            <Tag color={step.status === 'failed' ? 'error' : step.status === 'succeeded' ? 'success' : 'processing'}>
+                              {step.status}
+                            </Tag>
+                            <small>
+                              {formatDate(step.started_at || step.created_at)}
+                              {step.payload?.duration_ms ? ` · ${step.payload.duration_ms}ms` : ''}
+                            </small>
+                          </summary>
+                          {step.error ? <p className={styles.stepError}>{step.error}</p> : null}
+                          <div className={styles.stepTraceGrid}>
+                            <section>
+                              <h4>Input</h4>
+                              <pre>{renderValue(step.payload?.input_state)}</pre>
+                            </section>
+                            <section>
+                              <h4>Output</h4>
+                              <pre>{renderValue(step.payload?.output)}</pre>
+                            </section>
+                            <section>
+                              <h4>State After</h4>
+                              <pre>{renderValue(step.payload?.state_after)}</pre>
+                            </section>
+                          </div>
+                        </details>
+                      ))}
+                    </div>
+                  ) : (
+                    <pre>暂无步骤记录。新任务运行后会自动记录每一步输入和输出。</pre>
+                  )}
+                </div>
+                <div className={styles.signalCard}>
                   <span>热点候选</span>
                   <pre>
                     {hotspotCandidates.length
@@ -469,6 +544,44 @@ export default function TaskDetail() {
                 <div className={styles.signalCard}>
                   <span>图片资产</span>
                   <pre>{renderValue(task?.visual_state?.assets || finalArticle?.images)}</pre>
+                </div>
+                <div className={styles.signalCard}>
+                  <span>Research Plan</span>
+                  <pre>{renderValue(task?.planning_state?.research_plan)}</pre>
+                </div>
+                <div className={styles.signalCard}>
+                  <span>Search Contract</span>
+                  <pre>{renderValue(searchContract)}</pre>
+                </div>
+                <div className={styles.signalCard}>
+                  <span>Search Evaluation</span>
+                  <pre>{renderValue(searchEvaluation)}</pre>
+                </div>
+                <div className={styles.signalCard}>
+                  <span>Search Rounds</span>
+                  <pre>{renderValue(searchRuns)}</pre>
+                </div>
+                <div className={styles.signalCard}>
+                  <span>Citations</span>
+                  {citations.length ? (
+                    <div className={styles.citationList}>
+                      {citations.slice(0, 12).map((item: Record<string, any>, index: number) => (
+                        <a
+                          key={`${item.url || item.title || index}`}
+                          href={String(item.url || '#')}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <strong>{item.title || item.domain || item.url}</strong>
+                          <small>
+                            {item.source_type || 'unknown'} · {item.confidence || 'unknown'}
+                          </small>
+                        </a>
+                      ))}
+                    </div>
+                  ) : (
+                    <pre>{renderValue(citations)}</pre>
+                  )}
                 </div>
                 <div className={styles.signalCard}>
                   <span>研究状态</span>

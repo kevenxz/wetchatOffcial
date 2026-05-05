@@ -17,3 +17,33 @@ async def test_plan_research_creates_queries_for_all_research_angles() -> None:
 
     assert len(queries) == 5
     assert {item["angle"] for item in queries} == {"fact", "news", "opinion", "case", "data"}
+
+
+@pytest.mark.asyncio
+async def test_plan_research_uses_search_contract_query_plan() -> None:
+    state = {
+        "task_id": "task-contract",
+        "task_brief": {"topic": "AI 新模型发布"},
+        "planning_state": {
+            "search_contract": {
+                "freshness_window_days": 3,
+                "query_plan": [
+                    {
+                        "query": "AI 新模型 官方 公告",
+                        "purpose": "找官方来源",
+                        "source_type": "official",
+                        "priority": 1,
+                    }
+                ],
+            },
+            "search_plan": {"angles": ["fact"]},
+        },
+    }
+
+    result = await plan_research_node(state)
+    query = result["planning_state"]["search_plan"]["queries"][0]
+
+    assert query["query"] == "AI 新模型 官方 公告"
+    assert query["angle"] == "official"
+    assert query["purpose"] == "找官方来源"
+    assert query["freshness_window_days"] == 3

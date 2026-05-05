@@ -10,7 +10,7 @@ import structlog
 from fastapi import APIRouter, HTTPException, Path
 
 from api.models import CreateTaskRequest, TaskResponse, TaskStatus
-from api.store import save_tasks, task_store
+from api.store import delete_workflow_run_steps_for_task, save_tasks, task_store
 from api.workflow_sync import sync_task_from_workflow_event
 from api.ws_manager import manager
 from workflow.graph import run_workflow
@@ -184,4 +184,5 @@ async def delete_task(
     if task_id not in task_store:
         raise HTTPException(status_code=404, detail=f"task {task_id!r} not found")
     del task_store[task_id]
+    delete_workflow_run_steps_for_task(task_id)
     save_tasks()

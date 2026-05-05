@@ -164,30 +164,30 @@ def test_hotspot_platform_catalog_returns_builtin_n_paths() -> None:
     paths = {item["path"] for item in payload["items"]}
     assert "/n/mproPpoq6O" in paths
     assert "/n/Q1Vd5Ko85R" in paths
-    assert all(path.startswith("/n/") for path in paths)
+    assert "https://36kr.com/feed-newsflash" in paths
 
 
 def test_hotspot_platform_catalog_discovers_multiple_sources_when_builtin_misses(monkeypatch) -> None:
-    class FakeTopHubClient:
-        async def fetch_category_platforms(self, category, *, limit=20):
-            return [
-                {
-                    "name": f"{category}-A",
-                    "path": f"/n/{category}-a",
-                    "category": category,
-                    "weight": 1,
-                    "enabled": True,
-                },
-                {
-                    "name": f"{category}-B",
-                    "path": "/n/shared",
-                    "category": category,
-                    "weight": 1,
-                    "enabled": True,
-                },
-            ][:limit]
+    async def fake_discover_hotspot_platforms(categories):
+        return [
+            {
+                "name": f"{categories[0]}-A",
+                "path": f"/n/{categories[0]}-a",
+                "category": categories[0],
+                "weight": 1,
+                "enabled": True,
+            },
+            {
+                "name": f"{categories[0]}-B",
+                "path": "/n/shared",
+                "category": categories[0],
+                "weight": 1,
+                "enabled": True,
+            },
+        ]
 
-    monkeypatch.setattr(hotspots, "TopHubClient", FakeTopHubClient)
+    monkeypatch.setattr(hotspots, "list_builtin_hotspot_platforms", lambda *args, **kwargs: [])
+    monkeypatch.setattr(hotspots, "discover_hotspot_platforms", fake_discover_hotspot_platforms)
     client = TestClient(_build_app())
 
     response = client.get("/api/hotspots/platforms?categories=Finance&limit_per_category=2")

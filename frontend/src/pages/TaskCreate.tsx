@@ -39,6 +39,13 @@ interface TaskCreateFormValues {
   template_id?: string
   article_length?: 'short' | 'medium' | 'long'
   review_strictness?: 'lenient' | 'standard' | 'strict'
+  search_mode?: 'quick' | 'standard' | 'deep' | 'strict'
+  auto_deepen_for_sensitive_categories?: boolean
+  min_sources?: number
+  min_official_sources?: number
+  min_cross_sources?: number
+  require_opposing_view?: boolean
+  freshness_window_days?: number
   require_human_review?: boolean
   image_enabled?: boolean
   image_style?: string
@@ -130,6 +137,21 @@ export default function TaskCreate() {
             block_high_risk: true,
             max_revision_rounds: 1,
           },
+          research_policy: {
+            search_mode: values.search_mode || DEFAULT_GENERATION_CONFIG.research_policy?.search_mode || 'standard',
+            auto_deepen_for_sensitive_categories: values.auto_deepen_for_sensitive_categories !== false,
+            min_sources: Number(values.min_sources ?? DEFAULT_GENERATION_CONFIG.research_policy?.min_sources ?? 6),
+            min_official_sources: Number(
+              values.min_official_sources ?? DEFAULT_GENERATION_CONFIG.research_policy?.min_official_sources ?? 1,
+            ),
+            min_cross_sources: Number(
+              values.min_cross_sources ?? DEFAULT_GENERATION_CONFIG.research_policy?.min_cross_sources ?? 3,
+            ),
+            require_opposing_view: values.require_opposing_view !== false,
+            freshness_window_days: Number(
+              values.freshness_window_days ?? DEFAULT_GENERATION_CONFIG.research_policy?.freshness_window_days ?? 7,
+            ),
+          },
           image_policy: {
             enabled: values.image_enabled !== false,
             cover_enabled: values.image_enabled !== false,
@@ -216,6 +238,13 @@ export default function TaskCreate() {
             template_id: 'auto',
             article_length: 'medium',
             review_strictness: 'standard',
+            search_mode: DEFAULT_GENERATION_CONFIG.research_policy?.search_mode || 'standard',
+            auto_deepen_for_sensitive_categories: true,
+            min_sources: DEFAULT_GENERATION_CONFIG.research_policy?.min_sources || 6,
+            min_official_sources: DEFAULT_GENERATION_CONFIG.research_policy?.min_official_sources || 1,
+            min_cross_sources: DEFAULT_GENERATION_CONFIG.research_policy?.min_cross_sources || 3,
+            require_opposing_view: DEFAULT_GENERATION_CONFIG.research_policy?.require_opposing_view ?? true,
+            freshness_window_days: DEFAULT_GENERATION_CONFIG.research_policy?.freshness_window_days || 7,
             require_human_review: false,
             image_enabled: true,
             image_style: '',
@@ -372,6 +401,44 @@ export default function TaskCreate() {
                     <Switch checkedChildren="需要" unCheckedChildren="不需要" />
                   </Form.Item>
                 </div>
+                <div style={twoColumnStyle}>
+                  <Form.Item name="search_mode" label="Research depth">
+                    <Select
+                      options={[
+                        { label: 'Quick', value: 'quick' },
+                        { label: 'Standard', value: 'standard' },
+                        { label: 'Deep', value: 'deep' },
+                        { label: 'Strict', value: 'strict' },
+                      ]}
+                    />
+                  </Form.Item>
+                  <Form.Item name="freshness_window_days" label="Freshness window days">
+                    <InputNumber min={1} max={365} style={{ width: '100%' }} />
+                  </Form.Item>
+                </div>
+                <div style={twoColumnStyle}>
+                  <Form.Item name="min_sources" label="Minimum sources">
+                    <InputNumber min={1} max={30} style={{ width: '100%' }} />
+                  </Form.Item>
+                  <Form.Item name="min_official_sources" label="Minimum official sources">
+                    <InputNumber min={0} max={10} style={{ width: '100%' }} />
+                  </Form.Item>
+                </div>
+                <div style={twoColumnStyle}>
+                  <Form.Item name="min_cross_sources" label="Minimum source domains">
+                    <InputNumber min={1} max={20} style={{ width: '100%' }} />
+                  </Form.Item>
+                  <Form.Item name="require_opposing_view" label="Require risk/opposing view" valuePropName="checked">
+                    <Switch checkedChildren="Required" unCheckedChildren="Optional" />
+                  </Form.Item>
+                </div>
+                <Form.Item
+                  name="auto_deepen_for_sensitive_categories"
+                  label="Auto deepen sensitive categories"
+                  valuePropName="checked"
+                >
+                  <Switch checkedChildren="Auto" unCheckedChildren="Manual" />
+                </Form.Item>
                 <div style={twoColumnStyle}>
                   <Form.Item name="image_enabled" label="自动出图" valuePropName="checked">
                     <Switch checkedChildren="启用" unCheckedChildren="关闭" />

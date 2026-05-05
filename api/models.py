@@ -124,6 +124,16 @@ class PublishPolicyConfig(BaseModel):
     require_manual_confirmation: bool = False
 
 
+class ResearchPolicyConfig(BaseModel):
+    search_mode: Literal["quick", "standard", "deep", "strict"] = "standard"
+    auto_deepen_for_sensitive_categories: bool = True
+    min_sources: int = Field(default=6, ge=1, le=30)
+    min_official_sources: int = Field(default=1, ge=0, le=10)
+    min_cross_sources: int = Field(default=3, ge=1, le=20)
+    require_opposing_view: bool = True
+    freshness_window_days: int = Field(default=7, ge=1, le=365)
+
+
 class GenerationConfig(BaseModel):
     audience_roles: list[str] = Field(
         default_factory=lambda: list(DEFAULT_AUDIENCE_ROLES),
@@ -139,6 +149,7 @@ class GenerationConfig(BaseModel):
     review_policy: ReviewPolicyConfig = Field(default_factory=ReviewPolicyConfig)
     image_policy: WorkflowImagePolicyConfig = Field(default_factory=WorkflowImagePolicyConfig)
     publish_policy: PublishPolicyConfig = Field(default_factory=PublishPolicyConfig)
+    research_policy: ResearchPolicyConfig = Field(default_factory=ResearchPolicyConfig)
 
     @field_validator("audience_roles")
     @classmethod
@@ -774,6 +785,8 @@ class ScheduleStatus(str, Enum):
 
 class HotspotSource(str, Enum):
     tophub = "tophub"
+    ranking_page = "ranking_page"
+    rss_or_feed = "rss_or_feed"
 
 
 class HotspotFilters(BaseModel):
@@ -790,9 +803,13 @@ class HotspotFilters(BaseModel):
 
 class HotspotPlatformConfig(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    path: str = Field(..., min_length=1, max_length=200)
+    path: str = Field(..., min_length=1, max_length=500)
+    source: HotspotSource = Field(default=HotspotSource.tophub)
+    provider_id: str = Field(default="", max_length=100)
+    category: str = Field(default="", max_length=100)
     weight: float = Field(default=1.0, gt=0, le=10)
     enabled: bool = Field(default=True)
+    parser_options: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("name")
     @classmethod
@@ -805,7 +822,36 @@ class HotspotPlatformConfig(BaseModel):
     @field_validator("path")
     @classmethod
     def normalize_path(cls, value: str) -> str:
-        return _normalize_tophub_path(value)
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("path cannot be blank")
+        return cleaned
+
+    @model_validator(mode="before")
+    @classmethod
+    def hydrate_endpoint_aliases(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        payload = dict(data)
+        if not payload.get("path"):
+            payload["path"] = payload.get("url") or payload.get("feed_url") or ""
+        if not payload.get("source") and str(payload.get("path") or "").startswith(("http://", "https://")):
+            endpoint = str(payload.get("path") or "")
+            parsed = urlsplit(endpoint)
+            endpoint_lower = endpoint.lower()
+            if parsed.netloc == "tophub.today":
+                payload["source"] = "tophub"
+            else:
+                payload["source"] = "rss_or_feed" if "rss" in endpoint_lower or "feed" in endpoint_lower else "ranking_page"
+        return payload
+
+    @model_validator(mode="after")
+    def normalize_platform(self) -> HotspotPlatformConfig:
+        if self.source == HotspotSource.tophub:
+            self.path = _normalize_tophub_path(self.path)
+        self.provider_id = self.provider_id.strip() or self.source.value
+        self.category = self.category.strip()
+        return self
 
 
 class HotspotCaptureConfig(BaseModel):
@@ -823,8 +869,6 @@ class HotspotCaptureConfig(BaseModel):
 
 
 class HotspotPlatformCatalogItem(HotspotPlatformConfig):
-    category: str = Field(default="", max_length=100)
-
     @field_validator("category")
     @classmethod
     def normalize_category(cls, value: str) -> str:

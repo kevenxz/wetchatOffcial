@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from datetime import datetime, timezone
 
 import httpx
 import structlog
@@ -104,8 +105,17 @@ async def _fetch_and_extract_single(item: dict, client: httpx.AsyncClient) -> di
             "provider": item.get("provider", ""),
             "domain": item.get("domain", ""),
             "source_type": item.get("source_type", ""),
+            "authority_score": item.get("authority_score", 0),
+            "relevance_score": item.get("relevance_score", 0),
+            "freshness_score": item.get("freshness_score", 0),
+            "originality_score": item.get("originality_score", 0),
+            "cross_source_score": item.get("cross_source_score", 0),
+            "content_depth_score": item.get("content_depth_score", 0),
+            "risk_penalty": item.get("risk_penalty", 0),
+            "duplicate_penalty": item.get("duplicate_penalty", 0),
             "final_score": item.get("final_score", 0),
             "snippet": item.get("snippet", ""),
+            "retrieved_at": datetime.now(timezone.utc).isoformat(),
         },
     }
 

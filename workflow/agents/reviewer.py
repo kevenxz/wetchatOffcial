@@ -95,6 +95,17 @@ def _build_evidence_summary(evidence_pack: dict[str, Any]) -> str:
         claims = [str(item.get("claim") or "").strip() for item in items[:3] if str(item.get("claim") or "").strip()]
         if claims:
             lines.append(f"{label}: " + " | ".join(claims))
+    for label in ("key_facts", "allowed_claims", "forbidden_claims", "citations"):
+        items = list(evidence_pack.get(label) or [])
+        values: list[str] = []
+        for item in items[:5]:
+            if isinstance(item, dict):
+                values.append(str(item.get("fact") or item.get("title") or item.get("url") or "").strip())
+            else:
+                values.append(str(item).strip())
+        values = [value for value in values if value]
+        if values:
+            lines.append(f"{label}: " + " | ".join(values))
     research_gaps = list(evidence_pack.get("research_gaps") or [])
     if research_gaps:
         lines.append("research_gaps: " + " | ".join(str(item).strip() for item in research_gaps if str(item).strip()))

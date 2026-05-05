@@ -106,6 +106,7 @@ def normalize_generation_config(config: Mapping[str, Any] | None) -> dict[str, A
     style_hint = DEFAULT_STYLE_HINT
     runtime_profile = DEFAULT_RUNTIME_PROFILE
     image_policy: dict[str, Any] = {}
+    research_policy: dict[str, Any] = {}
 
     if isinstance(config, Mapping):
         raw_roles = config.get("audience_roles")
@@ -133,6 +134,10 @@ def normalize_generation_config(config: Mapping[str, Any] | None) -> dict[str, A
         if isinstance(raw_image_policy, Mapping):
             image_policy = dict(raw_image_policy)
 
+        raw_research_policy = config.get("research_policy")
+        if isinstance(raw_research_policy, Mapping):
+            research_policy = dict(raw_research_policy)
+
     if not roles:
         roles = list(DEFAULT_AUDIENCE_ROLES)
     if strategy not in ARTICLE_STRATEGY_VALUES:
@@ -144,6 +149,7 @@ def normalize_generation_config(config: Mapping[str, Any] | None) -> dict[str, A
         "style_hint": style_hint,
         "runtime_profile": runtime_profile,
         "image_policy": image_policy,
+        "research_policy": research_policy,
     }
 
 

@@ -40,6 +40,16 @@ export interface PublishPolicyConfig {
   require_manual_confirmation: boolean
 }
 
+export interface ResearchPolicyConfig {
+  search_mode: 'quick' | 'standard' | 'deep' | 'strict'
+  auto_deepen_for_sensitive_categories: boolean
+  min_sources: number
+  min_official_sources: number
+  min_cross_sources: number
+  require_opposing_view: boolean
+  freshness_window_days: number
+}
+
 export interface GenerationConfig {
   audience_roles: string[]
   article_strategy: ArticleStrategy
@@ -49,6 +59,7 @@ export interface GenerationConfig {
   review_policy?: ReviewPolicyConfig
   image_policy?: WorkflowImagePolicyConfig
   publish_policy?: PublishPolicyConfig
+  research_policy?: ResearchPolicyConfig
 }
 
 export const DEFAULT_GENERATION_CONFIG: GenerationConfig = {
@@ -87,6 +98,15 @@ export const DEFAULT_GENERATION_CONFIG: GenerationConfig = {
   publish_policy: {
     auto_publish_to_draft: true,
     require_manual_confirmation: false,
+  },
+  research_policy: {
+    search_mode: 'standard',
+    auto_deepen_for_sensitive_categories: true,
+    min_sources: 6,
+    min_official_sources: 1,
+    min_cross_sources: 3,
+    require_opposing_view: true,
+    freshness_window_days: 7,
   },
 }
 
@@ -164,11 +184,27 @@ export interface TaskResponse {
 
 export interface WsMessage {
   task_id: string
+  run_id?: string
+  run_step_id?: string
   status: string
   current_skill: string
   progress: number
   message: string
   result: unknown
+}
+
+export interface WorkflowRunStepRecord {
+  run_step_id: string
+  run_id?: string | null
+  task_id?: string | null
+  step_name: string
+  status: 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped'
+  payload: Record<string, any>
+  error?: string | null
+  started_at?: string | null
+  ended_at?: string | null
+  created_at: string
+  updated_at?: string | null
 }
 
 const http = axios.create({
@@ -227,6 +263,9 @@ export const deleteTask = (taskId: string): Promise<void> =>
 
 export const retryTask = (taskId: string): Promise<TaskResponse> =>
   http.post(`/tasks/${taskId}/retry`)
+
+export const listWorkflowRunSteps = (params: { task_id?: string; run_id?: string }): Promise<WorkflowRunStepRecord[]> =>
+  http.get('/workflow-runs/steps', { params })
 
 export function createTaskWs(taskId: string): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
@@ -371,7 +410,7 @@ export const updateArticleTheme = (
 
 export type ScheduleMode = 'once' | 'interval'
 export type ScheduleStatus = 'running' | 'stopped'
-export type HotspotSource = 'tophub'
+export type HotspotSource = 'tophub' | 'ranking_page' | 'rss_or_feed'
 
 export interface HotspotFilters {
   top_n_per_platform: number
@@ -383,8 +422,12 @@ export interface HotspotFilters {
 export interface HotspotPlatformConfig {
   name: string
   path: string
+  source?: HotspotSource
+  provider_id?: string
+  category?: string
   weight: number
   enabled: boolean
+  parser_options?: Record<string, any>
 }
 
 export interface HotspotPlatformCatalogItem extends HotspotPlatformConfig {

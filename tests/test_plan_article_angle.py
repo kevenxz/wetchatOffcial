@@ -41,11 +41,9 @@ async def test_plan_article_angle_builds_different_section_shapes_for_different_
     funding_sections = funding_result["planning_state"]["article_blueprint"]["sections"]
     expansion_sections = expansion_result["planning_state"]["article_blueprint"]["sections"]
 
-    assert 4 <= len(funding_sections) <= 6
-    assert 4 <= len(expansion_sections) <= 6
+    assert funding_sections
+    assert expansion_sections
     assert funding_sections != expansion_sections
-    assert any("风险" in section["heading"] for section in funding_sections)
-    assert any("风险" in section["heading"] for section in expansion_sections)
 
 
 @pytest.mark.asyncio
@@ -63,7 +61,11 @@ async def test_plan_article_angle_uses_quantum_skill_fallback_framework() -> Non
         "research_state": {"evidence_pack": {"confirmed_facts": [{"claim": "量子芯片保真度提升"}]}},
     }
 
-    result = await plan_article_angle_node(state)
+    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+        model_config = MagicMock()
+        model_config.text.api_key = ""
+        mock_get_model_config.return_value = model_config
+        result = await plan_article_angle_node(state)
     blueprint = result["planning_state"]["article_blueprint"]
     headings = [section["heading"] for section in blueprint["sections"]]
 
@@ -71,6 +73,76 @@ async def test_plan_article_angle_uses_quantum_skill_fallback_framework() -> Non
     assert "量子" in blueprint["framework"]
     assert any("工程指标" in heading or "量子技术" in heading for heading in headings)
     assert "量子玄学化表达" in blueprint["drop_points"]
+
+
+@pytest.mark.asyncio
+async def test_plan_article_angle_fallback_uses_skill_guidance_for_wechat_blueprint() -> None:
+    state = {
+        "task_brief": {"topic": "36氪 AI 融资榜单"},
+        "planning_state": {
+            "article_type": {"type_id": "trend_analysis"},
+            "selected_skill": {
+                "skill_id": "general_tech_explainer",
+                "name": "通用科技解读",
+                "framework": "Define why the event matters, then explain drivers, evidence, scenes, and risk boundaries.",
+                "section_guidance": [
+                    "Clarify the core event or technical change first.",
+                    "Use evidence, drivers, and cases to support the judgment.",
+                    "Keep a risk-boundary or next-observation section.",
+                ],
+                "evidence_policy": "Prefer official materials and verifiable industry data.",
+                "writing_constraints": ["Every major judgment needs evidence or an explicit evidence boundary."],
+            },
+        },
+        "research_state": {"evidence_pack": {"research_gaps": ["missing_data_evidence"]}},
+    }
+
+    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+        model_config = MagicMock()
+        model_config.text.api_key = ""
+        mock_get_model_config.return_value = model_config
+        result = await plan_article_angle_node(state)
+    blueprint = result["planning_state"]["article_blueprint"]
+    headings = [section["heading"] for section in blueprint["sections"]]
+
+    assert blueprint["framework"].startswith("Define why the event matters")
+    assert any("36氪 AI 融资榜单" in heading for heading in headings)
+    assert "Prefer official materials and verifiable industry data." in blueprint["must_cover_points"]
+    assert "补齐官方或数据证据" in blueprint["must_cover_points"]
+
+
+@pytest.mark.asyncio
+async def test_plan_article_angle_fallback_uses_neutral_title_candidates() -> None:
+    state = {
+        "task_brief": {"topic": "36氪 AI 融资榜单"},
+        "planning_state": {"article_type": {"type_id": "trend_analysis"}},
+        "research_state": {
+            "evidence_items": [
+                {
+                    "angle": "news",
+                    "title": "AI 公司融资数量回升",
+                    "claim": "榜单显示多家 AI 应用公司获得新融资。",
+                    "source_type": "news",
+                    "url": "https://example.com/a",
+                }
+            ],
+            "evidence_pack": {"confirmed_facts": [{"claim": "多家 AI 应用公司获得新融资"}]},
+        },
+    }
+
+    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+        model_config = MagicMock()
+        model_config.text.api_key = ""
+        mock_get_model_config.return_value = model_config
+        result = await plan_article_angle_node(state)
+
+    titles = result["planning_state"]["article_blueprint"]["title_candidates"]
+    joined_titles = " ".join(titles)
+    assert titles
+    assert "AI 公司融资数量回升" in joined_titles
+    assert "真正值得" not in joined_titles
+    assert "热闹" not in joined_titles
+    assert "别把" not in joined_titles
 
 
 @pytest.mark.asyncio
@@ -159,6 +231,10 @@ async def test_plan_article_angle_uses_model_to_generate_structured_blueprint() 
     assert blueprint["reader_value"] == "帮助读者判断这一轮融资热度的含金量"
     assert blueprint["sections"][0]["heading"] == "这一轮融资潮先看什么"
     assert blueprint["must_cover_points"] == ["融资节奏", "估值分化"]
+    messages = mock_prompt_class.from_messages.call_args.args[0]
+    assert "WeChat public account articles" in messages[0][1]
+    assert "selected_skill" in messages[1][1]
+    assert "source_context" in messages[1][1]
     mock_chat_openai.assert_called_once_with(
         model="text-model",
         api_key="text-key",
@@ -166,6 +242,93 @@ async def test_plan_article_angle_uses_model_to_generate_structured_blueprint() 
         max_tokens=1800,
         temperature=0.35,
     )
+
+
+@pytest.mark.asyncio
+async def test_plan_article_angle_keeps_model_decided_section_count() -> None:
+    state = {
+        "task_id": "task-flexible-count",
+        "keywords": "AI 榜单变化",
+        "task_brief": {"topic": "AI 榜单变化"},
+        "planning_state": {"article_type": {"type_id": "trend_analysis"}},
+        "research_state": {"evidence_pack": {"confirmed_facts": [{"claim": "榜单显示 AI 应用升温"}]}},
+    }
+    model_sections = [
+        {"heading": f"模型自定章节 {index}", "goal": f"展开第 {index} 个判断", "shape": "custom"}
+        for index in range(1, 8)
+    ]
+
+    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+        with patch("workflow.nodes.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.nodes.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+                model_config = MagicMock()
+                model_config.text.api_key = "text-key"
+                model_config.text.base_url = "https://text.example.com/v1"
+                model_config.text.model = "text-model"
+                mock_get_model_config.return_value = model_config
+
+                prompt = MagicMock()
+                chain = AsyncMock()
+                llm = MagicMock()
+                llm.with_structured_output.return_value = MagicMock(name="structured-llm")
+                mock_prompt_class.from_messages.return_value = prompt
+                prompt.__or__.return_value = chain
+                mock_chat_openai.return_value = llm
+                chain.ainvoke.return_value = {
+                    "thesis": "结构由模型决定",
+                    "reader_value": "帮助读者理解榜单变化",
+                    "sections": model_sections,
+                    "must_cover_points": [],
+                    "drop_points": [],
+                }
+
+                result = await plan_article_angle_node(state)
+
+    blueprint = result["planning_state"]["article_blueprint"]
+    messages = mock_prompt_class.from_messages.call_args.args[0]
+    assert len(blueprint["sections"]) == 7
+    assert "You may decide the number, order, and shape of H2 sections" in messages[0][1]
+    assert "Keep 4 to 6" not in messages[0][1]
+
+
+@pytest.mark.asyncio
+async def test_plan_article_angle_does_not_add_boundary_when_evidence_is_sufficient() -> None:
+    state = {
+        "task_id": "task-no-boundary",
+        "keywords": "AI 销售工具",
+        "task_brief": {"topic": "AI 销售工具"},
+        "planning_state": {"article_type": {"type_id": "trend_analysis"}},
+        "research_state": {"evidence_pack": {"confirmed_facts": [{"claim": "企业正在测试 AI 销售工具"}]}},
+    }
+
+    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+        with patch("workflow.nodes.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.nodes.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+                model_config = MagicMock()
+                model_config.text.api_key = "text-key"
+                model_config.text.base_url = "https://text.example.com/v1"
+                model_config.text.model = "text-model"
+                mock_get_model_config.return_value = model_config
+
+                prompt = MagicMock()
+                chain = AsyncMock()
+                llm = MagicMock()
+                llm.with_structured_output.return_value = MagicMock(name="structured-llm")
+                mock_prompt_class.from_messages.return_value = prompt
+                prompt.__or__.return_value = chain
+                mock_chat_openai.return_value = llm
+                chain.ainvoke.return_value = {
+                    "thesis": "AI 销售工具正在进入试点阶段",
+                    "reader_value": "帮助读者理解采用节奏",
+                    "sections": [{"heading": "模型只写一个判断", "goal": "解释试点阶段", "shape": "analysis"}],
+                    "must_cover_points": [],
+                    "drop_points": [],
+                }
+
+                result = await plan_article_angle_node(state)
+
+    headings = [section["heading"] for section in result["planning_state"]["article_blueprint"]["sections"]]
+    assert headings == ["模型只写一个判断"]
 
 
 @pytest.mark.asyncio

@@ -259,6 +259,80 @@
   color: var(--app-text-secondary);
 }
 
+.citationList {
+  display: grid;
+  gap: 10px;
+}
+
+.citationList a {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  color: var(--app-text-primary);
+  text-decoration: none;
+  background: var(--app-surface);
+}
+
+.citationList small {
+  color: var(--app-text-secondary);
+}
+
+.stepTraceList {
+  display: grid;
+  gap: 12px;
+}
+
+.stepTraceItem {
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: var(--app-surface);
+}
+
+.stepTraceItem summary {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.stepTraceItem summary strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.stepTraceItem summary small {
+  margin-left: auto;
+  color: var(--app-text-secondary);
+}
+
+.stepTraceGrid {
+  display: grid;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+
+.stepTraceGrid section {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.stepTraceGrid h4 {
+  margin: 0;
+  color: var(--app-text-primary);
+  font-size: 0.86rem;
+}
+
+.stepError {
+  margin: 0 12px 12px;
+  color: #dc2626;
+  line-height: 1.6;
+}
+
 @media (max-width: 1180px) {
   .executionLayout,
   .detailLayout {

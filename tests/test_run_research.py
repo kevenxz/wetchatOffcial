@@ -216,3 +216,79 @@ async def test_run_research_batches_queries_and_aggregates_results(monkeypatch: 
         "机器人市场 official announcement",
         "机器人市场 statistics benchmark",
     }
+
+
+@pytest.mark.asyncio
+async def test_run_research_continues_with_evaluator_next_queries(monkeypatch: pytest.MonkeyPatch) -> None:
+    search_calls: list[str] = []
+
+    async def fake_search_web_node(state: dict) -> dict:
+        query = state["search_queries"][0]["query"]
+        search_calls.append(query)
+        source_type = "official" if "官方" in query else "media"
+        return {
+            "status": "running",
+            "search_results": [
+                {
+                    "url": f"https://example.com/{len(search_calls)}",
+                    "title": f"Source {len(search_calls)}",
+                    "snippet": "AI 模型在 2026 发布，存在成本和隐私风险。",
+                    "query": query,
+                    "query_intent": state["search_queries"][0]["intent"],
+                    "domain": f"example{len(search_calls)}.com",
+                    "source_type": source_type,
+                    "provider": "duckduckgo",
+                    "authority_score": 0.92,
+                    "final_score": 0.88,
+                }
+            ],
+        }
+
+    async def fake_fetch_extract_node(state: dict) -> dict:
+        item = state["search_results"][0]
+        return {
+            "status": "running",
+            "extracted_contents": [
+                {
+                    "url": item["url"],
+                    "title": item["title"],
+                    "text": f"{item['snippet']} Expanded evidence.",
+                    "source_meta": {
+                        "query": item["query"],
+                        "query_intent": item["query_intent"],
+                        "domain": item["domain"],
+                        "source_type": item["source_type"],
+                        "provider": item["provider"],
+                        "authority_score": item["authority_score"],
+                        "final_score": item["final_score"],
+                    },
+                }
+            ],
+        }
+
+    monkeypatch.setattr("workflow.nodes.run_research.search_web_node", fake_search_web_node)
+    monkeypatch.setattr("workflow.nodes.run_research.fetch_extract_node", fake_fetch_extract_node)
+
+    state = {
+        "task_id": "task-multi-round",
+        "task_brief": {"topic": "AI 新模型发布"},
+        "planning_state": {
+            "search_contract": {
+                "topic": "AI 新模型发布",
+                "search_depth": "standard",
+                "query_plan": [{"query": "AI 新模型 解读", "source_type": "media", "priority": 1}],
+                "min_source_count": 2,
+                "min_authoritative_source_count": 1,
+                "min_cross_source_count": 2,
+                "require_opposing_view": True,
+            },
+            "search_plan": {"queries": [{"angle": "media", "query": "AI 新模型 解读"}]},
+        },
+        "research_state": {},
+    }
+
+    result = await run_research_node(state)
+
+    assert len(result["research_state"]["search_runs"]) >= 2
+    assert any("官方" in query for query in search_calls)
+    assert result["research_state"]["search_evaluation"]["decision"] in {"enough", "manual_review_required"}

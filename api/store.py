@@ -580,6 +580,19 @@ def list_workflow_run_steps(
     return sorted(steps, key=lambda step: step.created_at, reverse=True)
 
 
+def delete_workflow_run_steps_for_task(task_id: str) -> int:
+    run_step_ids = [
+        run_step_id
+        for run_step_id, step in workflow_run_step_store.items()
+        if step.task_id == task_id
+    ]
+    for run_step_id in run_step_ids:
+        del workflow_run_step_store[run_step_id]
+    if run_step_ids:
+        save_workflow_run_steps()
+    return len(run_step_ids)
+
+
 def get_workflow_run_step(run_step_id: str) -> WorkflowRunStepRecord | None:
     return workflow_run_step_store.get(run_step_id)
 

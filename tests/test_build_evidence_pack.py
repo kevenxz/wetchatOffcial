@@ -44,3 +44,33 @@ def test_build_evidence_pack_includes_source_and_angle_coverage() -> None:
     assert pack["quality_summary"]["angle_coverage"]["fact"] == 1
     assert pack["quality_summary"]["angle_coverage"]["data"] == 1
     assert pack["quality_summary"]["angle_coverage"]["opinion"] == 1
+
+
+def test_build_evidence_pack_includes_citations_and_claim_boundaries() -> None:
+    items = [
+        {
+            "angle": "fact",
+            "claim": "AI 新模型在 2026 年发布。",
+            "source_type": "official",
+            "title": "Official Blog",
+            "url": "https://example.com/blog",
+            "domain": "example.com",
+            "evidence_score": 0.91,
+        },
+        {
+            "angle": "opposing_view",
+            "claim": "成本和隐私风险仍需验证。",
+            "source_type": "community",
+            "url": "https://community.example.com/post",
+            "domain": "community.example.com",
+            "evidence_score": 0.42,
+            "needs_caution": True,
+        },
+    ]
+
+    pack = build_evidence_pack(items)
+
+    assert pack["citations"][0]["url"] == "https://example.com/blog"
+    assert pack["key_facts"][0]["confidence"] == "high"
+    assert pack["allowed_claims"]
+    assert pack["forbidden_claims"]

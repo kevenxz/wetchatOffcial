@@ -53,12 +53,12 @@ def _normalize_blueprint_output(result: BlueprintOutput | dict[str, Any]) -> Blu
         payload = result.model_dump()
     else:
         payload = dict(result)
-    payload["sections"] = _normalize_sections(list(payload.get("sections") or []))[:6]
+    payload["sections"] = _normalize_sections(list(payload.get("sections") or []))
     payload["title_candidates"] = [
         str(item).strip()
         for item in list(payload.get("title_candidates") or [])
         if str(item).strip()
-    ][:4]
+    ]
     return BlueprintOutput(**payload)
 
 
@@ -87,6 +87,35 @@ def _clean_text(value: Any, limit: int = 90) -> str:
     if len(cleaned) <= limit:
         return cleaned
     return cleaned[:limit].rstrip("，,。.;；:： ") + "..."
+
+
+def _build_fallback_title_candidates(topic: str, search_materials: list[dict[str, str]]) -> list[str]:
+    """Build neutral fallback title candidates without clickbait phrasing."""
+    cleaned_topic = str(topic or "").strip() or "未命名主题"
+    source_titles = [
+        _clean_text(item.get("title") or item.get("claim"), limit=34)
+        for item in search_materials
+        if _clean_text(item.get("title") or item.get("claim"), limit=34)
+    ]
+    candidates: list[str] = []
+    for source_title in source_titles[:2]:
+        if cleaned_topic in source_title:
+            candidates.append(source_title)
+        else:
+            candidates.append(f"{cleaned_topic}：{source_title}")
+    candidates.extend(
+        [
+            f"{cleaned_topic}的关键信号与证据",
+            f"{cleaned_topic}：进展、影响与边界",
+            f"从公开信息看{cleaned_topic}",
+        ]
+    )
+    deduped: list[str] = []
+    for candidate in candidates:
+        cleaned = _clean_text(candidate, limit=42)
+        if cleaned and cleaned not in deduped:
+            deduped.append(cleaned)
+    return deduped[:4]
 
 
 def _material_claim(material: dict[str, Any]) -> str:
@@ -211,25 +240,10 @@ def _section_from_material(topic: str, material: dict[str, str], index: int) -> 
 
 def _build_source_driven_sections(topic: str, search_materials: list[dict[str, str]]) -> list[dict[str, str]]:
     sections: list[dict[str, str]] = []
-    used_shapes: set[str] = set()
     for material in search_materials:
         section = _section_from_material(topic, material, len(sections))
-        shape = section["shape"]
-        if shape in used_shapes and shape not in {"case", "evidence"}:
-            continue
-        used_shapes.add(shape)
         sections.append(section)
-        if len(sections) >= 5:
-            break
-    if sections and not any(section["shape"] == "risks" for section in sections):
-        sections.append(
-            {
-                "heading": "风险和证据边界在哪里",
-                "goal": "基于搜索来源质量说明结论边界，避免把单一来源写成确定结论。",
-                "shape": "risks",
-            }
-        )
-    return sections[:6]
+    return sections
 
 
 def _build_dynamic_sections(
@@ -249,16 +263,14 @@ def _build_dynamic_sections(
     source_sections = _build_source_driven_sections(topic, search_materials)
 
     if len(source_sections) >= 4:
-        return source_sections[:6]
+        return source_sections
     elif source_sections:
         sections = source_sections
         if not any(section["shape"] == "evidence" for section in sections) and data_points:
             sections.append({"heading": f"数据如何验证{focus_phrase}", "goal": "补充搜索证据中的数据和事实支撑", "shape": "evidence"})
         if not any(section["shape"] == "case" for section in sections) and cases:
             sections.append({"heading": f"哪些案例能说明{focus_phrase}", "goal": "用可验证案例承接前文判断", "shape": "case"})
-        if not any(section["shape"] == "risks" for section in sections):
-            sections.append({"heading": "结论的边界在哪里", "goal": "交代证据强弱和不确定性", "shape": "risks"})
-        return sections[:6]
+        return sections
 
     if profile == "funding":
         sections = [
@@ -303,7 +315,7 @@ def _build_dynamic_sections(
             }
         )
 
-    return sections[:6]
+    return sections
 
 
 def _build_evidence_map(sections: list[dict[str, str]], search_materials: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -331,22 +343,24 @@ def _enforce_evidence_boundary_sections(blueprint: BlueprintOutput, evidence_pac
     )
     if not needs_validation:
         return blueprint
-    if not any("验证" in section.get("heading", "") or "证据" in section.get("heading", "") for section in blueprint.sections):
+    boundary_terms = ("验证", "证据", "边界", "风险", "不确定")
+    has_boundary = any(
+        any(term in section.get("heading", "") or term in section.get("goal", "") for term in boundary_terms)
+        for section in blueprint.sections
+    )
+    if not has_boundary:
         validation_section = {
             "heading": "还需要验证哪些关键判断",
             "goal": "明确当前搜索材料的证据边界，说明哪些结论仍缺少官方、数据或多源确认。",
             "shape": "validation",
         }
-        if len(blueprint.sections) >= 6:
-            blueprint.sections[-1] = validation_section
-        else:
-            blueprint.sections.append(validation_section)
+        blueprint.sections.append(validation_section)
     if "补齐官方或数据证据" not in blueprint.must_cover_points:
         blueprint.must_cover_points.append("补齐官方或数据证据")
     return blueprint
 
 
-def _build_fallback_blueprint(
+def _build_legacy_fallback_blueprint(
     topic: str,
     article_type: dict[str, Any],
     evidence_pack: dict[str, Any],
@@ -431,6 +445,139 @@ def _build_fallback_blueprint(
     )
 
 
+def _build_fallback_blueprint(
+    topic: str,
+    article_type: dict[str, Any],
+    evidence_pack: dict[str, Any],
+    search_materials: list[dict[str, str]],
+    selected_skill: dict[str, Any] | None = None,
+) -> BlueprintOutput:
+    """Build a WeChat-oriented fallback blueprint from skill and available evidence."""
+    selected_skill = dict(selected_skill or {})
+    profile = _topic_profile(topic)
+    research_gaps = list(evidence_pack.get("research_gaps") or [])
+    quality_summary = dict(evidence_pack.get("quality_summary") or {})
+    source_coverage = dict(quality_summary.get("source_coverage") or {})
+    skill_id = str(selected_skill.get("skill_id") or "")
+    skill_name = str(selected_skill.get("name") or "").strip()
+    skill_framework = str(selected_skill.get("framework") or "").strip()
+    section_guidance = [
+        str(item).strip()
+        for item in list(selected_skill.get("section_guidance") or [])
+        if str(item).strip()
+    ]
+    writing_constraints = [
+        str(item).strip()
+        for item in list(selected_skill.get("writing_constraints") or [])
+        if str(item).strip()
+    ]
+
+    framework_map = {
+        "funding": "融资趋势解读型",
+        "expansion": "出海机会分析型",
+        "launch": "产品发布解读型",
+        "general": "搜索证据解读型",
+    }
+    reader_value_map = {
+        "funding": "帮助读者判断这一轮融资热度的含金量",
+        "expansion": "帮助读者判断出海机会和落地难点",
+        "launch": "帮助读者判断新动作背后的真实价值",
+        "general": "帮助读者快速建立主题判断框架",
+    }
+    thesis_map = {
+        "funding": f"{topic}需要先看资金流向、估值分化和真实兑现能力，而不是只看热度。",
+        "expansion": f"{topic}的关键不在热门，而在需求、渠道和本地化落地是否成立。",
+        "launch": f"{topic}更值得看的是真实影响、使用场景和风险边界，而不是发布动作本身。",
+        "general": f"{topic}需要放回搜索证据里判断：哪些已经被证明，哪些仍只是信号。",
+    }
+
+    source_sections = _build_source_driven_sections(topic, search_materials)
+    quantum_sections = [
+        {"heading": "先把这项量子技术到底是什么讲清楚", "goal": "用准确但可读的方式解释核心概念和常见误解", "shape": "hook"},
+        {"heading": "真正的新进展发生在工程指标上", "goal": "围绕硬件、纠错、相干时间、保真度或通信链路拆解变化", "shape": "evidence"},
+        {"heading": "它距离产业应用还有哪几道门槛", "goal": "连接安全通信、材料计算、药物模拟或优化问题等应用场景", "shape": "drivers"},
+        {"heading": "哪些结论现在还不能写得太满", "goal": "交代实验室指标、规模化、成本和商业化周期的证据边界", "shape": "risks"},
+    ]
+    if source_sections:
+        sections = list(source_sections)
+        if skill_id == "quantum_tech_explainer" and not any("工程指标" in section.get("heading", "") for section in sections):
+            sections.append(
+                {
+                    "heading": "关键进展看哪些工程指标",
+                    "goal": "围绕硬件、纠错、相干时间、保真度或通信链路拆解变化。",
+                    "shape": "evidence",
+                }
+            )
+        if skill_id == "quantum_tech_explainer" and len(sections) < 4:
+            sections.extend(quantum_sections)
+    elif skill_id == "quantum_tech_explainer":
+        sections = [
+            {"heading": "先把这项量子技术到底是什么讲清楚", "goal": "用准确但可读的方式解释核心概念和常见误解", "shape": "hook"},
+            {"heading": "真正的新进展发生在工程指标上", "goal": "围绕硬件、纠错、相干时间、保真度或通信链路拆解变化", "shape": "evidence"},
+            {"heading": "它距离产业应用还有哪几道门槛", "goal": "连接安全通信、材料计算、药物模拟或优化问题等应用场景", "shape": "drivers"},
+            {"heading": "哪些结论现在还不能写得太满", "goal": "交代实验室指标、规模化、成本和商业化周期的证据边界", "shape": "risks"},
+        ]
+    elif section_guidance:
+        shapes = ["hook", "evidence", "case", "risks", "next_steps"]
+        sections = [
+            {
+                "heading": f"{topic}：{_clean_text(guidance, limit=26)}",
+                "goal": f"按所选 skill 的写作要求展开：{guidance}",
+                "shape": shapes[min(index, len(shapes) - 1)],
+            }
+            for index, guidance in enumerate(section_guidance)
+        ]
+    else:
+        sections = _build_dynamic_sections(topic, article_type, evidence_pack, search_materials)
+
+    existing = {(section.get("heading", ""), section.get("shape", "")) for section in sections}
+    for section in _build_dynamic_sections(topic, article_type, evidence_pack, search_materials):
+        signature = (section.get("heading", ""), section.get("shape", ""))
+        if signature not in existing:
+            sections.append(section)
+            existing.add(signature)
+        if len(sections) >= 3:
+            break
+
+    framework = skill_framework or (f"{skill_name} · 微信公众号文章蓝图" if skill_name else framework_map[profile])
+    title_candidates = [
+        f"{topic}，真正值得看的不是热闹",
+        f"从搜索证据看{topic}的下一步",
+        f"{topic}背后的信号、证据和边界",
+    ]
+    must_cover_points = [section["heading"] for section in sections[:3]]
+    if selected_skill.get("evidence_policy"):
+        must_cover_points.append(str(selected_skill["evidence_policy"]))
+    must_cover_points.extend(writing_constraints[:3])
+    if "missing_high_confidence_fact" in research_gaps or "missing_data_evidence" in research_gaps:
+        must_cover_points.append("补齐官方或数据证据")
+    if source_coverage and set(source_coverage).issubset({"community", "aggregator", "unknown"}):
+        must_cover_points.append("交代当前证据边界")
+
+    drop_points = ["泛泛背景复述"] if profile in {"funding", "expansion"} else []
+    if skill_id == "quantum_tech_explainer":
+        title_candidates = [
+            f"{topic}：真正值得看的不是概念，而是工程指标",
+            f"{topic}背后，量子科技走到了哪一步",
+            f"别把{topic}写玄了：进展、边界和产业信号",
+        ]
+        thesis_map["general"] = f"{topic}的关键不在概念热度，而在科学原理、工程指标和商业化边界是否同时站得住。"
+        reader_value_map["general"] = "帮助读者区分量子科技的真实进展、工程门槛和产业化想象。"
+        drop_points.extend(["量子玄学化表达", "马上取代经典计算的夸张判断"])
+
+    return BlueprintOutput(
+        framework=framework,
+        title_candidates=title_candidates,
+        thesis=thesis_map[profile],
+        reader_value=reader_value_map[profile],
+        sections=sections,
+        must_cover_points=list(dict.fromkeys(must_cover_points)),
+        drop_points=list(dict.fromkeys(drop_points)),
+        source_driven_framework=sections,
+        evidence_map=_build_evidence_map(sections, search_materials),
+    )
+
+
 def _build_evidence_summary(evidence_pack: dict[str, Any]) -> str:
     lines: list[str] = []
     for label in ("confirmed_facts", "usable_data_points", "usable_cases", "risk_points"):
@@ -447,6 +594,17 @@ def _build_evidence_summary(evidence_pack: dict[str, Any]) -> str:
                 claims.append(claim)
         if claims:
             lines.append(f"{label}: " + " | ".join(claims))
+    for label in ("key_facts", "allowed_claims", "forbidden_claims", "citations"):
+        items = list(evidence_pack.get(label) or [])
+        values: list[str] = []
+        for item in items[:5]:
+            if isinstance(item, dict):
+                values.append(str(item.get("fact") or item.get("title") or item.get("url") or "").strip())
+            else:
+                values.append(str(item).strip())
+        values = [value for value in values if value]
+        if values:
+            lines.append(f"{label}: " + " | ".join(values))
     research_gaps = list(evidence_pack.get("research_gaps") or [])
     if research_gaps:
         lines.append("research_gaps: " + " | ".join(str(item).strip() for item in research_gaps if str(item).strip()))
@@ -515,6 +673,127 @@ def _build_source_context(search_materials: list[dict[str, str]], evidence_pack:
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
+def _build_fallback_blueprint(
+    topic: str,
+    article_type: dict[str, Any],
+    evidence_pack: dict[str, Any],
+    search_materials: list[dict[str, str]],
+    selected_skill: dict[str, Any] | None = None,
+) -> BlueprintOutput:
+    """Final fallback blueprint builder with neutral title candidates."""
+    selected_skill = dict(selected_skill or {})
+    profile = _topic_profile(topic)
+    research_gaps = list(evidence_pack.get("research_gaps") or [])
+    quality_summary = dict(evidence_pack.get("quality_summary") or {})
+    source_coverage = dict(quality_summary.get("source_coverage") or {})
+    skill_id = str(selected_skill.get("skill_id") or "")
+    skill_name = str(selected_skill.get("name") or "").strip()
+    skill_framework = str(selected_skill.get("framework") or "").strip()
+    section_guidance = [
+        str(item).strip()
+        for item in list(selected_skill.get("section_guidance") or [])
+        if str(item).strip()
+    ]
+    writing_constraints = [
+        str(item).strip()
+        for item in list(selected_skill.get("writing_constraints") or [])
+        if str(item).strip()
+    ]
+
+    framework_map = {
+        "funding": "融资趋势解读型",
+        "expansion": "出海机会分析型",
+        "launch": "产品发布解读型",
+        "general": "搜索证据解读型",
+    }
+    reader_value_map = {
+        "funding": "帮助读者判断这一轮融资热度的含金量",
+        "expansion": "帮助读者判断出海机会和落地难点",
+        "launch": "帮助读者判断新动作背后的真实价值",
+        "general": "帮助读者快速建立主题判断框架",
+    }
+    thesis_map = {
+        "funding": f"{topic}需要结合资金流向、估值分化和真实兑现能力来判断。",
+        "expansion": f"{topic}需要放在需求、渠道和本地化落地条件里判断。",
+        "launch": f"{topic}需要回到真实影响、使用场景和风险边界中判断。",
+        "general": f"{topic}需要放回搜索证据里判断：哪些已经被证明，哪些仍只是信号。",
+    }
+
+    source_sections = _build_source_driven_sections(topic, search_materials)
+    if source_sections:
+        sections = list(source_sections)
+        if skill_id == "quantum_tech_explainer" and not any("工程指标" in section.get("heading", "") for section in sections):
+            sections.append(
+                {
+                    "heading": "关键进展看哪些工程指标",
+                    "goal": "围绕硬件、纠错、相干时间、保真度或通信链路拆解变化。",
+                    "shape": "evidence",
+                }
+            )
+    elif section_guidance:
+        shapes = ["hook", "evidence", "case", "risks", "next_steps"]
+        sections = [
+            {
+                "heading": f"{topic}：{_clean_text(guidance, limit=26)}",
+                "goal": f"按所选 skill 的写作要求展开：{guidance}",
+                "shape": shapes[min(index, len(shapes) - 1)],
+            }
+            for index, guidance in enumerate(section_guidance)
+        ]
+    else:
+        sections = _build_dynamic_sections(topic, article_type, evidence_pack, search_materials)
+
+    if skill_id == "quantum_tech_explainer" and not source_sections:
+        sections = [
+            {"heading": "先把技术对象讲清楚", "goal": "解释核心概念、技术对象和常见误解。", "shape": "hook"},
+            {"heading": "关键进展看哪些工程指标", "goal": "围绕硬件、纠错、相干时间、保真度或通信链路拆解变化。", "shape": "evidence"},
+            {"heading": "产业应用还需要哪些条件", "goal": "说明应用场景、规模化条件、成本和验证周期。", "shape": "drivers"},
+            {"heading": "当前结论的证据边界", "goal": "交代实验指标、商业化周期和仍需验证的部分。", "shape": "risks"},
+        ]
+
+    if not sections:
+        sections = [
+            {"heading": f"{topic}的核心事实", "goal": "先整理已知事实和搜索材料里的主要信号。", "shape": "hook"},
+            {"heading": f"{topic}的影响路径", "goal": "说明它可能影响哪些对象、场景或行业环节。", "shape": "analysis"},
+        ]
+
+    framework = skill_framework or (f"{skill_name} · 微信公众号文章蓝图" if skill_name else framework_map[profile])
+    title_candidates = _build_fallback_title_candidates(topic, search_materials)
+    if skill_id == "quantum_tech_explainer":
+        title_candidates = [
+            f"{topic}：工程指标、应用前景与边界",
+            f"{topic}的技术进展和验证条件",
+            f"从公开证据看{topic}",
+        ]
+        thesis_map["general"] = f"{topic}需要同时看科学原理、工程指标和商业化边界。"
+        reader_value_map["general"] = "帮助读者区分技术进展、工程门槛和产业化条件。"
+
+    must_cover_points = [section["heading"] for section in sections[:3]]
+    if selected_skill.get("evidence_policy"):
+        must_cover_points.append(str(selected_skill["evidence_policy"]))
+    must_cover_points.extend(writing_constraints[:3])
+    if "missing_high_confidence_fact" in research_gaps or "missing_data_evidence" in research_gaps:
+        must_cover_points.append("补齐官方或数据证据")
+    if source_coverage and set(source_coverage).issubset({"community", "aggregator", "unknown"}):
+        must_cover_points.append("交代当前证据边界")
+
+    drop_points = ["泛泛背景复述"] if profile in {"funding", "expansion"} else []
+    if skill_id == "quantum_tech_explainer":
+        drop_points.extend(["量子玄学化表达", "马上取代经典计算的夸张判断"])
+
+    return BlueprintOutput(
+        framework=framework,
+        title_candidates=title_candidates,
+        thesis=thesis_map[profile],
+        reader_value=reader_value_map[profile],
+        sections=sections,
+        must_cover_points=list(dict.fromkeys(must_cover_points)),
+        drop_points=list(dict.fromkeys(drop_points)),
+        source_driven_framework=sections,
+        evidence_map=_build_evidence_map(sections, search_materials),
+    )
+
+
 async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
     """Create a dynamic section plan for the current article."""
     planning_state = dict(state.get("planning_state") or {})
@@ -531,13 +810,14 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
         blueprint = _build_fallback_blueprint(topic, article_type, evidence_pack, search_materials, selected_skill)
     else:
         system_prompt = (
-            "You are a planning agent for Chinese long-form content. "
+            "You are a planning agent for Chinese WeChat public account articles. "
             "Generate a dynamic article blueprint based on the actual search materials, extracted source content, and evidence density. "
             "Read source_context first; it contains the real search results, extracted page text, source URLs, and evidence pack. "
-            "You must decide the article framework, final title candidates, and H2 subtitles yourself from the materials. "
-            "The result should feel like a WeChat public account article structure planned by an experienced editor. "
+            "The output is a WeChat article blueprint, not a research report, not a search plan, and not a generic outline. "
+            "You must decide the article framework, final title candidates, opening logic, and H2 subtitles from the searched materials. "
+            "The result should feel like a WeChat public account article structure planned by an experienced editor: readable, specific, and publication-ready. "
             "Section headings should be content-specific, topic-specific, and publication-ready instead of generic placeholders. "
-            "Keep 4 to 6 H2 sections. Always include one risk-boundary section. "
+            "You may decide the number, order, and shape of H2 sections based on the materials and selected_skill. "
             "Use source_context and search_materials to decide the article framework before using any generic topic template. "
             "If selected_skill is provided, use it as the specialized editorial skill for framework, tone, evidence policy, and forbidden patterns. "
             "Each section should map to at least one concrete source signal when possible. "
@@ -589,8 +869,6 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
         try:
             result = await chain.ainvoke(payload)
             blueprint = _normalize_blueprint_output(result)
-            if len(blueprint.sections) < 4:
-                raise ValueError("insufficient dynamic sections from model blueprint")
             blueprint = _enforce_evidence_boundary_sections(blueprint, evidence_pack)
             if search_materials and not blueprint.source_driven_framework:
                 blueprint.source_driven_framework = _build_source_driven_sections(topic, search_materials)
@@ -620,4 +898,5 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
         "current_skill": "plan_article_angle",
         "progress": 44,
         "planning_state": planning_state,
+        "article_blueprint": blueprint_payload,
     }

@@ -671,3 +671,59 @@ wechatProject/
 - `tests/test_hotspot_ranker.py`
 - `tests/test_scheduler_hotspot_capture.py`
 - `tests/test_workflow_hotspot_capture.py`
+
+## 14. 2026-05-05 多数据源热点与 Planner 前置蓝图（已实现）
+
+### 目标
+
+- 热点监控从单一 TopHub 配置升级为多数据源 provider 架构。
+- 定时任务可以选择具体榜单平台，例如 TopHub 节点、36氪 RSS、华尔街日报 RSS。
+- Planner Agent 在搜索前携带任务、热点、可用 article skills 给 AI，由 AI 选择写作风格 skill，并生成初版文章结构蓝图。
+
+### 关键实现
+
+- `workflow/utils/hotspot_providers.py` 新增统一热点 provider registry：
+  - `TopHubHotspotProvider`
+  - `RssHotspotProvider`
+  - `HtmlRankingHotspotProvider`
+- `workflow/agents/hotspot.py` 改为按平台 `source` 调用 provider，合并候选后复用 `rank_hotspots` 评分和筛选。
+- `api.models.HotspotPlatformConfig` 支持 `source`、`provider_id`、`category`、`parser_options`，并兼容旧 TopHub `path` 配置。
+- `/api/hotspots/platforms` 返回内置多源平台目录，包含 36氪快讯和华尔街日报全球新闻。
+- `workflow/agents/planner.py` 新增结构化 `PlannerOutput`，模型可输出：
+  - `selected_skill`
+  - `style_profile`
+  - `initial_article_blueprint`
+  - `search_plan`
+  - `visual_plan`
+- `workflow/nodes/research_plan.py` 会把 planner 初版蓝图的 `search_focuses` 转成搜索 query。
+- `workflow/nodes/plan_article_angle.py` 在搜索后蓝图修正时继承 planner 初版蓝图和已选 skill。
+- 前端 `ScheduleManage` 支持配置 TopHub、RSS / Feed、公开榜单页三类热点平台。
+
+### 测试覆盖
+
+- `tests/test_hotspot_providers.py`
+- `tests/test_schedule_hotspot_models.py`
+- `tests/test_planner_agent.py`
+- `tests/test_workflow_hotspot_capture.py`
+- `tests/test_scheduler_hotspot_capture.py`
+
+## 15. 2026-05-05 Planner 蓝图时机修正（已实现）
+
+- Planner Agent 不再调用 AI 生成搜索前 `initial_article_blueprint`，也不再把临时蓝图写入 `article_blueprint`。
+- Planner Agent 只输出 `selected_skill`、`style_profile.content_type=wechat_public_account_article`、搜索角度、视觉策略和质量阈值。
+- `workflow/nodes/research_plan.py` 不再消费蓝图 `search_focuses`；搜索 query 只来自主题、热点分类和搜索角度。
+- `workflow/nodes/plan_article_angle.py` 是正式文章蓝图生成入口：AI 明确知道目标是微信公众号文章，并基于 `selected_skill + source_context + search_materials + evidence_pack` 自动生成蓝图。
+- 该修正覆盖上一节中“Planner 前置蓝图”的描述；后续以本节为准。
+
+## 16. 2026-05-05 Fallback 蓝图优化（已实现）
+
+- `_build_fallback_blueprint` 在模型不可用或结构化输出失败时，也会按微信公众号文章语境生成蓝图。
+- fallback 优先使用搜索材料生成来源驱动结构；材料不足时再结合 `selected_skill.section_guidance`、`evidence_policy`、`writing_constraints` 和证据缺口补齐章节。
+- 量子科技等专项 skill 保留术语解释、工程指标、产业门槛和风险边界要求，但不再完全依赖固定模板。
+
+## 17. 2026-05-05 文章蓝图结构限制放开（已实现）
+
+- `plan_article_angle` 不再限制 AI 生成 4-6 个 H2，也不再截断章节数量。
+- AI 可以根据 `selected_skill`、搜索内容和证据包自行决定章节数量、顺序和结构类型。
+- 代码只保留空标题/空目标过滤；当证据包存在明显缺口且模型完全没有表达风险/证据边界时，才追加一个安全边界章节。
+- `source_driven_framework` 和 `evidence_map` 仍用于帮助写作节点理解证据来源，但不再反向限制文章结构。

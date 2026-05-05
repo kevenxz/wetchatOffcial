@@ -2,13 +2,17 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 import time
 from collections.abc import Callable, Coroutine
+from datetime import datetime, timezone
 from typing import Any
 
 import structlog
 from langgraph.graph import END, StateGraph
 
+from api.models import WorkflowRunStepRecord, WorkflowRunStepStatus
+from api.store import create_workflow_run_step, update_workflow_run_step
 from workflow.article_generation import normalize_generation_config
 from workflow.config import build_config_snapshot
 from workflow.agents.hotspot import capture_hot_topics_node
@@ -32,10 +36,65 @@ from workflow.nodes.ui_feedback import ui_feedback_node
 from workflow.nodes.visual_plan import plan_visual_assets_node
 from workflow.tools.wechat_draft import push_to_draft_node
 from workflow.state import WorkflowState
+from workflow.utils.step_trace import sanitize_step_payload
 
 logger = structlog.get_logger(__name__)
 
 ProgressCallback = Callable[[str, dict], Coroutine[Any, Any, None]]
+
+
+def _create_step_record(
+    *,
+    run_id: str,
+    task_id: str,
+    node_name: str,
+    input_state: dict,
+    started_at: datetime,
+) -> WorkflowRunStepRecord:
+    return create_workflow_run_step(
+        WorkflowRunStepRecord(
+            run_step_id=str(uuid.uuid4()),
+            run_id=run_id,
+            task_id=task_id,
+            step_name=node_name,
+            status=WorkflowRunStepStatus.running,
+            payload={
+                "input_state": sanitize_step_payload(input_state),
+            },
+            started_at=started_at,
+            created_at=started_at,
+        )
+    )
+
+
+def _complete_step_record(
+    *,
+    run_step_id: str,
+    input_state: dict,
+    output: dict,
+    state_after: dict,
+    started_at: datetime,
+    ended_at: datetime,
+    status_message: str,
+) -> None:
+    duration_ms = round((ended_at - started_at).total_seconds() * 1000)
+    update_workflow_run_step(
+        run_step_id,
+        {
+            "status": WorkflowRunStepStatus.failed if output.get("status") == "failed" else WorkflowRunStepStatus.succeeded,
+            "payload": {
+                "input_state": sanitize_step_payload(input_state),
+                "output": sanitize_step_payload(output),
+                "state_after": sanitize_step_payload(state_after),
+                "progress": output.get("progress"),
+                "duration_ms": duration_ms,
+                "status_message": status_message,
+            },
+            "error": str(output.get("error") or "")[:2000] or None,
+            "ended_at": ended_at,
+            "updated_at": ended_at,
+        },
+    )
 
 
 def _build_result_payload(final_state: dict | None) -> dict:
@@ -230,6 +289,7 @@ async def run_workflow(
 ) -> WorkflowState:
     """Run workflow and stream progress via callback."""
     start = time.monotonic()
+    run_id = str(uuid.uuid4())
 
     if resume_state:
         initial_state = dict(resume_state)
@@ -277,6 +337,7 @@ async def run_workflow(
             skill="workflow",
             status="running",
             resume_from=initial_state.get("current_skill", "unknown"),
+            run_id=run_id,
         )
     else:
         normalized_generation_config = normalize_generation_config(generation_config)
@@ -331,14 +392,16 @@ async def run_workflow(
             generation_config=normalized_generation_config,
             hotspot_capture_enabled=bool((hotspot_capture_config or {}).get("enabled")),
             skip_auto_push=skip_auto_push,
+            run_id=run_id,
         )
 
     if progress_callback:
         await progress_callback(
             task_id,
-            {
-                "task_id": task_id,
-                "status": "pending",
+                {
+                    "task_id": task_id,
+                    "run_id": run_id,
+                    "status": "pending",
                 "current_skill": "",
                 "progress": 0,
                 "message": "task created, preparing workflow",
@@ -352,17 +415,47 @@ async def run_workflow(
     try:
         async for event in _compiled_graph.astream(initial_state):
             for node_name, output in event.items():
+                input_state = dict(current_state)
+                step_started_at = datetime.now(tz=timezone.utc)
+                step = None
+                try:
+                    step = _create_step_record(
+                        run_id=run_id,
+                        task_id=task_id,
+                        node_name=node_name,
+                        input_state=input_state,
+                        started_at=step_started_at,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("workflow_step_trace_create_failed", task_id=task_id, node=node_name, error=str(exc))
                 current_state.update(output)
                 final_state = current_state
+                step_ended_at = datetime.now(tz=timezone.utc)
+                status_message = f"node [{node_name}] done"
+                if step is not None:
+                    try:
+                        _complete_step_record(
+                            run_step_id=step.run_step_id,
+                            input_state=input_state,
+                            output=dict(output),
+                            state_after=dict(current_state),
+                            started_at=step_started_at,
+                            ended_at=step_ended_at,
+                            status_message=status_message,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("workflow_step_trace_update_failed", task_id=task_id, node=node_name, error=str(exc))
                 if progress_callback:
                     await progress_callback(
                         task_id,
                         {
                             "task_id": task_id,
+                            "run_id": run_id,
+                            "run_step_id": step.run_step_id if step is not None else None,
                             "status": output.get("status", "running"),
                             "current_skill": output.get("current_skill", node_name),
                             "progress": output.get("progress", 0),
-                            "message": f"node [{node_name}] done",
+                            "message": status_message,
                             "result": None,
                         },
                     )
@@ -384,6 +477,7 @@ async def run_workflow(
                 task_id,
                 {
                     "task_id": task_id,
+                    "run_id": run_id,
                     "status": final_status,
                     "current_skill": "",
                     "progress": 100 if not is_failed else int(final_state.get("progress", 0) if final_state else 0),
@@ -406,6 +500,7 @@ async def run_workflow(
                 task_id,
                 {
                     "task_id": task_id,
+                    "run_id": run_id,
                     "status": "failed",
                     "current_skill": "",
                     "progress": 0,

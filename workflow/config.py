@@ -45,6 +45,16 @@ DEFAULT_PUBLISH_POLICY = {
     "require_manual_confirmation": False,
 }
 
+DEFAULT_RESEARCH_POLICY = {
+    "search_mode": "standard",
+    "auto_deepen_for_sensitive_categories": True,
+    "min_sources": 6,
+    "min_official_sources": 1,
+    "min_cross_sources": 3,
+    "require_opposing_view": True,
+    "freshness_window_days": 7,
+}
+
 
 def _clean_string_list(value: Any) -> list[str]:
     items: list[str] = []
@@ -114,6 +124,21 @@ def normalize_publish_policy(raw: Any, *, skip_auto_push: bool) -> dict[str, Any
     return policy
 
 
+def normalize_research_policy(raw: Any) -> dict[str, Any]:
+    policy = _merge_mapping(DEFAULT_RESEARCH_POLICY, raw)
+    search_mode = str(policy.get("search_mode") or "standard").strip()
+    if search_mode not in {"quick", "standard", "deep", "strict"}:
+        search_mode = "standard"
+    policy["search_mode"] = search_mode
+    policy["auto_deepen_for_sensitive_categories"] = bool(policy.get("auto_deepen_for_sensitive_categories", True))
+    policy["min_sources"] = max(1, min(int(policy.get("min_sources") or 6), 30))
+    policy["min_official_sources"] = max(0, min(int(policy.get("min_official_sources") or 1), 10))
+    policy["min_cross_sources"] = max(1, min(int(policy.get("min_cross_sources") or 3), 20))
+    policy["require_opposing_view"] = bool(policy.get("require_opposing_view", True))
+    policy["freshness_window_days"] = max(1, min(int(policy.get("freshness_window_days") or 7), 365))
+    return policy
+
+
 def build_config_snapshot(
     *,
     generation_config: Mapping[str, Any] | None,
@@ -137,4 +162,5 @@ def build_config_snapshot(
             raw_generation.get("publish_policy"),
             skip_auto_push=skip_auto_push,
         ),
+        "research_policy": normalize_research_policy(raw_generation.get("research_policy")),
     }

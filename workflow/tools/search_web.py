@@ -262,6 +262,26 @@ def _freshness_score(title: str, snippet: str, url: str) -> float:
     return 0.02
 
 
+def _originality_score(source_type: str) -> float:
+    if source_type in {"official", "documentation", "github", "research"}:
+        return 0.92
+    if source_type in {"institution", "media"}:
+        return 0.76
+    if source_type == "aggregator":
+        return 0.35
+    return 0.55
+
+
+def _risk_penalty(source_type: str, title: str, snippet: str) -> float:
+    text = f"{title} {snippet}".lower()
+    penalty = 0.0
+    if source_type in {"community", "aggregator", "unknown"}:
+        penalty += 0.08
+    if any(token in text for token in ("震惊", "爆炸", "必看", "颠覆", "guaranteed", "shocking")):
+        penalty += 0.08
+    return min(0.25, penalty)
+
+
 def _normalize_search_item(query: str, intent: str, provider: str, raw_item: dict) -> dict | None:
     url = raw_item.get("url", "").strip()
     if not url.startswith("http"):
@@ -275,6 +295,22 @@ def _normalize_search_item(query: str, intent: str, provider: str, raw_item: dic
     authority_score = _authority_score(source_type, domain)
     relevance_score = _relevance_score(query, raw_item.get("title", ""), raw_item.get("snippet", ""))
     freshness_score = _freshness_score(raw_item.get("title", ""), raw_item.get("snippet", ""), normalized_url)
+    originality_score = _originality_score(source_type)
+    content_depth_score = 0.72 if len(raw_item.get("snippet", "")) >= 80 else 0.5
+    cross_source_score = 0.0
+    risk_penalty = _risk_penalty(source_type, raw_item.get("title", ""), raw_item.get("snippet", ""))
+    duplicate_penalty = 0.0
+    final_score = (
+        authority_score * 0.34
+        + relevance_score * 0.25
+        + freshness_score * 0.08
+        + originality_score * 0.16
+        + content_depth_score * 0.12
+        + official_bonus
+        + cross_source_score * 0.05
+        - risk_penalty
+        - duplicate_penalty
+    )
     return {
         "query": query,
         "query_intent": intent,
@@ -287,8 +323,13 @@ def _normalize_search_item(query: str, intent: str, provider: str, raw_item: dic
         "authority_score": authority_score,
         "relevance_score": relevance_score,
         "freshness_score": freshness_score,
+        "originality_score": originality_score,
+        "cross_source_score": cross_source_score,
+        "content_depth_score": content_depth_score,
+        "risk_penalty": risk_penalty,
+        "duplicate_penalty": duplicate_penalty,
         "official_bonus": official_bonus,
-        "final_score": round(authority_score * 0.4 + relevance_score * 0.35 + freshness_score * 0.1 + official_bonus, 4),
+        "final_score": round(max(0.0, min(1.0, final_score)), 4),
     }
 
 

@@ -47,7 +47,7 @@ async def test_capture_hot_topics_selects_high_score_item() -> None:
         },
     }
 
-    async def fake_fetch_platform_hot_items(*args, **kwargs):
+    async def fake_fetch_platform_items(*args, **kwargs):
         return [
             {
                 "source": "tophub",
@@ -65,8 +65,8 @@ async def test_capture_hot_topics_selects_high_score_item() -> None:
         ]
 
     with patch(
-        "workflow.agents.hotspot.TopHubClient.fetch_platform_hot_items",
-        side_effect=fake_fetch_platform_hot_items,
+        "workflow.agents.hotspot.fetch_hotspot_platform_items",
+        side_effect=fake_fetch_platform_items,
     ):
         result = await capture_hot_topics_node(state)  # type: ignore[arg-type]
 

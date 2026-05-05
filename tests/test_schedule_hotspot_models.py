@@ -45,6 +45,32 @@ def test_create_schedule_request_prefers_structured_hotspot_capture_and_normaliz
     assert request.hotspot_capture.platforms[0].path == "/n/mproPpoq6O"
 
 
+def test_hotspot_platform_config_accepts_rss_provider_endpoint() -> None:
+    request = CreateScheduleRequest(
+        name="多源榜单任务",
+        mode=ScheduleMode.interval,
+        interval_minutes=60,
+        hotspot_capture={
+            "enabled": True,
+            "platforms": [
+                {
+                    "name": "36氪快讯",
+                    "path": "https://36kr.com/feed-newsflash",
+                    "source": "rss_or_feed",
+                    "provider_id": "36kr_newsflash",
+                    "category": "科技",
+                    "weight": 1.1,
+                }
+            ],
+        },
+    )
+
+    platform = request.hotspot_capture.platforms[0]
+    assert platform.source == HotspotSource.rss_or_feed
+    assert platform.provider_id == "36kr_newsflash"
+    assert platform.path == "https://36kr.com/feed-newsflash"
+
+
 def test_update_schedule_request_builds_hotspot_capture_from_legacy_hot_topics() -> None:
     request = UpdateScheduleRequest(hot_topics=["抖音", " 小红书 ", "抖音"])
     patch = request.model_dump(exclude_unset=True)

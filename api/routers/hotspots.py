@@ -1,7 +1,6 @@
 ﻿"""Hotspot preview routes."""
 from __future__ import annotations
 
-import asyncio
 import uuid
 from datetime import datetime, timezone
 
@@ -22,7 +21,7 @@ from api.models import (
 )
 from api.store import create_topic, list_topics, topic_store, update_topic
 from workflow.agents.hotspot import capture_hot_topics_node
-from workflow.utils.tophub_client import TopHubClient, list_builtin_platforms
+from workflow.utils.hotspot_providers import discover_hotspot_platforms, list_builtin_hotspot_platforms
 
 router = APIRouter(prefix="/hotspots", tags=["hotspots"])
 logger = structlog.get_logger(__name__)
@@ -243,7 +242,10 @@ async def list_hotspot_platforms(
 
     builtin_items = [
         HotspotPlatformCatalogItem.model_validate(item)
-        for item in list_builtin_platforms(normalized_categories, limit=limit_per_category * max(1, len(normalized_categories)))
+        for item in list_builtin_hotspot_platforms(
+            normalized_categories,
+            limit=limit_per_category * max(1, len(normalized_categories)),
+        )
     ]
     if builtin_items:
         logger.info(
@@ -261,31 +263,23 @@ async def list_hotspot_platforms(
             updated_at=datetime.now(tz=timezone.utc),
         )
 
-    client = TopHubClient()
-    discovered_results = await asyncio.gather(
-        *[
-            client.fetch_category_platforms(category, limit=limit_per_category)
-            for category in normalized_categories
-        ],
-        return_exceptions=True,
-    )
-
     items: list[HotspotPlatformCatalogItem] = []
     seen_paths: set[str] = set()
     failed = 0
-    for result in discovered_results:
-        if isinstance(result, Exception):
-            failed += 1
+    try:
+        discovered = await discover_hotspot_platforms(normalized_categories)
+    except Exception:  # noqa: BLE001
+        failed = len(normalized_categories)
+        discovered = []
+    for item in discovered:
+        try:
+            catalog_item = HotspotPlatformCatalogItem.model_validate(item)
+        except Exception:  # noqa: BLE001
             continue
-        for item in result:
-            try:
-                catalog_item = HotspotPlatformCatalogItem.model_validate(item)
-            except Exception:  # noqa: BLE001
-                continue
-            if catalog_item.path in seen_paths:
-                continue
-            seen_paths.add(catalog_item.path)
-            items.append(catalog_item)
+        if catalog_item.path in seen_paths:
+            continue
+        seen_paths.add(catalog_item.path)
+        items.append(catalog_item)
 
     logger.info(
         "hotspot_platform_catalog_fetch",

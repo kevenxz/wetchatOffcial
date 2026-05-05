@@ -56,6 +56,11 @@ const HOTSPOT_CATEGORY_PRESETS = [
   { label: '消费', value: 'consumer' },
   { label: '行业', value: 'industry' },
 ]
+const HOTSPOT_SOURCE_OPTIONS = [
+  { label: 'TopHub', value: 'tophub' },
+  { label: 'RSS / Feed', value: 'rss_or_feed' },
+  { label: '公开榜单页', value: 'ranking_page' },
+]
 const PAGE_STACK_STYLE = {
   display: 'grid',
   gap: 24,
@@ -76,6 +81,13 @@ interface FormValues {
   audience_roles: string[]
   article_strategy: ArticleStrategy
   style_hint?: string
+  search_mode?: 'quick' | 'standard' | 'deep' | 'strict'
+  min_sources?: number
+  min_official_sources?: number
+  min_cross_sources?: number
+  freshness_window_days?: number
+  require_opposing_view?: boolean
+  auto_deepen_for_sensitive_categories?: boolean
   enabled: boolean
 }
 
@@ -120,8 +132,12 @@ const normalizePlatformList = (platforms?: HotspotPlatformConfig[]): HotspotPlat
     normalized.push({
       name,
       path,
+      source: platform.source || (path.startsWith('http') ? 'rss_or_feed' : 'tophub'),
+      provider_id: platform.provider_id?.trim() || platform.source || 'tophub',
+      category: platform.category?.trim() || '',
       weight: Number(platform.weight || 1),
       enabled: platform.enabled !== false,
+      parser_options: platform.parser_options || {},
     })
   })
   return normalized
@@ -250,6 +266,13 @@ export default function ScheduleManage() {
       audience_roles: DEFAULT_GENERATION_CONFIG.audience_roles,
       article_strategy: DEFAULT_GENERATION_CONFIG.article_strategy,
       style_hint: DEFAULT_GENERATION_CONFIG.style_hint,
+      search_mode: DEFAULT_GENERATION_CONFIG.research_policy?.search_mode || 'standard',
+      min_sources: DEFAULT_GENERATION_CONFIG.research_policy?.min_sources || 6,
+      min_official_sources: DEFAULT_GENERATION_CONFIG.research_policy?.min_official_sources || 1,
+      min_cross_sources: DEFAULT_GENERATION_CONFIG.research_policy?.min_cross_sources || 3,
+      freshness_window_days: DEFAULT_GENERATION_CONFIG.research_policy?.freshness_window_days || 7,
+      require_opposing_view: DEFAULT_GENERATION_CONFIG.research_policy?.require_opposing_view ?? true,
+      auto_deepen_for_sensitive_categories: true,
       enabled: true,
     })
     setModalOpen(true)
@@ -268,6 +291,22 @@ export default function ScheduleManage() {
       audience_roles: record.generation_config?.audience_roles || DEFAULT_GENERATION_CONFIG.audience_roles,
       article_strategy: record.generation_config?.article_strategy || DEFAULT_GENERATION_CONFIG.article_strategy,
       style_hint: record.generation_config?.style_hint || DEFAULT_GENERATION_CONFIG.style_hint,
+      search_mode: record.generation_config?.research_policy?.search_mode || DEFAULT_GENERATION_CONFIG.research_policy?.search_mode,
+      min_sources: record.generation_config?.research_policy?.min_sources || DEFAULT_GENERATION_CONFIG.research_policy?.min_sources,
+      min_official_sources:
+        record.generation_config?.research_policy?.min_official_sources ||
+        DEFAULT_GENERATION_CONFIG.research_policy?.min_official_sources,
+      min_cross_sources:
+        record.generation_config?.research_policy?.min_cross_sources ||
+        DEFAULT_GENERATION_CONFIG.research_policy?.min_cross_sources,
+      freshness_window_days:
+        record.generation_config?.research_policy?.freshness_window_days ||
+        DEFAULT_GENERATION_CONFIG.research_policy?.freshness_window_days,
+      require_opposing_view:
+        record.generation_config?.research_policy?.require_opposing_view ??
+        DEFAULT_GENERATION_CONFIG.research_policy?.require_opposing_view,
+      auto_deepen_for_sensitive_categories:
+        record.generation_config?.research_policy?.auto_deepen_for_sensitive_categories ?? true,
       enabled: record.enabled,
     })
     setModalOpen(true)
@@ -291,6 +330,21 @@ export default function ScheduleManage() {
           : DEFAULT_GENERATION_CONFIG.audience_roles,
         article_strategy: values.article_strategy || DEFAULT_GENERATION_CONFIG.article_strategy,
         style_hint: values.style_hint?.trim() || DEFAULT_GENERATION_CONFIG.style_hint,
+        research_policy: {
+          search_mode: values.search_mode || DEFAULT_GENERATION_CONFIG.research_policy?.search_mode || 'standard',
+          auto_deepen_for_sensitive_categories: values.auto_deepen_for_sensitive_categories !== false,
+          min_sources: Number(values.min_sources ?? DEFAULT_GENERATION_CONFIG.research_policy?.min_sources ?? 6),
+          min_official_sources: Number(
+            values.min_official_sources ?? DEFAULT_GENERATION_CONFIG.research_policy?.min_official_sources ?? 1,
+          ),
+          min_cross_sources: Number(
+            values.min_cross_sources ?? DEFAULT_GENERATION_CONFIG.research_policy?.min_cross_sources ?? 3,
+          ),
+          require_opposing_view: values.require_opposing_view !== false,
+          freshness_window_days: Number(
+            values.freshness_window_days ?? DEFAULT_GENERATION_CONFIG.research_policy?.freshness_window_days ?? 7,
+          ),
+        },
       },
       enabled: values.enabled ?? true,
     }
@@ -596,7 +650,7 @@ export default function ScheduleManage() {
                       <Row gutter={16}>
                         <Col xs={24} md={12}>
                           <Form.Item label="来源" name={['hotspot_capture', 'source']}>
-                            <Select options={[{ label: 'TopHub', value: 'tophub' }]} />
+                            <Select options={HOTSPOT_SOURCE_OPTIONS} />
                           </Form.Item>
                         </Col>
                         <Col xs={24} md={12}>
@@ -619,7 +673,18 @@ export default function ScheduleManage() {
                               <Button
                                 type="dashed"
                                 icon={<PlusOutlined />}
-                                onClick={() => add({ name: '', path: '', weight: 1, enabled: true })}
+                                onClick={() =>
+                                  add({
+                                    name: '',
+                                    path: '',
+                                    source: 'rss_or_feed',
+                                    provider_id: '',
+                                    category: '',
+                                    weight: 1,
+                                    enabled: true,
+                                    parser_options: {},
+                                  })
+                                }
                               >
                                 添加平台
                               </Button>
@@ -628,7 +693,7 @@ export default function ScheduleManage() {
                             {fields.map((field) => (
                               <Card key={field.key} size="small" style={{ marginTop: 8 }}>
                                 <Row gutter={16}>
-                                  <Col xs={24} md={8}>
+                                  <Col xs={24} md={6}>
                                     <Form.Item
                                       {...field}
                                       label="平台名称"
@@ -638,14 +703,24 @@ export default function ScheduleManage() {
                                       <Input placeholder="例如：知乎热榜" />
                                     </Form.Item>
                                   </Col>
-                                  <Col xs={24} md={8}>
+                                  <Col xs={24} md={6}>
                                     <Form.Item
                                       {...field}
-                                      label="节点路径"
+                                      label="路径 / Feed URL"
                                       name={[field.name, 'path']}
                                       rules={[{ required: true, message: '请输入节点路径' }]}
                                     >
-                                      <Input placeholder="例如：/n/mproPpoq6O" />
+                                      <Input placeholder="例如：/n/mproPpoq6O 或 https://36kr.com/feed-newsflash" />
+                                    </Form.Item>
+                                  </Col>
+                                  <Col xs={24} md={4}>
+                                    <Form.Item {...field} label="来源类型" name={[field.name, 'source']}>
+                                      <Select options={HOTSPOT_SOURCE_OPTIONS} />
+                                    </Form.Item>
+                                  </Col>
+                                  <Col xs={24} md={4}>
+                                    <Form.Item {...field} label="分类" name={[field.name, 'category']}>
+                                      <Input placeholder="例如：财经" />
                                     </Form.Item>
                                   </Col>
                                   <Col xs={24} md={4}>
@@ -753,6 +828,67 @@ export default function ScheduleManage() {
                   }))}
                 />
               </Form.Item>
+
+              <Row gutter={16}>
+                <Col xs={24} md={12}>
+                  <Form.Item label="Research depth" name="search_mode">
+                    <Select
+                      options={[
+                        { label: 'Quick', value: 'quick' },
+                        { label: 'Standard', value: 'standard' },
+                        { label: 'Deep', value: 'deep' },
+                        { label: 'Strict', value: 'strict' },
+                      ]}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item label="Freshness window days" name="freshness_window_days">
+                    <InputNumber min={1} max={365} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              <Row gutter={16}>
+                <Col xs={24} md={8}>
+                  <Form.Item label="Minimum sources" name="min_sources">
+                    <InputNumber min={1} max={30} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Form.Item label="Official sources" name="min_official_sources">
+                    <InputNumber min={0} max={10} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={8}>
+                  <Form.Item label="Source domains" name="min_cross_sources">
+                    <InputNumber min={1} max={20} style={{ width: '100%' }} />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              <Row gutter={16}>
+                <Col xs={24} md={12}>
+                  <Form.Item label="Require risk/opposing view" name="require_opposing_view">
+                    <Radio.Group
+                      options={[
+                        { label: '是', value: true },
+                        { label: '否', value: false },
+                      ]}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item label="Auto deepen sensitive categories" name="auto_deepen_for_sensitive_categories">
+                    <Radio.Group
+                      options={[
+                        { label: '是', value: true },
+                        { label: '否', value: false },
+                      ]}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
 
               <Form.Item
                 label="风格补充（可选）"

@@ -5,12 +5,13 @@ import asyncio
 import random
 import time
 from typing import Any
+from urllib.parse import urlsplit
 
 import structlog
 
 from workflow.state import WorkflowState
+from workflow.utils.hotspot_providers import discover_hotspot_platforms, fetch_hotspot_platform_items
 from workflow.utils.hotspot_ranker import pick_best_hotspot, rank_hotspots
-from workflow.utils.tophub_client import TopHubClient, list_builtin_platforms
 
 logger = structlog.get_logger(__name__)
 
@@ -26,6 +27,34 @@ def _normalize_list(value: Any) -> list[str]:
         if cleaned and cleaned not in result:
             result.append(cleaned)
     return result
+
+
+def _normalize_platform(platform: Any) -> dict[str, Any] | None:
+    if not isinstance(platform, dict):
+        return None
+    name = str(platform.get("name") or "").strip()
+    path = str(platform.get("path") or platform.get("url") or platform.get("feed_url") or "").strip()
+    if not name or not path:
+        return None
+    source = str(platform.get("source") or platform.get("source_type") or "").strip()
+    if not source:
+        parsed = urlsplit(path) if path.startswith(("http://", "https://")) else None
+        if parsed and parsed.netloc == "tophub.today":
+            source = "tophub"
+        elif parsed:
+            source = "rss_or_feed" if "rss" in path.lower() or "feed" in path.lower() else "ranking_page"
+        else:
+            source = "tophub"
+    return {
+        "name": name,
+        "path": path,
+        "source": source,
+        "provider_id": str(platform.get("provider_id") or source).strip(),
+        "category": str(platform.get("category") or "").strip(),
+        "weight": float(platform.get("weight") or 1.0),
+        "enabled": bool(platform.get("enabled", True)),
+        "parser_options": dict(platform.get("parser_options") or {}),
+    }
 
 
 def _normalize_hotspot_capture_config(raw_config: Any) -> dict[str, Any]:
@@ -49,7 +78,11 @@ def _normalize_hotspot_capture_config(raw_config: Any) -> dict[str, Any]:
         "enabled": bool(raw_config.get("enabled", False)),
         "source": str(raw_config.get("source", "tophub") or "tophub"),
         "categories": _normalize_list(raw_config.get("categories")),
-        "platforms": list(raw_config.get("platforms") or []),
+        "platforms": [
+            normalized
+            for platform in list(raw_config.get("platforms") or [])
+            if (normalized := _normalize_platform(platform))
+        ],
         "filters": {
             "top_n_per_platform": int(filters.get("top_n_per_platform") or 10),
             "min_selection_score": float(filters.get("min_selection_score") or 60),
@@ -87,34 +120,6 @@ def _platform_log_sample(platforms: list[dict[str, Any]], limit: int = 10) -> li
     ]
 
 
-async def _discover_platforms_from_categories(
-    client: TopHubClient,
-    categories: list[str],
-) -> list[dict[str, Any]]:
-    builtin = list_builtin_platforms(categories)
-    if builtin:
-        return builtin
-    if not categories:
-        return list_builtin_platforms()
-
-    discovered_results = await asyncio.gather(
-        *[client.fetch_category_platforms(category) for category in categories[:5]],
-        return_exceptions=True,
-    )
-    discovered: list[dict[str, Any]] = []
-    seen_paths: set[str] = set()
-    for result in discovered_results:
-        if isinstance(result, Exception):
-            continue
-        for item in result:
-            path = str(item.get("path", "")).strip()
-            if not path or path in seen_paths:
-                continue
-            seen_paths.add(path)
-            discovered.append(item)
-    return discovered
-
-
 async def capture_hot_topics_node(state: WorkflowState) -> dict[str, Any]:
     """Capture hotspots, rank candidates and rewrite workflow keywords."""
     task_id = state["task_id"]
@@ -131,7 +136,7 @@ async def capture_hot_topics_node(state: WorkflowState) -> dict[str, Any]:
         source=config["source"],
     )
 
-    if not config["enabled"] or config["source"] != "tophub":
+    if not config["enabled"]:
         duration_ms = round((time.monotonic() - start_time) * 1000)
         logger.info(
             "skill_done",
@@ -139,7 +144,7 @@ async def capture_hot_topics_node(state: WorkflowState) -> dict[str, Any]:
             skill="capture_hot_topics",
             status="done",
             duration_ms=duration_ms,
-            reason="disabled_or_unsupported_source",
+            reason="disabled",
         )
         return {
             "status": "running",
@@ -165,10 +170,8 @@ async def capture_hot_topics_node(state: WorkflowState) -> dict[str, Any]:
             and str(platform.get("path", "")).strip()
             and str(platform.get("name", "")).strip()
         ]
-        client = TopHubClient()
-
         if not platforms:
-            platforms = await _discover_platforms_from_categories(client, categories)
+            platforms = await discover_hotspot_platforms(categories)
 
         if not platforms:
             fallback_keyword = _pick_fallback_keyword(config, original_keywords)
@@ -187,7 +190,7 @@ async def capture_hot_topics_node(state: WorkflowState) -> dict[str, Any]:
                 "hotspot_capture_config": config,
                 "hotspot_candidates": [],
                 "selected_hotspot": None,
-                "hotspot_capture_error": "未找到可用的 TopHub 平台配置，已回退到 fallback_topics",
+                "hotspot_capture_error": "未找到可用热点平台配置，已回退到 fallback_topics",
             }
 
         logger.info(
@@ -201,12 +204,9 @@ async def capture_hot_topics_node(state: WorkflowState) -> dict[str, Any]:
 
         fetch_results = await asyncio.gather(
             *[
-                client.fetch_platform_hot_items(
-                    platform_name=str(platform.get("name", "")).strip(),
-                    platform_path=str(platform.get("path", "")).strip(),
-                    category=_platform_category(platform, categories),
+                fetch_hotspot_platform_items(
+                    {**platform, "category": _platform_category(platform, categories)},
                     top_n=top_n_per_platform,
-                    platform_weight=float(platform.get("weight") or 1.0),
                 )
                 for platform in platforms
             ],
@@ -232,7 +232,7 @@ async def capture_hot_topics_node(state: WorkflowState) -> dict[str, Any]:
             error_message = None
         else:
             next_keywords = _pick_fallback_keyword(config, original_keywords)
-            error_message = "TopHub 抓取成功但没有命中过滤条件，已回退到 fallback_topics"
+            error_message = "热点抓取成功但没有命中过滤条件，已回退到 fallback_topics"
 
         duration_ms = round((time.monotonic() - start_time) * 1000)
         logger.info(
