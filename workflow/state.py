@@ -21,6 +21,7 @@ class WorkflowState(TypedDict, total=False):
     research_state: dict
     writing_state: dict
     visual_state: dict
+    viral_state: dict
     quality_state: dict
     quality_report: dict
     human_review_required: bool
@@ -41,6 +42,9 @@ class WorkflowState(TypedDict, total=False):
     generated_article: dict
     final_article: dict
     draft_info: Optional[dict]
+    publish_targets: list[dict]
+    publish_records: list[dict]
+    article_theme: Optional[str]
 
     retry_count: int
     error: Optional[str]

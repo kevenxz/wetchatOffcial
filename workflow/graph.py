@@ -17,15 +17,18 @@ from workflow.article_generation import normalize_generation_config
 from workflow.config import build_config_snapshot
 from workflow.agents.hotspot import capture_hot_topics_node
 from workflow.agents.image import image_agent_node
-from workflow.agents.outline import outline_planner_node
+from workflow.agents.outline import outline_planner_base_node
 from workflow.agents.planner import planner_agent_node
-from workflow.agents.reviewer import review_article_draft_node
 from workflow.agents.visual_reviewer import review_visual_assets_node
+from workflow.agents.virality import design_viral_strategy_node
 from workflow.agents.writer import compose_draft_node
 from workflow.nodes.assemble_article import assemble_article_node
 from workflow.nodes.evidence_pack import build_evidence_pack_node
 from workflow.nodes.error_handler import error_handler
 from workflow.nodes.intake import intake_task_brief_node
+from workflow.nodes.merge_outline_strategy import merge_outline_strategy_node
+from workflow.nodes.normalize_draft import normalize_draft_node
+from workflow.nodes.parallel_review import parallel_review_node
 from workflow.nodes.quality_gate import quality_gate_node
 from workflow.nodes.research_plan import plan_research_node
 from workflow.nodes.resolve_article_type import resolve_article_type_node
@@ -118,6 +121,7 @@ def _build_result_payload(final_state: dict | None) -> dict:
         "research_state": state.get("research_state"),
         "writing_state": state.get("writing_state"),
         "visual_state": state.get("visual_state"),
+        "viral_state": state.get("viral_state"),
         "quality_state": state.get("quality_state"),
         "quality_report": quality_report,
         "human_review_required": bool(quality_report and not quality_report.get("ready_to_publish")),
@@ -129,6 +133,8 @@ def _build_result_payload(final_state: dict | None) -> dict:
         "generated_article": state.get("generated_article"),
         "final_article": state.get("final_article"),
         "draft_info": state.get("draft_info"),
+        "publish_records": state.get("publish_records"),
+        "article_theme": state.get("article_theme"),
     }
 
 
@@ -157,6 +163,24 @@ async def initialize_node(state: WorkflowState) -> dict:
 
 def _route_status(state: WorkflowState) -> str:
     return "error" if state.get("status") == "failed" else "next"
+
+
+def _route_planning_fanout(state: WorkflowState) -> str | list[str]:
+    """Fan out the distribution strategy and the article blueprint.
+
+    Both only depend on the evidence pack, so they are planned concurrently and
+    joined by ``merge_outline_strategy``.
+    """
+    if state.get("status") == "failed":
+        return "error_handler"
+    return ["design_viral_strategy", "outline_planner"]
+
+
+def _route_draft_fanout(state: WorkflowState) -> str | list[str]:
+    """Fan out the review branch and the visual branch after the draft is ready."""
+    if state.get("status") == "failed":
+        return "error_handler"
+    return ["parallel_review", "plan_visual_assets"]
 
 
 def _route_quality_action(state: WorkflowState) -> str:
@@ -212,9 +236,12 @@ def build_graph() -> StateGraph:
     graph.add_node("run_research", run_research_node)
     graph.add_node("build_evidence_pack", build_evidence_pack_node)
     graph.add_node("resolve_article_type", resolve_article_type_node)
-    graph.add_node("outline_planner", outline_planner_node)
+    graph.add_node("design_viral_strategy", design_viral_strategy_node)
+    graph.add_node("outline_planner", outline_planner_base_node)
+    graph.add_node("merge_outline_strategy", merge_outline_strategy_node)
     graph.add_node("compose_draft", compose_draft_node)
-    graph.add_node("review_article_draft", review_article_draft_node)
+    graph.add_node("normalize_draft", normalize_draft_node)
+    graph.add_node("parallel_review", parallel_review_node)
     graph.add_node("plan_visual_assets", plan_visual_assets_node)
     graph.add_node("image_agent", image_agent_node)
     graph.add_node("review_visual_assets", review_visual_assets_node)
@@ -233,13 +260,64 @@ def build_graph() -> StateGraph:
     graph.add_conditional_edges("plan_research", _route_status, {"error": "error_handler", "next": "run_research"})
     graph.add_conditional_edges("run_research", _route_status, {"error": "error_handler", "next": "build_evidence_pack"})
     graph.add_conditional_edges("build_evidence_pack", _route_status, {"error": "error_handler", "next": "resolve_article_type"})
-    graph.add_conditional_edges("resolve_article_type", _route_status, {"error": "error_handler", "next": "outline_planner"})
-    graph.add_conditional_edges("outline_planner", _route_status, {"error": "error_handler", "next": "compose_draft"})
-    graph.add_conditional_edges("compose_draft", _route_status, {"error": "error_handler", "next": "review_article_draft"})
-    graph.add_conditional_edges("review_article_draft", _route_status, {"error": "error_handler", "next": "plan_visual_assets"})
-    graph.add_conditional_edges("plan_visual_assets", _route_status, {"error": "error_handler", "next": "image_agent"})
+
+    # Fan-out: the distribution strategy and the article blueprint only depend on the
+    # evidence pack, so they are planned concurrently and merged deterministically.
+    graph.add_conditional_edges(
+        "resolve_article_type",
+        _route_planning_fanout,
+        {
+            "error_handler": "error_handler",
+            "design_viral_strategy": "design_viral_strategy",
+            "outline_planner": "outline_planner",
+        },
+    )
+    graph.add_conditional_edges(
+        "design_viral_strategy",
+        _route_status,
+        {"error": "error_handler", "next": "merge_outline_strategy"},
+    )
+    graph.add_conditional_edges(
+        "outline_planner",
+        _route_status,
+        {"error": "error_handler", "next": "merge_outline_strategy"},
+    )
+    graph.add_conditional_edges(
+        "merge_outline_strategy",
+        _route_status,
+        {"error": "error_handler", "next": "compose_draft"},
+    )
+    graph.add_conditional_edges("compose_draft", _route_status, {"error": "error_handler", "next": "normalize_draft"})
+
+    # Fan-out: review and image generation both only need the finished draft, so the
+    # visual branch no longer waits behind the two reviews.
+    graph.add_conditional_edges(
+        "normalize_draft",
+        _route_draft_fanout,
+        {
+            "error_handler": "error_handler",
+            "parallel_review": "parallel_review",
+            "plan_visual_assets": "plan_visual_assets",
+        },
+    )
+    graph.add_conditional_edges(
+        "plan_visual_assets",
+        _route_status,
+        {"error": "error_handler", "next": "image_agent"},
+    )
     graph.add_conditional_edges("image_agent", _route_status, {"error": "error_handler", "next": "review_visual_assets"})
-    graph.add_conditional_edges("review_visual_assets", _route_status, {"error": "error_handler", "next": "quality_gate"})
+
+    # Fan-in: the quality gate waits for both the reviews and the visual assets.
+    graph.add_conditional_edges(
+        "parallel_review",
+        _route_status,
+        {"error": "error_handler", "next": "quality_gate"},
+    )
+    graph.add_conditional_edges(
+        "review_visual_assets",
+        _route_status,
+        {"error": "error_handler", "next": "quality_gate"},
+    )
     graph.add_conditional_edges(
         "quality_gate",
         _route_quality_action,
@@ -286,6 +364,8 @@ async def run_workflow(
     progress_callback: ProgressCallback | None = None,
     resume_state: dict | None = None,
     skip_auto_push: bool = False,
+    publish_targets: list[dict] | None = None,
+    article_theme: str | None = None,
 ) -> WorkflowState:
     """Run workflow and stream progress via callback."""
     start = time.monotonic()
@@ -300,11 +380,19 @@ async def run_workflow(
         initial_state["generation_config"] = normalize_generation_config(raw_generation_config)
         if hotspot_capture_config is not None:
             initial_state["hotspot_capture_config"] = dict(hotspot_capture_config)
+        if publish_targets is not None:
+            initial_state["publish_targets"] = list(publish_targets)
+        if article_theme is not None:
+            initial_state["article_theme"] = article_theme
+        initial_state.setdefault("publish_targets", [])
+        initial_state.setdefault("publish_records", [])
+        initial_state.setdefault("article_theme", None)
         initial_state.setdefault("task_brief", {})
         initial_state.setdefault("planning_state", {})
         initial_state.setdefault("research_state", {})
         initial_state.setdefault("writing_state", {})
         initial_state.setdefault("visual_state", {})
+        initial_state.setdefault("viral_state", {})
         initial_state.setdefault("quality_state", {})
         initial_state.setdefault("user_intent", {})
         initial_state.setdefault("style_profile", {})
@@ -359,6 +447,7 @@ async def run_workflow(
             "research_state": {},
             "writing_state": {},
             "visual_state": {},
+            "viral_state": {},
             "quality_state": {},
             "user_intent": {},
             "style_profile": {},
@@ -375,6 +464,9 @@ async def run_workflow(
             "generated_article": {},
             "final_article": {},
             "draft_info": None,
+            "publish_targets": list(publish_targets or []),
+            "publish_records": [],
+            "article_theme": article_theme,
             "retry_count": 0,
             "revision_count": 0,
             "error": None,

@@ -24,7 +24,7 @@ body {
   font-weight: var(--font-weight-normal);
   line-height: var(--line-height-base);
   color: var(--app-text);
-  background: var(--app-bg);
+  background: var(--app-bg-gradient);
   background-color: var(--app-bg);
   transition:
     color var(--transition-base),
@@ -52,6 +52,7 @@ h3,
 h4,
 h5,
 h6 {
+  font-family: var(--font-family-display);
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
   color: var(--app-text);
@@ -113,7 +114,7 @@ textarea {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(125, 211, 252, 0.6);
+  background: var(--app-primary-hover);
 }
 
 .ant-layout {
@@ -176,6 +177,10 @@ textarea {
 .backstage-page {
   display: grid;
   gap: 14px;
+}
+
+.ant-btn-primary {
+  box-shadow: 0 8px 22px -12px color-mix(in srgb, var(--app-primary) 72%, transparent);
 }
 
 .backstage-metric-grid {

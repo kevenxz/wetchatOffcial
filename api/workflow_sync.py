@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from api.models import ReviewQueueItem, ReviewTargetType, TaskResponse, TaskStatus
+from api.models import PushRecord, ReviewQueueItem, ReviewTargetType, TaskResponse, TaskStatus
 from api.store import create_review, get_review
 
 
@@ -86,12 +86,41 @@ def sync_task_from_workflow_event(task: TaskResponse, data: dict[str, Any]) -> N
         or dict(task.quality_state or {}).get("quality_report")
         or None
     )
+    _sync_push_records(task, result)
     task.human_review_required = bool(
         result.get("human_review_required")
         or (task.quality_report and not task.quality_report.get("ready_to_publish"))
     )
     if task.human_review_required:
         _ensure_review_queue_item(task)
+
+
+def _sync_push_records(task: TaskResponse, result: dict[str, Any]) -> None:
+    """Append push records produced by the workflow's own push node.
+
+    Records are de-duplicated by push id so a resumed run never doubles them.
+    """
+    raw_records = result.get("publish_records")
+    if not isinstance(raw_records, list) or not raw_records:
+        return
+
+    existing_ids = {record.push_id for record in task.push_records}
+    for raw in raw_records:
+        if not isinstance(raw, dict):
+            continue
+        push_id = str(raw.get("push_id") or "")
+        if not push_id or push_id in existing_ids:
+            continue
+        try:
+            task.push_records.append(PushRecord(**raw))
+        except Exception:  # noqa: BLE001
+            # A malformed record must never break task persistence.
+            continue
+        existing_ids.add(push_id)
+
+    theme_name = result.get("article_theme")
+    if isinstance(theme_name, str) and theme_name.strip():
+        task.article_theme = theme_name.strip()
 
 
 def _ensure_review_queue_item(task: TaskResponse) -> None:

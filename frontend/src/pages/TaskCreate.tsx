@@ -136,6 +136,7 @@ export default function TaskCreate() {
             require_human_review: Boolean(values.require_human_review),
             block_high_risk: true,
             max_revision_rounds: 1,
+            viral_threshold: DEFAULT_GENERATION_CONFIG.review_policy?.viral_threshold || 78,
           },
           research_policy: {
             search_mode: values.search_mode || DEFAULT_GENERATION_CONFIG.research_policy?.search_mode || 'standard',

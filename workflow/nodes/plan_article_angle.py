@@ -2,15 +2,15 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import structlog
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
-from api.store import get_model_config
-from workflow.model_logging import build_model_context, log_model_request, log_model_response
+from workflow.model_factory import build_chat_model, llm_slot, model_context as stage_context
+from workflow.model_logging import log_model_request, log_model_response
 from workflow.state import WorkflowState
 
 logger = structlog.get_logger(__name__)
@@ -19,16 +19,24 @@ logger = structlog.get_logger(__name__)
 class BlueprintOutput(BaseModel):
     """Structured article blueprint payload."""
 
-    framework: str = Field(default="", description="AI-selected article framework")
+    framework: str = Field(default="", description="Optional narrative hypothesis, never a mandatory template")
+    structure_mode: str = Field(default="adaptive", description="adaptive by default; structure follows the material")
     title_candidates: list[str] = Field(default_factory=list, description="Publication-ready title candidates")
     thesis: str = Field(description="Core thesis of the article")
     reader_value: str = Field(default="", description="Why the reader should care")
-    sections: list[dict[str, str]] = Field(default_factory=list, description="Ordered H2 sections")
+    central_question: str = Field(default="", description="The single question the article must answer")
+    opening_move: str = Field(default="", description="How the opening creates relevance or tension")
+    narrative_arc: str = Field(default="", description="The intended movement of the argument, not a section template")
+    ending_move: str = Field(default="", description="How the ending resolves the thesis and points forward")
+    sections: list[dict[str, str]] = Field(
+        default_factory=list,
+        description="Candidate narrative beats; the writer may merge, reorder, rename, or omit them",
+    )
     must_cover_points: list[str] = Field(default_factory=list, description="Points that must be covered")
     drop_points: list[str] = Field(default_factory=list, description="Points intentionally left out")
     source_driven_framework: list[dict[str, str]] = Field(
         default_factory=list,
-        description="Search-result-backed structure signals used to shape the article",
+        description="Search-result-backed narrative signals, not a required section sequence",
     )
     evidence_map: list[dict[str, str]] = Field(
         default_factory=list,
@@ -36,10 +44,21 @@ class BlueprintOutput(BaseModel):
     )
 
 
+def _clean_heading(value: Any) -> str:
+    heading = " ".join(str(value or "").replace("#", " ").split()).strip(" -—:：")
+    if not heading or len(heading) > 42:
+        return ""
+    if re.search(r"(?:https?://|www\.|\.(?:com|cn|net|org)(?:/|$))", heading, flags=re.I):
+        return ""
+    if heading.endswith("...") or heading.endswith("……"):
+        return ""
+    return heading
+
+
 def _normalize_sections(sections: list[dict[str, Any]]) -> list[dict[str, str]]:
     normalized: list[dict[str, str]] = []
     for section in sections:
-        heading = str(section.get("heading") or section.get("title") or "").strip()
+        heading = _clean_heading(section.get("heading") or section.get("title"))
         goal = str(section.get("goal") or section.get("content") or "").strip()
         shape = str(section.get("shape") or "").strip()
         if not heading or not goal:
@@ -92,24 +111,11 @@ def _clean_text(value: Any, limit: int = 90) -> str:
 def _build_fallback_title_candidates(topic: str, search_materials: list[dict[str, str]]) -> list[str]:
     """Build neutral fallback title candidates without clickbait phrasing."""
     cleaned_topic = str(topic or "").strip() or "未命名主题"
-    source_titles = [
-        _clean_text(item.get("title") or item.get("claim"), limit=34)
-        for item in search_materials
-        if _clean_text(item.get("title") or item.get("claim"), limit=34)
+    candidates = [
+        f"{cleaned_topic}：真正发生变化的是什么",
+        f"重新理解{cleaned_topic}：事实、影响与未决问题",
+        f"从公开证据看{cleaned_topic}",
     ]
-    candidates: list[str] = []
-    for source_title in source_titles[:2]:
-        if cleaned_topic in source_title:
-            candidates.append(source_title)
-        else:
-            candidates.append(f"{cleaned_topic}：{source_title}")
-    candidates.extend(
-        [
-            f"{cleaned_topic}的关键信号与证据",
-            f"{cleaned_topic}：进展、影响与边界",
-            f"从公开信息看{cleaned_topic}",
-        ]
-    )
     deduped: list[str] = []
     for candidate in candidates:
         cleaned = _clean_text(candidate, limit=42)
@@ -202,14 +208,20 @@ def _collect_search_materials(research_state: dict[str, Any], evidence_pack: dic
 def _shape_from_material(material: dict[str, str], index: int) -> str:
     angle = str(material.get("angle") or "").lower()
     source_type = str(material.get("source_type") or "").lower()
-    if "risk" in angle or "caution" in angle:
-        return "risks"
-    if "case" in angle or source_type in {"news", "media"}:
+    if any(token in angle for token in ("risk", "caution", "counter", "opposing", "gap")):
+        return "tension"
+    if "case" in angle:
         return "case"
-    if "data" in angle or source_type in {"dataset", "report"}:
+    if any(token in angle for token in ("data", "fact", "official", "confirmed")) or source_type in {
+        "official", "dataset", "report", "paper", "research"
+    }:
         return "evidence"
+    if any(token in angle for token in ("analysis", "driver", "cause", "opinion", "news")) or source_type in {
+        "news", "media", "analysis"
+    }:
+        return "drivers"
     if index == 0:
-        return "hook"
+        return "evidence"
     return "drivers"
 
 
@@ -239,10 +251,31 @@ def _section_from_material(topic: str, material: dict[str, str], index: int) -> 
 
 
 def _build_source_driven_sections(topic: str, search_materials: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Cluster sources by narrative job so source count never becomes section count."""
+    buckets: dict[str, list[str]] = {"evidence": [], "drivers": [], "case": [], "tension": []}
+    for index, material in enumerate(search_materials):
+        claim = _material_claim(material)
+        if not claim:
+            continue
+        shape = _shape_from_material(material, index)
+        bucket = shape if shape in buckets else "drivers"
+        if claim not in buckets[bucket]:
+            buckets[bucket].append(claim)
+
+    focus = _topic_focus_phrase(topic)
+    definitions = (
+        ("evidence", "先确认发生了什么", f"用可核验事实回答{focus}发生了哪些变化，区分事实与推断。"),
+        ("drivers", "变化为什么会在此时出现", "解释事实之间的原因链条，以及哪些只是同时发生而非因果关系。"),
+        ("case", "把变化放进真实场景", "用具体案例说明影响如何发生，并交代案例能证明和不能证明什么。"),
+        ("tension", "仍需验证的关键变量", "呈现相反信号、证据缺口与下一步验证条件，不制造虚假的确定性。"),
+    )
     sections: list[dict[str, str]] = []
-    for material in search_materials:
-        section = _section_from_material(topic, material, len(sections))
-        sections.append(section)
+    for shape, heading, goal in definitions:
+        claims = buckets[shape]
+        if not claims:
+            continue
+        evidence_hint = "；".join(claims[:2])
+        sections.append({"heading": heading, "goal": f"{goal} 可用证据：{evidence_hint}", "shape": shape})
     return sections
 
 
@@ -252,81 +285,63 @@ def _build_dynamic_sections(
     evidence_pack: dict[str, Any],
     search_materials: list[dict[str, str]],
 ) -> list[dict[str, str]]:
-    profile = _topic_profile(topic)
-    focus_phrase = _topic_focus_phrase(topic)
-    data_points = list(evidence_pack.get("usable_data_points") or [])
-    cases = list(evidence_pack.get("usable_cases") or [])
-    facts = list(evidence_pack.get("confirmed_facts") or [])
-    research_gaps = list(evidence_pack.get("research_gaps") or [])
-    quality_summary = dict(evidence_pack.get("quality_summary") or {})
-    source_coverage = dict(quality_summary.get("source_coverage") or {})
     source_sections = _build_source_driven_sections(topic, search_materials)
-
-    if len(source_sections) >= 4:
+    if source_sections:
         return source_sections
-    elif source_sections:
-        sections = source_sections
-        if not any(section["shape"] == "evidence" for section in sections) and data_points:
-            sections.append({"heading": f"数据如何验证{focus_phrase}", "goal": "补充搜索证据中的数据和事实支撑", "shape": "evidence"})
-        if not any(section["shape"] == "case" for section in sections) and cases:
-            sections.append({"heading": f"哪些案例能说明{focus_phrase}", "goal": "用可验证案例承接前文判断", "shape": "case"})
-        return sections
 
-    if profile == "funding":
-        sections = [
-            {"heading": "这一轮融资潮先看什么", "goal": "先给结论，定义这轮热度的判断标准", "shape": "hook"},
-            {"heading": "资金为什么重新流入", "goal": "解释驱动融资回暖的关键因素", "shape": "drivers"},
-            {"heading": "资金流向了哪些方向", "goal": "结合数据看热点赛道和节奏", "shape": "evidence"},
-            {"heading": "哪些公司真正吃到红利", "goal": "用案例区分热度和兑现能力", "shape": "case"},
-            {"heading": "风险边界在哪里", "goal": "说明估值、交付和周期风险", "shape": "risks"},
-        ]
-    elif profile == "expansion":
-        sections = [
-            {"heading": "先看出海这件事值不值得做", "goal": "先判断主题的重要性", "shape": "hook"},
-            {"heading": "海外市场到底缺什么", "goal": "解释需求侧差异", "shape": "drivers"},
-            {"heading": "产品和渠道怎么分化", "goal": "看不同打法的结构差异", "shape": "evidence"},
-            {"heading": "谁更有可能先跑出来", "goal": "结合案例判断胜率", "shape": "case"},
-            {"heading": "风险边界在哪里", "goal": "说明本地化、成本和交付风险", "shape": "risks"},
-        ]
-    else:
-        sections = [
-            {"heading": f"{focus_phrase}为什么会变成一个真问题", "goal": "明确这件事为什么值得关注", "shape": "hook"},
-            {"heading": f"{focus_phrase}背后真正卡住的是哪几件事", "goal": "解释驱动因素", "shape": "drivers"},
-            {"heading": f"从哪些事实和数据能看清{focus_phrase}", "goal": "整合事实和数据", "shape": "evidence"},
-            {"heading": f"{focus_phrase}的风险边界到底在哪", "goal": "约束结论，说明不确定性", "shape": "risks"},
-        ]
+    def evidence_text(item: Any) -> str:
+        if isinstance(item, dict):
+            return _clean_text(item.get("claim") or item.get("fact") or item.get("title"), limit=30)
+        return _clean_text(item, limit=30)
 
-    if not data_points:
-        sections = [section for section in sections if section["shape"] != "evidence"] + [
-            {"heading": "还缺哪些关键验证", "goal": "指出证据不足的部分", "shape": "next_steps"}
-        ]
-    if not cases:
-        sections = [section for section in sections if section["shape"] != "case"]
-    if not facts and len(sections) < 4:
-        sections.insert(1, {"heading": "背景里真正发生了什么", "goal": "补齐必要事实背景", "shape": "context"})
-    if "missing_high_confidence_fact" in research_gaps or (
-        source_coverage and set(source_coverage).issubset({"community", "aggregator", "unknown"})
-    ):
+    sections: list[dict[str, str]] = []
+    evidence_groups = (
+        ("confirmed_facts", "fact", "已确认的变化"),
+        ("usable_data_points", "evidence", "数字呈现的另一面"),
+        ("usable_cases", "case", "一个具体样本"),
+        ("risk_points", "tension", "仍未收束的矛盾"),
+    )
+    for key, shape, fallback_heading in evidence_groups:
+        items = list(evidence_pack.get(key) or [])
+        if not items:
+            continue
+        signal = evidence_text(items[0])
         sections.append(
             {
-                "heading": "还哪些核心判断需要验证",
-                "goal": "明确哪些结论还缺少官方或数据证据支撑",
-                "shape": "validation",
+                "heading": signal or fallback_heading,
+                "goal": f"围绕现有{key}展开这个叙事节点；可与其他节点合并、换序或省略。",
+                "shape": shape,
             }
         )
 
+    if not sections:
+        sections.append(
+            {
+                "heading": f"目前能确认的{_topic_focus_phrase(topic)}",
+                "goal": "只沿当前可验证信号展开，不为凑结构添加章节。",
+                "shape": "open_question",
+            }
+        )
     return sections
 
 
 def _build_evidence_map(sections: list[dict[str, str]], search_materials: list[dict[str, str]]) -> list[dict[str, str]]:
     evidence_map: list[dict[str, str]] = []
-    for section, material in zip(sections, search_materials, strict=False):
+    for section_index, section in enumerate(sections):
+        section_shape = str(section.get("shape") or "").strip()
+        matched = [
+            material
+            for index, material in enumerate(search_materials)
+            if _shape_from_material(material, index) == section_shape
+        ]
+        if not matched and section_index < len(search_materials):
+            matched = [search_materials[section_index]]
         evidence_map.append(
             {
                 "section_heading": section.get("heading", ""),
-                "source_title": material.get("title", ""),
-                "source_claim": material.get("claim", ""),
-                "source_url": material.get("url", ""),
+                "source_title": "；".join(item.get("title", "") for item in matched[:2] if item.get("title")),
+                "source_claim": "；".join(item.get("claim", "") for item in matched[:2] if item.get("claim")),
+                "source_url": next((item.get("url", "") for item in matched if item.get("url")), ""),
             }
         )
     return evidence_map
@@ -343,20 +358,11 @@ def _enforce_evidence_boundary_sections(blueprint: BlueprintOutput, evidence_pac
     )
     if not needs_validation:
         return blueprint
-    boundary_terms = ("验证", "证据", "边界", "风险", "不确定")
-    has_boundary = any(
-        any(term in section.get("heading", "") or term in section.get("goal", "") for term in boundary_terms)
-        for section in blueprint.sections
-    )
-    if not has_boundary:
-        validation_section = {
-            "heading": "还需要验证哪些关键判断",
-            "goal": "明确当前搜索材料的证据边界，说明哪些结论仍缺少官方、数据或多源确认。",
-            "shape": "validation",
-        }
-        blueprint.sections.append(validation_section)
-    if "补齐官方或数据证据" not in blueprint.must_cover_points:
-        blueprint.must_cover_points.append("补齐官方或数据证据")
+    boundary_requirement = "对证据不足的判断使用条件化表达，并在相关位置说明验证边界"
+    if boundary_requirement not in blueprint.must_cover_points:
+        blueprint.must_cover_points.append(boundary_requirement)
+    if "补齐官方或数据证据；无法补齐时删除对应强结论" not in blueprint.must_cover_points:
+        blueprint.must_cover_points.append("补齐官方或数据证据；无法补齐时删除对应强结论")
     return blueprint
 
 
@@ -461,11 +467,6 @@ def _build_fallback_blueprint(
     skill_id = str(selected_skill.get("skill_id") or "")
     skill_name = str(selected_skill.get("name") or "").strip()
     skill_framework = str(selected_skill.get("framework") or "").strip()
-    section_guidance = [
-        str(item).strip()
-        for item in list(selected_skill.get("section_guidance") or [])
-        if str(item).strip()
-    ]
     writing_constraints = [
         str(item).strip()
         for item in list(selected_skill.get("writing_constraints") or [])
@@ -570,6 +571,10 @@ def _build_fallback_blueprint(
         title_candidates=title_candidates,
         thesis=thesis_map[profile],
         reader_value=reader_value_map[profile],
+        central_question=f"围绕{topic}，目前最值得读者弄清楚的变化、影响和证据边界是什么？",
+        opening_move="从一个已确认的变化、具体场景或认知冲突切入，在首屏给出中心判断和读者关联。",
+        narrative_arc="沿着事实确认、原因解释、现实影响与未决变量自然推进；素材不足时合并或省略节点。",
+        ending_move="回扣中心判断，给出下一步观察指标或可执行启示，不重复全文、不喊口号。",
         sections=sections,
         must_cover_points=list(dict.fromkeys(must_cover_points)),
         drop_points=list(dict.fromkeys(drop_points)),
@@ -639,8 +644,8 @@ def _build_search_materials_summary(search_materials: list[dict[str, str]]) -> s
 def _build_source_context(search_materials: list[dict[str, str]], evidence_pack: dict[str, Any]) -> str:
     payload = {
         "instruction": (
-            "Use these search and extraction results as the primary material for deciding the WeChat article title, "
-            "H2 subtitles, section order, and evidence mapping. Do not create a structure before reading these sources."
+            "Use these search and extraction results as the primary material for discovering the best narrative. "
+            "Do not force every source into an H2, and do not create a structure before reading the sources."
         ),
         "sources": [
             {
@@ -730,26 +735,19 @@ def _build_fallback_blueprint(
                     "shape": "evidence",
                 }
             )
-    elif section_guidance:
-        shapes = ["hook", "evidence", "case", "risks", "next_steps"]
-        sections = [
-            {
-                "heading": f"{topic}：{_clean_text(guidance, limit=26)}",
-                "goal": f"按所选 skill 的写作要求展开：{guidance}",
-                "shape": shapes[min(index, len(shapes) - 1)],
-            }
-            for index, guidance in enumerate(section_guidance)
-        ]
     else:
         sections = _build_dynamic_sections(topic, article_type, evidence_pack, search_materials)
 
     if skill_id == "quantum_tech_explainer" and not source_sections:
-        sections = [
-            {"heading": "先把技术对象讲清楚", "goal": "解释核心概念、技术对象和常见误解。", "shape": "hook"},
-            {"heading": "关键进展看哪些工程指标", "goal": "围绕硬件、纠错、相干时间、保真度或通信链路拆解变化。", "shape": "evidence"},
-            {"heading": "产业应用还需要哪些条件", "goal": "说明应用场景、规模化条件、成本和验证周期。", "shape": "drivers"},
-            {"heading": "当前结论的证据边界", "goal": "交代实验指标、商业化周期和仍需验证的部分。", "shape": "risks"},
-        ]
+        quantum_data = list(evidence_pack.get("usable_data_points") or [])
+        if quantum_data:
+            sections = [
+                {
+                    "heading": "工程指标透露了什么",
+                    "goal": "从可验证工程指标出发组织叙事，是否扩展其他节点由素材决定。",
+                    "shape": "evidence",
+                }
+            ]
 
     if not sections:
         sections = [
@@ -768,7 +766,7 @@ def _build_fallback_blueprint(
         thesis_map["general"] = f"{topic}需要同时看科学原理、工程指标和商业化边界。"
         reader_value_map["general"] = "帮助读者区分技术进展、工程门槛和产业化条件。"
 
-    must_cover_points = [section["heading"] for section in sections[:3]]
+    must_cover_points: list[str] = []
     if selected_skill.get("evidence_policy"):
         must_cover_points.append(str(selected_skill["evidence_policy"]))
     must_cover_points.extend(writing_constraints[:3])
@@ -786,6 +784,10 @@ def _build_fallback_blueprint(
         title_candidates=title_candidates,
         thesis=thesis_map[profile],
         reader_value=reader_value_map[profile],
+        central_question=f"围绕{topic}，目前最值得读者弄清楚的变化、影响和证据边界是什么？",
+        opening_move="从一个已确认的变化、具体场景或认知冲突切入，在首屏给出中心判断和读者关联。",
+        narrative_arc="沿着事实确认、原因解释、现实影响与未决变量自然推进；素材不足时合并或省略节点。",
+        ending_move="回扣中心判断，给出下一步观察指标或可执行启示，不重复全文、不喊口号。",
         sections=sections,
         must_cover_points=list(dict.fromkeys(must_cover_points)),
         drop_points=list(dict.fromkeys(drop_points)),
@@ -805,8 +807,8 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
     evidence_pack = dict(research_state.get("evidence_pack") or {})
     search_materials = _collect_search_materials(research_state, evidence_pack)
 
-    text_model_config = get_model_config().text
-    if not text_model_config.api_key or not state.get("task_id"):
+    llm = build_chat_model(stage="plan_article_angle", max_tokens=1800, temperature=0.35)
+    if llm is None or not state.get("task_id"):
         blueprint = _build_fallback_blueprint(topic, article_type, evidence_pack, search_materials, selected_skill)
     else:
         system_prompt = (
@@ -817,10 +819,16 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
             "You must decide the article framework, final title candidates, opening logic, and H2 subtitles from the searched materials. "
             "The result should feel like a WeChat public account article structure planned by an experienced editor: readable, specific, and publication-ready. "
             "Section headings should be content-specific, topic-specific, and publication-ready instead of generic placeholders. "
-            "You may decide the number, order, and shape of H2 sections based on the materials and selected_skill. "
+            "You may decide whether H2 sections are needed at all, and freely choose their number, order, and shape. "
+            "The sections field contains candidate narrative beats, not a contract: the writer may merge, reorder, rename, replace, or omit them. "
+            "Choose a scene-led, question-led, argument-led, chronological, contrast, list, or essay-like narrative only when it fits the material. "
             "Use source_context and search_materials to decide the article framework before using any generic topic template. "
-            "If selected_skill is provided, use it as the specialized editorial skill for framework, tone, evidence policy, and forbidden patterns. "
-            "Each section should map to at least one concrete source signal when possible. "
+            "If selected_skill is provided, use its expertise, tone, evidence policy, and forbidden patterns; its framework is inspiration, not a skeleton. "
+            "Map claims to evidence, not sections to sources. A source may support several beats and a beat may use several sources. "
+            "Cluster sources around claims; never create one section for each search result. "
+            "Never use a raw source title, website name, URL, or truncated snippet as a section heading. "
+            "Define one central_question plus opening_move, narrative_arc, and ending_move so the writer has a coherent editorial backbone. "
+            "Three to five narrative beats often work for a medium article, but this is guidance rather than a required count. "
             "Do not output a fixed template."
         )
         human_prompt = (
@@ -832,13 +840,6 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
             "evidence_pack:\n{evidence_pack}\n"
         )
         prompt = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", human_prompt)])
-        llm = ChatOpenAI(
-            model=text_model_config.model,
-            api_key=text_model_config.api_key,
-            base_url=text_model_config.base_url or None,
-            max_tokens=1800,
-            temperature=0.35,
-        )
         chain = prompt | llm.with_structured_output(BlueprintOutput)
         payload = {
             "topic": topic,
@@ -853,12 +854,7 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
             "selected_skill": selected_skill,
             "evidence_pack": _build_evidence_summary(evidence_pack),
         }
-        model_context = build_model_context(
-            model=text_model_config.model,
-            base_url=text_model_config.base_url,
-            api_key=text_model_config.api_key,
-            structured_output="BlueprintOutput",
-        )
+        model_context = stage_context("plan_article_angle", structured_output="BlueprintOutput")
         log_model_request(
             logger,
             task_id=str(state.get("task_id") or ""),
@@ -867,7 +863,8 @@ async def plan_article_angle_node(state: WorkflowState) -> dict[str, Any]:
             request=payload,
         )
         try:
-            result = await chain.ainvoke(payload)
+            async with llm_slot():
+                result = await chain.ainvoke(payload)
             blueprint = _normalize_blueprint_output(result)
             blueprint = _enforce_evidence_boundary_sections(blueprint, evidence_pack)
             if search_materials and not blueprint.source_driven_framework:

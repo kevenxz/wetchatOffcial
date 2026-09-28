@@ -23,6 +23,7 @@ export interface ReviewPolicyConfig {
   require_human_review: boolean
   block_high_risk: boolean
   max_revision_rounds: number
+  viral_threshold: number
 }
 
 export interface WorkflowImagePolicyConfig {
@@ -85,6 +86,7 @@ export const DEFAULT_GENERATION_CONFIG: GenerationConfig = {
     require_human_review: false,
     block_high_risk: true,
     max_revision_rounds: 1,
+    viral_threshold: 78,
   },
   image_policy: {
     enabled: true,
@@ -168,6 +170,7 @@ export interface TaskResponse {
   research_state?: Record<string, any> | null
   writing_state?: Record<string, any> | null
   visual_state?: Record<string, any> | null
+  viral_state?: Record<string, any> | null
   quality_state?: Record<string, any> | null
   quality_report?: Record<string, any> | null
   user_intent?: Record<string, any> | null

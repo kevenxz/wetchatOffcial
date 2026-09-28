@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, HTTPException, Path, Query
 
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/reviews", tags=["reviews"])
 
 @router.get("", response_model=list[ReviewQueueItem])
 async def get_reviews(
-    status: Annotated[ReviewStatus | None, Query(description="Filter by review status")] = None,
+    status: Annotated[Optional[ReviewStatus], Query(description="Filter by review status")] = None,
 ) -> list[ReviewQueueItem]:
     return list_reviews(status.value if status else None)
 

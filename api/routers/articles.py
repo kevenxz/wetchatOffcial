@@ -74,15 +74,21 @@ async def _push_single(
     account: AccountConfig,
     theme_name: str,
     style_config: dict[str, str],
+    *,
+    auto_publish: bool = False,
 ) -> PushOperationResult:
     """Push one article task to one account and append push record."""
     now = datetime.now(tz=timezone.utc)
+    publish_policy = dict((task.config_snapshot or {}).get("publish_policy") or {})
     try:
         draft_info = await push_article_to_wechat_draft(
             article=task.generated_article or {},
             app_id=account.app_id,
             app_secret=account.app_secret,
             style_config=style_config,
+            auto_publish=auto_publish,
+            publish_poll_interval_seconds=float(publish_policy.get("publish_poll_interval_seconds") or 5),
+            publish_poll_max_attempts=int(publish_policy.get("publish_poll_max_attempts") or 10),
         )
         record = PushRecord(
             push_id=str(uuid.uuid4()),
@@ -92,6 +98,9 @@ async def _push_single(
             pushed_at=now,
             status=PushStatus.success,
             draft_info=draft_info,
+            publish_status=str(draft_info.get("publish_status") or "draft_only"),
+            publish_id=str(draft_info.get("publish_id") or "") or None,
+            theme_name=theme_name,
         )
         task.draft_info = draft_info
         result = PushOperationResult(
@@ -111,6 +120,8 @@ async def _push_single(
             pushed_at=now,
             status=PushStatus.failed,
             error=error_msg,
+            publish_status="failed",
+            theme_name=theme_name,
         )
         result = PushOperationResult(
             task_id=task.task_id,

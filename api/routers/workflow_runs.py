@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, HTTPException, Path, Query
 
@@ -24,8 +24,8 @@ router = APIRouter(prefix="/workflow-runs", tags=["workflow-runs"])
 
 @router.get("/steps", response_model=list[WorkflowRunStepRecord])
 async def get_workflow_run_steps(
-    task_id: Annotated[str | None, Query(description="Filter by task id")] = None,
-    run_id: Annotated[str | None, Query(description="Filter by run id")] = None,
+    task_id: Annotated[Optional[str], Query(description="Filter by task id")] = None,
+    run_id: Annotated[Optional[str], Query(description="Filter by run id")] = None,
 ) -> list[WorkflowRunStepRecord]:
     return list_workflow_run_steps(task_id=task_id, run_id=run_id)
 

@@ -1,8 +1,10 @@
 """Run planned research tasks."""
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
+from workflow import runtime_settings
 from workflow.tools.fetch_extract import fetch_extract_node
 from workflow.tools.search_web import search_web_node
 from workflow.state import WorkflowState
@@ -137,6 +139,62 @@ def _merge_results(existing: list[dict[str, Any]], incoming: list[dict[str, Any]
     return merged
 
 
+async def _run_single_query(
+    state: WorkflowState,
+    query: dict[str, Any],
+    fetch_per_query: int,
+    semaphore: asyncio.Semaphore,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Run search plus extraction for one query.
+
+    Returns ``(search_results, extracted_contents, gaps)``. Failures never raise:
+    they are reported as research gaps so one bad query cannot break the round.
+    """
+    query_text = str(query.get("query") or "").strip()
+    gaps: list[dict[str, Any]] = []
+
+    async with semaphore:
+        search_result = await search_web_node({**state, "search_queries": [query]})
+        if search_result.get("status") == "failed":
+            gaps.append(
+                {
+                    "stage": "search_web",
+                    "message": str(search_result.get("error") or "search failed"),
+                    "queries": [query_text],
+                }
+            )
+            return [], [], gaps
+
+        search_results = list(search_result.get("search_results") or [])
+        if not search_results:
+            gaps.append(
+                {
+                    "stage": "search_web",
+                    "message": "no search results",
+                    "queries": [query_text],
+                }
+            )
+            return [], [], gaps
+
+        extract_result = await fetch_extract_node(
+            {
+                **state,
+                "search_results": search_results[:fetch_per_query],
+            }
+        )
+        if extract_result.get("status") == "failed":
+            gaps.append(
+                {
+                    "stage": "fetch_extract",
+                    "message": str(extract_result.get("error") or "extract failed"),
+                    "queries": [str(item.get("query") or "") for item in search_results if item.get("query")],
+                }
+            )
+            return search_results, [], gaps
+
+        return search_results, list(extract_result.get("extracted_contents") or []), gaps
+
+
 async def run_research_node(state: WorkflowState) -> dict[str, Any]:
     """Run search and extraction for planned research queries."""
     planning_state = dict(state.get("planning_state") or {})
@@ -181,38 +239,38 @@ async def run_research_node(state: WorkflowState) -> dict[str, Any]:
         round_search_results: list[dict[str, Any]] = []
         round_extracted_contents: list[dict[str, Any]] = []
 
-        for query_batch in _chunk_search_queries(round_queries, batch_size=1):
-            for query in query_batch:
-                executed_queries.add(str(query.get("query") or "").strip())
-            search_result = await search_web_node(
-                {
-                    **state,
-                    "search_queries": query_batch,
-                }
-            )
-            if search_result.get("status") == "failed":
-                failed_queries = [item.get("query") for item in query_batch if item.get("query")]
+        for query in round_queries:
+            executed_queries.add(str(query.get("query") or "").strip())
+
+        # Queries inside one round are independent, so they run concurrently under a
+        # shared semaphore. The round barrier is preserved: sufficiency is evaluated
+        # only after every query in this round has settled.
+        semaphore = runtime_settings.get_semaphore("research", runtime_settings.research_concurrency())
+        query_outcomes = await asyncio.gather(
+            *[
+                _run_single_query(state, query, int(limits["fetch_per_query"]), semaphore)
+                for query in round_queries
+            ],
+            return_exceptions=True,
+        )
+
+        for query, outcome in zip(round_queries, query_outcomes):
+            query_text = str(query.get("query") or "").strip()
+            if isinstance(outcome, BaseException):
                 research_gaps.append(
                     {
-                        "stage": "search_web",
+                        "stage": "run_research",
                         "round": round_index,
-                        "message": str(search_result.get("error") or "search failed"),
-                        "queries": failed_queries,
+                        "message": str(outcome),
+                        "queries": [query_text],
                     }
                 )
                 continue
 
-            search_results = list(search_result.get("search_results") or [])
+            search_results, extracted, gaps = outcome
+            for gap in gaps:
+                research_gaps.append({**gap, "round": round_index})
             if not search_results:
-                failed_queries = [item.get("query") for item in query_batch if item.get("query")]
-                research_gaps.append(
-                    {
-                        "stage": "search_web",
-                        "round": round_index,
-                        "message": "no search results",
-                        "queries": failed_queries,
-                    }
-                )
                 continue
 
             round_search_results = _merge_results(round_search_results, search_results, dedupe_keys=("url", "query"))
@@ -221,25 +279,8 @@ async def run_research_node(state: WorkflowState) -> dict[str, Any]:
                 search_results,
                 dedupe_keys=("url", "query"),
             )
-            extract_result = await fetch_extract_node(
-                {
-                    **state,
-                    "search_results": search_results[: int(limits["fetch_per_query"])],
-                }
-            )
-            if extract_result.get("status") == "failed":
-                failed_queries = [item.get("query") for item in search_results if item.get("query")]
-                research_gaps.append(
-                    {
-                        "stage": "fetch_extract",
-                        "round": round_index,
-                        "message": str(extract_result.get("error") or "extract failed"),
-                        "queries": failed_queries,
-                    }
-                )
+            if not extracted:
                 continue
-
-            extracted = list(extract_result.get("extracted_contents") or [])
             round_extracted_contents = _merge_results(round_extracted_contents, extracted, dedupe_keys=("url",))
             aggregated_extracted_contents = _merge_results(
                 aggregated_extracted_contents,

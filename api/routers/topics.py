@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 import asyncio
 from datetime import datetime, timezone
-from typing import Annotated
+from typing import Annotated, Optional
 
 from fastapi import APIRouter, HTTPException, Path, Query
 
@@ -57,7 +57,7 @@ async def _run_converted_topic_task(
 
 @router.get("", response_model=list[TopicCandidate])
 async def get_topics(
-    status: Annotated[TopicStatus | None, Query(description="Filter by topic status")] = None,
+    status: Annotated[Optional[TopicStatus], Query(description="Filter by topic status")] = None,
 ) -> list[TopicCandidate]:
     return list_topics(status.value if status else None)
 

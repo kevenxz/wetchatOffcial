@@ -181,9 +181,9 @@ test('keeps shared surfaces light in light mode', () => {
   expect(canvas).toBeInTheDocument()
 
   const rootRuleBody = getRuleBody(variablesSource, ":root[data-theme='light']")
-  expect(getDeclarationValue(rootRuleBody, '--app-surface-muted')).toBe('#f8fafc')
-  expect(getDeclarationValue(rootRuleBody, '--app-toolbar-bg')).toBe('#ffffff')
-  expect(getDeclarationValue(rootRuleBody, '--app-list-row-hover')).toBe('#f8fafc')
+  expect(getDeclarationValue(rootRuleBody, '--app-surface-muted')).toBe('#f8f3ea')
+  expect(getDeclarationValue(rootRuleBody, '--app-toolbar-bg')).toBe('#fffdf8')
+  expect(getDeclarationValue(rootRuleBody, '--app-list-row-hover')).toBe('#f8f3ea')
 
   const toolbarRuleBody = getRuleBody(globalStylesSource, '.backstage-toolbar')
   expect(getDeclarationValue(toolbarRuleBody, 'background')).toBe('var(--app-toolbar-bg)')

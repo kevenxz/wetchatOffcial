@@ -102,6 +102,7 @@ class ReviewPolicyConfig(BaseModel):
     require_human_review: bool = False
     block_high_risk: bool = True
     max_revision_rounds: int = Field(default=1, ge=0, le=3)
+    viral_threshold: int = Field(default=78, ge=60, le=95)
 
 
 class WorkflowImagePolicyConfig(BaseModel):
@@ -122,6 +123,13 @@ class WorkflowImagePolicyConfig(BaseModel):
 class PublishPolicyConfig(BaseModel):
     auto_publish_to_draft: bool = True
     require_manual_confirmation: bool = False
+    auto_publish: bool = Field(
+        default=False,
+        description="Publish the draft to the official account instead of only filling the draft box",
+    )
+    publish_retry_limit: int = Field(default=3, ge=1, le=5)
+    publish_poll_interval_seconds: int = Field(default=5, ge=1, le=60)
+    publish_poll_max_attempts: int = Field(default=10, ge=1, le=60)
 
 
 class ResearchPolicyConfig(BaseModel):
@@ -224,6 +232,10 @@ class ImageModelConfig(BaseModel):
 
 class ModelConfig(BaseModel):
     text: TextModelConfig = Field(default_factory=TextModelConfig)
+    text_fast: TextModelConfig = Field(
+        default_factory=TextModelConfig,
+        description="Optional fast model for planning and review stages; empty key falls back to text",
+    )
     image: ImageModelConfig = Field(default_factory=ImageModelConfig)
 
 
@@ -231,6 +243,11 @@ class CreateTaskRequest(BaseModel):
     keywords: str = Field(..., min_length=1, max_length=200, description="Search keywords")
     generation_config: GenerationConfig = Field(default_factory=lambda: GenerationConfig())
     hotspot_capture_config: Optional[dict] = Field(default=None, description="Optional per-task hotspot capture config")
+    account_ids: list[str] = Field(
+        default_factory=list,
+        description="Publish targets bound to this task; empty falls back to WECHAT_APP_ID/SECRET",
+    )
+    theme_name: Optional[str] = Field(default=None, description="Theme used when pushing this task")
 
     @field_validator("keywords")
     @classmethod
@@ -238,6 +255,11 @@ class CreateTaskRequest(BaseModel):
         if not value.strip():
             raise ValueError("keywords cannot be blank")
         return value.strip()
+
+    @field_validator("account_ids")
+    @classmethod
+    def normalize_account_ids(cls, value: list[str]) -> list[str]:
+        return _normalize_unique_strings(value)
 
 
 class TopicCandidate(BaseModel):
@@ -521,6 +543,13 @@ class PushRecord(BaseModel):
     status: PushStatus = Field(..., description="Push result")
     draft_info: Optional[dict] = Field(default=None, description="Draft response payload")
     error: Optional[str] = Field(default=None, description="Failure reason")
+    publish_status: str = Field(
+        default="draft_only",
+        description="Delivery stage: draft_only | publishing | published | publish_failed | failed",
+    )
+    publish_id: Optional[str] = Field(default=None, description="WeChat publish id when publishing")
+    theme_name: Optional[str] = Field(default=None, description="Theme used for this push")
+    attempt: int = Field(default=1, ge=1, description="Attempt number for this target")
 
 
 class UserRole(str, Enum):
@@ -670,6 +699,7 @@ class TaskResponse(BaseModel):
     research_state: Optional[dict] = Field(default=None, description="Research artifacts and evidence pack")
     writing_state: Optional[dict] = Field(default=None, description="Draft and review state")
     visual_state: Optional[dict] = Field(default=None, description="Visual briefs and generated assets")
+    viral_state: Optional[dict] = Field(default=None, description="Distribution strategy and independent virality review")
     quality_state: Optional[dict] = Field(default=None, description="Quality reviews and next action")
     quality_report: Optional[dict] = Field(default=None, description="Unified quality summary report")
     user_intent: Optional[dict] = Field(default=None, description="Resolved user intent from LangGraph")
@@ -741,6 +771,10 @@ class TestConnectionResponse(BaseModel):
 class PushArticleRequest(BaseModel):
     account_ids: list[str] = Field(..., min_length=1, description="Target account ids")
     theme_name: Optional[str] = Field(default=None, description="Theme name")
+    auto_publish: bool = Field(
+        default=False,
+        description="Publish to the official account instead of only filling the draft box",
+    )
 
 
 class BatchPushRequest(BaseModel):
@@ -751,6 +785,7 @@ class BatchPushRequest(BaseModel):
         default=None,
         description="Per-task theme map; key is task_id, value is theme name",
     )
+    auto_publish: bool = Field(default=False, description="Publish instead of only creating drafts")
 
 
 class UpdateArticleThemeRequest(BaseModel):

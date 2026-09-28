@@ -28,6 +28,7 @@ DEFAULT_REVIEW_POLICY = {
     "require_human_review": False,
     "block_high_risk": True,
     "max_revision_rounds": 1,
+    "viral_threshold": 78,
 }
 
 DEFAULT_IMAGE_POLICY = {
@@ -43,6 +44,10 @@ DEFAULT_IMAGE_POLICY = {
 DEFAULT_PUBLISH_POLICY = {
     "auto_publish_to_draft": True,
     "require_manual_confirmation": False,
+    "auto_publish": False,
+    "publish_retry_limit": 3,
+    "publish_poll_interval_seconds": 5,
+    "publish_poll_max_attempts": 10,
 }
 
 DEFAULT_RESEARCH_POLICY = {
@@ -102,6 +107,7 @@ def normalize_review_policy(raw: Any) -> dict[str, Any]:
     policy["require_human_review"] = bool(policy.get("require_human_review", False))
     policy["block_high_risk"] = bool(policy.get("block_high_risk", True))
     policy["max_revision_rounds"] = max(0, min(int(policy.get("max_revision_rounds") or 1), 3))
+    policy["viral_threshold"] = max(60, min(int(policy.get("viral_threshold") or 78), 95))
     return policy
 
 
@@ -121,6 +127,20 @@ def normalize_publish_policy(raw: Any, *, skip_auto_push: bool) -> dict[str, Any
     policy = _merge_mapping(DEFAULT_PUBLISH_POLICY, raw)
     policy["auto_publish_to_draft"] = bool(policy.get("auto_publish_to_draft", True)) and not skip_auto_push
     policy["require_manual_confirmation"] = bool(policy.get("require_manual_confirmation", False))
+    # Publishing is opt-in and only meaningful when the draft is actually created.
+    policy["auto_publish"] = bool(policy.get("auto_publish", False)) and policy["auto_publish_to_draft"]
+    try:
+        policy["publish_retry_limit"] = max(1, min(int(policy.get("publish_retry_limit") or 3), 5))
+    except (TypeError, ValueError):
+        policy["publish_retry_limit"] = 3
+    try:
+        policy["publish_poll_interval_seconds"] = max(1, min(int(policy.get("publish_poll_interval_seconds") or 5), 60))
+    except (TypeError, ValueError):
+        policy["publish_poll_interval_seconds"] = 5
+    try:
+        policy["publish_poll_max_attempts"] = max(1, min(int(policy.get("publish_poll_max_attempts") or 10), 60))
+    except (TypeError, ValueError):
+        policy["publish_poll_max_attempts"] = 10
     return policy
 
 

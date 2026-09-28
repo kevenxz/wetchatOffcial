@@ -5,12 +5,12 @@ from typing import Any
 
 import structlog
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
-from api.store import get_model_config
+from workflow import runtime_settings
 from workflow.article_skills import list_article_skills, select_article_skill
-from workflow.model_logging import build_model_context, log_model_request, log_model_response
+from workflow.model_factory import build_chat_model, llm_slot, model_context as stage_context
+from workflow.model_logging import log_model_request, log_model_response
 from workflow.state import WorkflowState
 from workflow.utils.article_type_registry import get_article_type_registry
 from workflow.utils.research_contract import (
@@ -88,11 +88,12 @@ def _prioritize_angles(research_state: dict[str, Any]) -> tuple[list[str], list[
 
 def _thresholds_for_policy(policy: dict[str, Any]) -> dict[str, int]:
     strictness = str(policy.get("strictness") or "standard")
+    configured_viral = int(policy.get("viral_threshold") or 78)
     if strictness == "strict":
-        return {"article": 86, "visual": 80, "evidence": 84, "hotspot": 75}
+        return {"article": 86, "visual": 80, "viral": max(configured_viral, 84), "evidence": 84, "hotspot": 75}
     if strictness == "lenient":
-        return {"article": 74, "visual": 68, "evidence": 70, "hotspot": 58}
-    return {"article": 80, "visual": 75, "evidence": 80, "hotspot": 70}
+        return {"article": 74, "visual": 68, "viral": min(configured_viral, 72), "evidence": 70, "hotspot": 58}
+    return {"article": 80, "visual": 75, "viral": configured_viral, "evidence": 80, "hotspot": 70}
 
 
 def _visual_roles(article_type: dict[str, Any], image_policy: dict[str, Any]) -> list[str]:
@@ -120,6 +121,23 @@ def _available_skill_summary() -> list[dict[str, Any]]:
     ]
 
 
+def _should_use_ai_planner(fallback_contract: dict[str, Any]) -> bool:
+    """Decide whether the LLM planner adds value over the deterministic contract.
+
+    ``rules`` skips the LLM entirely, ``auto`` only escalates for topics the rule
+    engine cannot classify or for high-risk strict-depth research, and ``llm``
+    always calls the model.
+    """
+    mode = runtime_settings.planner_mode()
+    if mode == "rules":
+        return False
+    if mode == "llm":
+        return True
+    return str(fallback_contract.get("category") or "") == "other" or str(
+        fallback_contract.get("search_depth") or ""
+    ) == "strict"
+
+
 async def _build_ai_search_contract(
     *,
     state: WorkflowState,
@@ -129,8 +147,8 @@ async def _build_ai_search_contract(
 ) -> dict[str, Any] | None:
     if not state.get("config_snapshot"):
         return None
-    text_model_config = get_model_config().text
-    if not text_model_config.api_key:
+    llm = build_chat_model(stage="planner_agent", max_tokens=900, temperature=0.2)
+    if llm is None:
         return None
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -152,12 +170,6 @@ async def _build_ai_search_contract(
             ),
         ]
     )
-    llm = ChatOpenAI(
-        model=text_model_config.model,
-        api_key=text_model_config.api_key,
-        base_url=text_model_config.base_url or None,
-        temperature=0.2,
-    )
     chain = prompt | llm.with_structured_output(ResearchContractOutput)
     payload = {
         "topic": fallback_contract["topic"],
@@ -167,14 +179,11 @@ async def _build_ai_search_contract(
         "research_policy": research_policy,
         "fallback_contract": fallback_contract,
     }
-    context = build_model_context(
-        model=text_model_config.model,
-        base_url=text_model_config.base_url,
-        api_key=text_model_config.api_key,
-    )
+    context = stage_context("planner_agent", structured_output="ResearchContractOutput")
     log_model_request(logger, task_id=state["task_id"], skill="planner_agent", context=context, request=payload)
     try:
-        result = await chain.ainvoke(payload)
+        async with llm_slot():
+            result = await chain.ainvoke(payload)
         contract = result.model_dump()
         log_model_response(logger, task_id=state["task_id"], skill="planner_agent", context=context, response=contract)
         contract["planner_source"] = "ai"
@@ -234,11 +243,15 @@ async def planner_agent_node(state: WorkflowState) -> dict[str, Any]:
         selected_hotspot=selected_hotspot,
         research_policy=research_policy,
     )
-    ai_contract = await _build_ai_search_contract(
-        state=state,
-        fallback_contract=fallback_contract,
-        selected_skill=selected_skill,
-        research_policy=research_policy,
+    ai_contract = (
+        await _build_ai_search_contract(
+            state=state,
+            fallback_contract=fallback_contract,
+            selected_skill=selected_skill,
+            research_policy=research_policy,
+        )
+        if _should_use_ai_planner(fallback_contract)
+        else None
     )
     search_contract = normalize_search_contract(ai_contract or fallback_contract, fallback=fallback_contract)
     research_plan = {

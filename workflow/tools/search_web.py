@@ -12,8 +12,12 @@ import structlog
 from bs4 import BeautifulSoup
 
 from workflow.state import WorkflowState
+from workflow.utils.search_cache import get_cached_search, set_cached_search
 
 logger = structlog.get_logger(__name__)
+
+# Every provider is asked for the same number of results.
+PROVIDER_RESULT_LIMIT = 6
 
 MEDIA_DOMAINS = {
     "techcrunch.com",
@@ -168,6 +172,32 @@ async def _call_provider_with_retry(provider_name: str, provider_fn, query: str,
             if attempt >= max_attempts:
                 raise
             await asyncio.sleep(2 ** (attempt - 1))
+
+
+async def _call_provider_cached(
+    provider_name: str,
+    provider_fn,
+    query: str,
+    provider_key: str | None = None,
+) -> list[dict]:
+    """Call a provider through the Redis cache when one is available.
+
+    Scheduled hotspot runs repeat the same queries often, so a cache hit removes
+    the entire network round trip from the research stage.
+    """
+    cached = await get_cached_search(provider_name, query, PROVIDER_RESULT_LIMIT)
+    if cached is not None:
+        logger.info(
+            "search_web_cache_hit",
+            provider=provider_name,
+            query=query,
+            result_count=len(cached),
+        )
+        return cached
+
+    items = await _call_provider_with_retry(provider_name, provider_fn, query, provider_key)
+    await set_cached_search(provider_name, query, PROVIDER_RESULT_LIMIT, items)
+    return items
 
 
 def _normalize_url(url: str) -> str:
@@ -382,7 +412,7 @@ async def search_web_node(state: WorkflowState) -> dict:
                 continue
             try:
                 logger.info("search_web_provider", task_id=task_id, provider=provider_name, query=query)
-                provider_items = await _call_provider_with_retry(provider_name, provider_fn, query, provider_key)
+                provider_items = await _call_provider_cached(provider_name, provider_fn, query, provider_key)
                 query_results.extend(
                     filter(
                         None,
@@ -404,7 +434,7 @@ async def search_web_node(state: WorkflowState) -> dict:
 
         try:
             logger.info("search_web_provider", task_id=task_id, provider="duckduckgo", query=query)
-            ddg_items = await _call_provider_with_retry("duckduckgo", _search_duckduckgo, query)
+            ddg_items = await _call_provider_cached("duckduckgo", _search_duckduckgo, query)
             query_results.extend(
                 filter(
                     None,

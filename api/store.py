@@ -317,6 +317,29 @@ def save_style_config(new_style: dict[str, str]) -> dict[str, str]:
     return dict(_style_config)
 
 
+def resolve_theme_style(theme_name: str | None, *, strict: bool = False) -> tuple[str, dict[str, str]]:
+    """Resolve a theme name into ``(resolved_name, style_config)``.
+
+    Resolution order: current global style, preset theme, custom theme. When
+    ``strict`` is set an unknown theme raises instead of silently falling back.
+    """
+    normalized = (theme_name or "").strip()
+    if not normalized or normalized == "__current__":
+        return "__current__", get_style_config()
+
+    preset_themes = get_preset_themes()
+    if normalized in preset_themes:
+        return normalized, preset_themes[normalized]
+
+    custom_themes = get_custom_themes()
+    if normalized in custom_themes:
+        return normalized, custom_themes[normalized]
+
+    if strict:
+        raise ValueError(f"theme {normalized!r} not found")
+    return "__current__", get_style_config()
+
+
 def _is_enabled(value: str | None) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "on"}
 
@@ -325,6 +348,11 @@ def _default_model_config_from_env() -> ModelConfig:
     text_api_key = os.getenv("OPENAI_API_KEY", "").strip()
     text_base_url = (os.getenv("OPENAI_API_BASE") or "").strip() or None
     text_model = (os.getenv("OPENAI_MODEL") or "gpt-4o").strip() or "gpt-4o"
+
+    # The fast model is optional: an empty key makes every stage use the primary model.
+    fast_model = (os.getenv("OPENAI_FAST_MODEL") or "").strip()
+    fast_api_key = (os.getenv("OPENAI_FAST_API_KEY") or text_api_key).strip() if fast_model else ""
+    fast_base_url = (os.getenv("OPENAI_FAST_API_BASE") or text_base_url or "").strip() or None
 
     image_enabled = _is_enabled(os.getenv("DALLE_ENABLED"))
     image_api_key = (os.getenv("IMAGE_API_KEY") or text_api_key).strip()
@@ -339,6 +367,11 @@ def _default_model_config_from_env() -> ModelConfig:
             api_key=text_api_key,
             base_url=text_base_url,
             model=text_model,
+        ),
+        text_fast=TextModelConfig(
+            api_key=fast_api_key,
+            base_url=fast_base_url,
+            model=fast_model or text_model,
         ),
         image=ImageModelConfig(
             enabled=image_enabled,

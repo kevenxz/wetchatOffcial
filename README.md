@@ -1,38 +1,83 @@
-# 微信公众号文章自动生成与发布系统
+# 微信公众号智能编辑部
 
-## 项目功能
-- 基于 FastAPI 与 LangGraph 的后端，输入关键词即可自动完成“搜索网页 → 抽取内容 → 大模型生成稿件 → 配图 → 推送公众号草稿”整条流水线。
-- 任务管理 API：`POST /api/tasks` 创建任务，`GET /api/tasks`/`/api/tasks/{id}` 查询，`DELETE /api/tasks/{id}` 删除，`POST /api/tasks/{id}/retry` 从失败节点继续；任务状态持久化在 `data/tasks.json`。
-- WebSocket 实时进度：`/ws/tasks/{task_id}` 推送节点进展（状态、进度百分比、结果摘要）。
-- 样式配置 API：`GET/PUT /api/config/style` 读取或更新文章样式，持久化到 `data/style_config.json`，方便前端按需渲染。
-- 前端位于 `frontend/`（React + Vite + Ant Design），用于可视化创建任务、查看生成文章与草稿信息。
+面向微信公众号的 Agentic 内容生产系统。系统以“提升合格点击、阅读完成、收藏与有效转发的概率”为目标，在事实边界内完成热点捕获、研究取证、传播策略、写作、双重评审、配图和草稿发布。
 
-## 配置
-- 复制 `.env.example` 为 `.env` 并填写：
-  - `WECHAT_APP_ID`、`WECHAT_APP_SECRET`：公众号凭证，用于草稿上传。
-  - `SERPAPI_API_KEY` 或 `BING_SEARCH_API_KEY`：网页搜索所需的 API Key（二选一或同时提供）。
-  - `OPENAI_API_KEY`、`OPENAI_API_BASE`、`OPENAI_MODEL`：大模型访问配置，默认使用 OpenAI 兼容接口。
-  - `DALLE_ENABLED`：设置为 `true` 时启用图片生成节点，为 `false` 则仅使用网页抽取的配图。
-  - `API_HOST`、`API_PORT`：后端监听地址与端口。
-- Python 依赖列表见 `requirements.txt`，运行时将在 `data/` 目录下生成 `tasks.json` 与 `style_config.json` 作为持久化存储。
+> 传播潜力评分是创作质量的领先指标，不是流量承诺。可信度始终是硬约束。
 
-## 启动流程
-1. 准备 Python 3.9+ 环境（建议）并创建虚拟环境：`python -m venv .venv && .\\.venv\\Scripts\\activate`（Windows PowerShell）。
-2. 安装后端依赖：`pip install -r requirements.txt`。
-3. 初始化配置：`copy .env.example .env`，按上文填入各类密钥与模型配置。
-4. 启动后端服务：
-   - 开发模式：`python main.py`（等价于 `uvicorn api.main:app --host 0.0.0.0 --port 8001 --reload`）。
-   - Swagger 文档：`http://localhost:8001/docs`；创建任务示例请求体 `{"keywords": "输入要生成的主题"}`。
-   - 订阅进度：连接 WebSocket `ws://localhost:8001/ws/tasks/{task_id}` 获取实时状态与结果。
-5. 启动前端（可选，用于可视化操作）：
-   - `cd frontend && npm install`
-   - 开发预览：`npm run dev`（若需修改后端地址，可在前端代码中调整 API 基础路径）。
-   - 生产构建/预览：`npm run build && npm run preview`。
+## 核心工作流
 
-完成以上步骤后，即可通过前端界面或直接调用 API 触发文章生成并推送到公众号草稿箱。持续运行时注意妥善保管 `.env` 中的密钥，并定期备份 `data/` 目录以保留历史任务和样式配置。
-## Agent Workflow
+```text
+热点捕获 → 任务简报 → 总体规划 → 选题评估
+  → 研究规划 → 多轮检索 → 证据包 → 类型路由
+  → 传播策略 → 文章大纲 → 写作成稿
+  → 编辑审核 → 传播评审
+  → 图片规划 → 图片生成 → 图片审核
+  → 质量门禁 → 定向返工 / 人工复核 / 草稿发布
+```
 
-The workflow now runs through `intake_task_brief`, `planner_agent`, `analyze_hotspot_opportunities`, `plan_research`, `run_research`, `build_evidence_pack`, `resolve_article_type`, `plan_article_angle`, `compose_draft`, `review_article_draft`, `plan_visual_assets`, `generate_visual_assets`, `review_visual_assets`, and `quality_gate` before draft publishing.
+传播评审包含标题点击力、首屏留存、观点新颖度、读者共鸣、分享动机、证据可信度和阅读流畅度七个维度。默认质量线为 78 分，可通过 `review_policy.viral_threshold` 调整。
 
-Status: Implemented in branch `feature/agent-redesign-spec`
-Verified by: `pytest -v`
+完整设计见 [爆文目标驱动的 Agent 架构](docs/2026-07-18-viral-agent-architecture.md)。
+
+## 技术栈
+
+- 后端：FastAPI、LangGraph、Pydantic、structlog
+- 模型：OpenAI 兼容文本模型与图片模型
+- 研究：多搜索源、网页抓取、证据包与引用追踪
+- 前端：React 18、TypeScript、Vite、Ant Design、Zustand
+- 发布：微信公众号草稿 API
+- 测试：pytest、pytest-asyncio、Vitest、Testing Library、ESLint
+
+## 项目结构
+
+```text
+api/                  FastAPI 路由、鉴权、调度、存储与 WebSocket
+workflow/
+  agents/             规划、写作、评审、传播策略、图片等领域 Agent
+  nodes/              LangGraph 应用节点与质量路由
+  tools/              搜索、抓取、图片、微信草稿等基础设施适配器
+  utils/              证据、评分、文章类型与可观测性工具
+frontend/src/         编辑部工作台
+tests/                后端与工作流测试
+data/                 本地运行状态（不要手工编辑或提交）
+docs/                 架构、实现与迁移文档
+```
+
+## 本地启动
+
+建议使用 Python 3.11+。
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\activate
+pip install -r requirements.txt
+Copy-Item .env.example .env
+python main.py
+```
+
+后端默认地址为 `http://localhost:8001`，API 文档位于 `http://localhost:8001/docs`。
+
+前端：
+
+```powershell
+Set-Location frontend
+npm install
+npm run dev
+```
+
+## 验证
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+Set-Location frontend
+npm test
+npm run lint
+npm run build
+```
+
+## 配置与安全
+
+- 复制 `.env.example` 后配置模型、搜索和微信公众号凭据。
+- 不要提交 `.env`、API Key、生产账号数据、`data/` 运行状态或 `logs/`。
+- 模型不可用时，关键 Agent 提供确定性降级结果；高风险、证据不足或超过返工预算的文章进入人工复核。
+- 自动发布可通过 `publish_policy.auto_publish_to_draft` 关闭。

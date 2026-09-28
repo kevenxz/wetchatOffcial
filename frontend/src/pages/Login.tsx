@@ -1,24 +1,11 @@
-import type { CSSProperties } from 'react'
 import { useEffect, useState } from 'react'
 import { LockOutlined, UserOutlined } from '@ant-design/icons'
 import { Button, Card, Form, Input, Space, Typography, message } from 'antd'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { login } from '@/api'
+import { ThemeModeSwitch } from '@/components/workbench'
 import useAuthStore from '@/store/authStore'
-
-const cardStyle: CSSProperties = {
-  width: 420,
-  maxWidth: '92vw',
-  borderRadius: 16,
-}
-
-const layoutStyle: CSSProperties = {
-  minHeight: '100vh',
-  display: 'grid',
-  placeItems: 'center',
-  background: 'linear-gradient(140deg, #edf5ff 0%, #f8fbff 45%, #eef8f4 100%)',
-  padding: 20,
-}
+import styles from './Login.module.css'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -51,19 +38,34 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={layoutStyle}>
-      <Card style={cardStyle} bodyStyle={{ padding: 28 }}>
+    <main className={styles.page}>
+      <div className={styles.themeControl}>
+        <ThemeModeSwitch />
+      </div>
+      <section className={styles.manifesto} aria-label="产品介绍">
+        <span className={styles.edition}>EDITORIAL OS · 2026</span>
+        <h1>让每一次选题，<br />都有成为代表作的理由。</h1>
+        <p>从热点、证据到标题与分享动机，一条可追踪的智能编辑链路。</p>
+        <div className={styles.signalRow}>
+          <span>01 / 研究</span>
+          <span>02 / 策略</span>
+          <span>03 / 反思</span>
+        </div>
+      </section>
+
+      <Card className={styles.card} styles={{ body: { padding: 32 } }}>
         <Space direction="vertical" size={20} style={{ width: '100%' }}>
           <div>
-            <Typography.Title level={3} style={{ marginBottom: 4 }}>
-              系统登录
+            <Typography.Text className={styles.kicker}>CONTENT COMMAND ROOM</Typography.Text>
+            <Typography.Title level={3} className={styles.title}>
+              回到编辑部
             </Typography.Title>
             <Typography.Text type="secondary">
-              使用系统账号登录后可管理任务、模型配置和账号权限
+              登录后继续管理选题、Agent 运行与文章发布
             </Typography.Text>
           </div>
 
-          <Form layout="vertical" onFinish={handleSubmit} initialValues={{ username: 'admin', password: 'admin123456' }}>
+          <Form layout="vertical" onFinish={handleSubmit} initialValues={{ username: 'admin' }}>
             <Form.Item
               label="用户名"
               name="username"
@@ -85,6 +87,6 @@ export default function LoginPage() {
           </Form>
         </Space>
       </Card>
-    </div>
+    </main>
   )
 }

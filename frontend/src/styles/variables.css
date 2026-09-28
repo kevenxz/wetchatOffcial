@@ -1,37 +1,52 @@
 :root {
-  --app-primary: #5b3ff4;
-  --app-primary-hover: #6d5dfc;
-  --app-primary-active: #4f32d9;
-  --app-primary-bg: rgba(91, 63, 244, 0.1);
-  --app-primary-bg-hover: rgba(91, 63, 244, 0.16);
+  --app-primary: #0f766e;
+  --app-primary-hover: #0d9488;
+  --app-primary-active: #115e59;
+  --app-primary-bg: rgba(15, 118, 110, 0.09);
+  --app-primary-bg-hover: rgba(15, 118, 110, 0.15);
 
   --app-success: #34d399;
   --app-warning: #fbbf24;
   --app-error: #f87171;
   --app-info: #7dd3fc;
 
-  --app-bg: #f7f8fa;
-  --app-bg-gradient: #f7f8fa;
-  --app-surface: #ffffff;
-  --app-surface-muted: #f8fafc;
-  --app-surface-strong: #eef2ff;
-  --app-toolbar-bg: #ffffff;
-  --app-list-row-hover: #f8fafc;
-  --app-border: #e8ebf0;
-  --app-border-strong: #d8dce5;
-  --app-text: #0f172a;
-  --app-text-secondary: #516074;
-  --app-text-tertiary: #738196;
+  --app-bg: #f4f0e8;
+  --app-bg-gradient: linear-gradient(135deg, #f6f2ea 0%, #efe9df 100%);
+  --app-surface: #fffdf8;
+  --app-surface-muted: #f8f3ea;
+  --app-surface-strong: #eee6d9;
+  --app-toolbar-bg: #fffdf8;
+  --app-list-row-hover: #f8f3ea;
+  --app-border: #e3dacd;
+  --app-border-strong: #d3c6b6;
+  --app-text: #1c1917;
+  --app-text-secondary: #625b52;
+  --app-text-tertiary: #8a8177;
   --app-text-disabled: rgba(15, 23, 42, 0.38);
   --app-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.06);
   --app-shadow-md: 0 18px 40px -24px rgba(15, 23, 42, 0.18), 0 10px 24px -18px rgba(15, 23, 42, 0.12);
   --app-shadow-lg: 0 30px 60px -28px rgba(15, 23, 42, 0.22);
+  --app-sidebar-bg-layer:
+    radial-gradient(circle at 10% 0%, rgba(15, 118, 110, 0.1), transparent 30%),
+    #f8fbfa;
+  --app-sidebar-text: #18312f;
+  --app-sidebar-muted: #69807c;
+  --app-sidebar-border: rgba(15, 118, 110, 0.14);
+  --app-sidebar-status-bg: #e8f4f2;
+  --app-sidebar-hover: rgba(15, 118, 110, 0.09);
+  --app-sidebar-active: #0f766e;
+  --app-sidebar-active-text: #ffffff;
+  --app-header-bg: rgba(255, 253, 248, 0.92);
+  --app-header-border: #e3dacd;
+  --app-avatar-bg: rgba(15, 118, 110, 0.11);
+  --app-avatar-text: #0f766e;
+  --app-overlay-surface: rgba(255, 253, 248, 0.9);
 
-  --color-primary: #5b3ff4;
-  --color-primary-hover: #6d5dfc;
-  --color-primary-active: #4f32d9;
-  --color-primary-bg: rgba(91, 63, 244, 0.1);
-  --color-primary-bg-hover: rgba(91, 63, 244, 0.16);
+  --color-primary: var(--app-primary);
+  --color-primary-hover: var(--app-primary-hover);
+  --color-primary-active: var(--app-primary-active);
+  --color-primary-bg: var(--app-primary-bg);
+  --color-primary-bg-hover: var(--app-primary-bg-hover);
 
   --color-success: #34d399;
   --color-success-bg: rgba(52, 211, 153, 0.12);
@@ -80,7 +95,8 @@
   --space-2xl: 48px;
   --space-3xl: 64px;
 
-  --font-family-sans: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+  --font-family-sans: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-family-display: 'Noto Serif SC', 'Songti SC', SimSun, serif;
   --font-family-mono: 'SFMono-Regular', Consolas, monospace;
   --font-xs: 12px;
   --font-sm: 14px;
@@ -119,22 +135,42 @@
 }
 
 :root[data-theme='light'] {
-  --app-bg: #f7f8fa;
-  --app-bg-gradient: #f7f8fa;
-  --app-surface: #ffffff;
-  --app-surface-muted: #f8fafc;
-  --app-surface-strong: #eef2ff;
-  --app-toolbar-bg: #ffffff;
-  --app-list-row-hover: #f8fafc;
-  --app-border: #e8ebf0;
-  --app-border-strong: #d8dce5;
-  --app-text: #0f172a;
-  --app-text-secondary: #516074;
-  --app-text-tertiary: #738196;
+  --app-primary: #0f766e;
+  --app-primary-hover: #0d9488;
+  --app-primary-active: #115e59;
+  --app-primary-bg: rgba(15, 118, 110, 0.09);
+  --app-primary-bg-hover: rgba(15, 118, 110, 0.15);
+  --app-bg: #f4f0e8;
+  --app-bg-gradient: linear-gradient(135deg, #f6f2ea 0%, #efe9df 100%);
+  --app-surface: #fffdf8;
+  --app-surface-muted: #f8f3ea;
+  --app-surface-strong: #eee6d9;
+  --app-toolbar-bg: #fffdf8;
+  --app-list-row-hover: #f8f3ea;
+  --app-border: #e3dacd;
+  --app-border-strong: #d3c6b6;
+  --app-text: #1c1917;
+  --app-text-secondary: #625b52;
+  --app-text-tertiary: #8a8177;
   --app-text-disabled: rgba(15, 23, 42, 0.38);
   --app-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.06);
   --app-shadow-md: 0 18px 40px -24px rgba(15, 23, 42, 0.18), 0 10px 24px -18px rgba(15, 23, 42, 0.12);
   --app-shadow-lg: 0 30px 60px -28px rgba(15, 23, 42, 0.22);
+  --app-sidebar-bg-layer:
+    radial-gradient(circle at 10% 0%, rgba(15, 118, 110, 0.1), transparent 30%),
+    #f8fbfa;
+  --app-sidebar-text: #18312f;
+  --app-sidebar-muted: #69807c;
+  --app-sidebar-border: rgba(15, 118, 110, 0.14);
+  --app-sidebar-status-bg: #e8f4f2;
+  --app-sidebar-hover: rgba(15, 118, 110, 0.09);
+  --app-sidebar-active: #0f766e;
+  --app-sidebar-active-text: #ffffff;
+  --app-header-bg: rgba(255, 253, 248, 0.92);
+  --app-header-border: #e3dacd;
+  --app-avatar-bg: rgba(15, 118, 110, 0.11);
+  --app-avatar-text: #0f766e;
+  --app-overlay-surface: rgba(255, 253, 248, 0.9);
 
   --bg-workbench: var(--app-bg);
   --bg-workbench-gradient: var(--app-bg-gradient);
@@ -153,6 +189,11 @@
 }
 
 :root[data-theme='dark'] {
+  --app-primary: #2dd4bf;
+  --app-primary-hover: #5eead4;
+  --app-primary-active: #14b8a6;
+  --app-primary-bg: rgba(45, 212, 191, 0.12);
+  --app-primary-bg-hover: rgba(45, 212, 191, 0.2);
   --app-bg: #0b1020;
   --app-bg-gradient:
     radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 28%),
@@ -172,6 +213,21 @@
   --app-shadow-sm: 0 1px 2px rgba(2, 8, 23, 0.18), 0 2px 6px rgba(2, 8, 23, 0.12);
   --app-shadow-md: 0 18px 40px -24px rgba(2, 8, 23, 0.85), 0 10px 24px -18px rgba(2, 8, 23, 0.7);
   --app-shadow-lg: 0 30px 60px -28px rgba(2, 8, 23, 0.95);
+  --app-sidebar-bg-layer:
+    radial-gradient(circle at 10% 0%, rgba(45, 212, 191, 0.13), transparent 30%),
+    #091719;
+  --app-sidebar-text: #e6f5f2;
+  --app-sidebar-muted: #89aaa5;
+  --app-sidebar-border: rgba(94, 234, 212, 0.15);
+  --app-sidebar-status-bg: #102724;
+  --app-sidebar-hover: rgba(45, 212, 191, 0.1);
+  --app-sidebar-active: #14b8a6;
+  --app-sidebar-active-text: #042f2e;
+  --app-header-bg: rgba(11, 16, 32, 0.9);
+  --app-header-border: #273449;
+  --app-avatar-bg: rgba(45, 212, 191, 0.14);
+  --app-avatar-text: #5eead4;
+  --app-overlay-surface: rgba(18, 26, 43, 0.92);
 
   --bg-workbench: var(--app-bg);
   --bg-workbench-gradient: var(--app-bg-gradient);

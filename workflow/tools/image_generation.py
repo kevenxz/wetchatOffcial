@@ -1,6 +1,7 @@
 """Generate visual assets from planned briefs."""
 from __future__ import annotations
 
+import asyncio
 import base64
 import time
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Any
 import structlog
 
 from api.store import get_model_config
+from workflow import runtime_settings
 from workflow.state import WorkflowState
 
 logger = structlog.get_logger(__name__)
@@ -307,53 +309,79 @@ def _merge_assets_into_article(article: dict[str, Any], assets: list[dict[str, s
     return merged_article
 
 
-async def generate_visual_assets_node(state: WorkflowState) -> dict[str, Any]:
-    """Generate or fall back visual assets from image briefs."""
-    visual_state = dict(state.get("visual_state") or {})
-    briefs = list(visual_state.get("image_briefs") or [])
-    revision_brief = dict(visual_state.get("revision_brief") or {})
-    image_model_config = get_model_config().image
-    assets: list[dict[str, str]] = []
-
-    use_real_generation = bool(image_model_config.enabled and image_model_config.api_key)
-    for brief in briefs:
-        effective_brief = _apply_visual_revision_brief(brief, revision_brief)
-        if not use_real_generation:
-            assets.append(_placeholder_asset(effective_brief))
-            continue
-
+async def _generate_single_asset(
+    *,
+    task_id: str,
+    brief: dict[str, Any],
+    image_model_config: Any,
+    semaphore: asyncio.Semaphore,
+) -> dict[str, str]:
+    """Generate one asset, degrading to a placeholder instead of raising."""
+    async with semaphore:
         try:
             generated = await _generate_image_asset(
-                str(state.get("task_id") or ""),
-                effective_brief,
+                task_id,
+                brief,
                 model=image_model_config.model,
                 api_key=image_model_config.api_key,
                 base_url=image_model_config.base_url,
             )
             normalized = _normalize_generated_asset_payload(
                 generated,
-                task_id=str(state.get("task_id") or ""),
-                role=str(effective_brief.get("role") or ""),
-            )
-            assets.append(
-                {
-                    "role": str(effective_brief.get("role") or ""),
-                    "prompt": str(effective_brief.get("compressed_prompt") or ""),
-                    "url": normalized.get("url", ""),
-                    "path": normalized.get("path", ""),
-                    "mime_type": normalized.get("mime_type", ""),
-                    "target_aspect_ratio": str(effective_brief.get("target_aspect_ratio") or ""),
-                    "provider_size": str(effective_brief.get("provider_size") or ""),
-                }
+                task_id=task_id,
+                role=str(brief.get("role") or ""),
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "generate_visual_asset_fallback",
-                task_id=str(state.get("task_id") or ""),
-                role=str(effective_brief.get("role") or ""),
+                task_id=task_id,
+                role=str(brief.get("role") or ""),
                 error=str(exc),
             )
-            assets.append(_placeholder_asset(effective_brief))
+            return _placeholder_asset(brief)
+
+    return {
+        "role": str(brief.get("role") or ""),
+        "prompt": str(brief.get("compressed_prompt") or ""),
+        "url": normalized.get("url", ""),
+        "path": normalized.get("path", ""),
+        "mime_type": normalized.get("mime_type", ""),
+        "target_aspect_ratio": str(brief.get("target_aspect_ratio") or ""),
+        "provider_size": str(brief.get("provider_size") or ""),
+    }
+
+
+async def generate_visual_assets_node(state: WorkflowState) -> dict[str, Any]:
+    """Generate or fall back visual assets from image briefs."""
+    visual_state = dict(state.get("visual_state") or {})
+    briefs = list(visual_state.get("image_briefs") or [])
+    revision_brief = dict(visual_state.get("revision_brief") or {})
+    image_model_config = get_model_config().image
+    task_id = str(state.get("task_id") or "")
+
+    use_real_generation = bool(image_model_config.enabled and image_model_config.api_key)
+    effective_briefs = [_apply_visual_revision_brief(brief, revision_brief) for brief in briefs]
+
+    if not use_real_generation:
+        assets: list[dict[str, str]] = [_placeholder_asset(brief) for brief in effective_briefs]
+    else:
+        # Image providers are the slowest single step, so briefs are generated
+        # concurrently under a bounded semaphore. Order is preserved by gather,
+        # which keeps the [插图N] numbering stable.
+        semaphore = runtime_settings.get_semaphore("image", runtime_settings.image_concurrency())
+        assets = list(
+            await asyncio.gather(
+                *[
+                    _generate_single_asset(
+                        task_id=task_id,
+                        brief=brief,
+                        image_model_config=image_model_config,
+                        semaphore=semaphore,
+                    )
+                    for brief in effective_briefs
+                ]
+            )
+        )
 
     visual_state["assets"] = assets
     visual_state["revision_brief"] = {}

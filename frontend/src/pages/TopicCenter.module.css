@@ -16,10 +16,10 @@
   gap: 16px;
   align-items: center;
   padding: 20px;
-  border: 1px solid #e8ebf0;
+  border: 1px solid var(--app-border);
   border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .statIcon {
@@ -51,21 +51,21 @@
 
 .statCard span {
   display: block;
-  color: #9aa7ba;
+  color: var(--app-text-tertiary);
   font-size: 13px;
 }
 
 .statCard strong {
   display: inline-block;
   margin-top: 4px;
-  color: #111827;
+  color: var(--app-text);
   font-size: 26px;
   line-height: 1;
 }
 
 .statCard em {
   margin-left: 6px;
-  color: #64748b;
+  color: var(--app-text-secondary);
   font-style: normal;
   font-weight: 600;
 }
@@ -87,7 +87,7 @@
 
 .filterActions {
   justify-content: flex-end;
-  color: #475569;
+  color: var(--app-text-secondary);
 }
 
 .platformPicker {
@@ -98,7 +98,7 @@
 }
 
 .platformPicker > span {
-  color: #64748b;
+  color: var(--app-text-secondary);
   font-size: 14px;
   white-space: nowrap;
 }
@@ -111,16 +111,16 @@
   min-width: 58px;
   height: 36px;
   border-radius: 10px;
-  border-color: #e6eaf0;
-  color: #475569;
-  background: #fff;
+  border-color: var(--app-border);
+  color: var(--app-text-secondary);
+  background: var(--app-surface);
 }
 
 .categoryButtonActive {
-  border-color: #5b3ff4;
-  color: #fff;
-  background: #5b3ff4;
-  box-shadow: 0 8px 18px rgba(91, 63, 244, 0.18);
+  border-color: var(--app-primary);
+  color: var(--app-sidebar-active-text);
+  background: var(--app-primary);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--app-primary) 25%, transparent);
 }
 
 .topicList {
@@ -129,15 +129,15 @@
 }
 
 .topicCard {
-  border: 1px solid #e8ebf0;
+  border: 1px solid var(--app-border);
   border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow-sm);
   overflow: hidden;
 }
 
 .topicCardExpanded {
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.07);
+  box-shadow: var(--app-shadow-md);
 }
 
 .topicMain {
@@ -155,14 +155,14 @@
 }
 
 .hotScore strong {
-  color: #f00016;
+  color: var(--app-error);
   font-size: 30px;
   font-weight: 800;
   line-height: 1;
 }
 
 .hotScore span {
-  color: #9aa7ba;
+  color: var(--app-text-tertiary);
   font-size: 13px;
 }
 
@@ -179,7 +179,7 @@
 
 .topicHeader h2 {
   margin: 0;
-  color: #10203a;
+  color: var(--app-text);
   font-size: 18px;
   font-weight: 700;
   line-height: 1.35;
@@ -194,8 +194,8 @@
 .recommendTag {
   border: 0;
   border-radius: 999px;
-  color: #5b3ff4;
-  background: #eef2ff;
+  color: var(--app-primary);
+  background: var(--app-primary-bg);
 }
 
 .metaLine {
@@ -204,7 +204,7 @@
   flex-wrap: wrap;
   gap: 12px;
   margin-top: 8px;
-  color: #94a3b8;
+  color: var(--app-text-tertiary);
   font-size: 13px;
 }
 
@@ -218,23 +218,23 @@
 }
 
 .riskLow {
-  color: #059669;
-  background: #d1fae5;
+  color: var(--color-success);
+  background: var(--color-success-bg);
 }
 
 .riskMedium {
-  color: #d97706;
-  background: #fef3c7;
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
 }
 
 .riskHigh {
-  color: #e11d48;
-  background: #ffe4e6;
+  color: var(--color-error);
+  background: var(--color-error-bg);
 }
 
 .fitText {
-  color: #4f46e5;
-  background: #eef2ff;
+  color: var(--app-primary);
+  background: var(--app-primary-bg);
 }
 
 .tags {
@@ -248,20 +248,20 @@
   margin: 0;
   border: 0;
   border-radius: 999px;
-  color: #64748b;
-  background: #f1f5f9;
+  color: var(--app-text-secondary);
+  background: var(--app-surface-strong);
 }
 
 .topicDetail {
   display: grid;
   gap: 20px;
   padding: 20px;
-  border-top: 1px solid #edf0f4;
+  border-top: 1px solid var(--app-border);
 }
 
 .topicDetail p {
   margin: 0;
-  color: #516074;
+  color: var(--app-text-secondary);
   font-size: 16px;
   line-height: 1.7;
 }
@@ -276,13 +276,13 @@
   display: grid;
   gap: 8px;
   padding: 16px;
-  border: 1px solid #edf0f4;
+  border: 1px solid var(--app-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--app-surface-muted);
 }
 
 .scoreBox span {
-  color: #94a3b8;
+  color: var(--app-text-tertiary);
   font-size: 13px;
 }
 
@@ -294,7 +294,7 @@
 }
 
 .scoreBox strong {
-  color: #334155;
+  color: var(--app-text);
   font-size: 18px;
 }
 

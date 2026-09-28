@@ -16,13 +16,21 @@ async def targeted_revision_node(state: WorkflowState) -> dict[str, Any]:
     revision_count = int(state.get("revision_count") or 0) + 1
 
     if action == "revise_writing":
+        viral_review = dict(state.get("viral_state", {}).get("review") or writing_state.get("viral_review") or {})
         guidance = list(writing_state.get("revision_guidance") or [])
+        guidance.extend(list(viral_review.get("revision_guidance") or []))
         if evidence_gaps:
             guidance.extend([f"Address evidence gap: {gap}" for gap in evidence_gaps])
+        guidance = list(dict.fromkeys(guidance))
         writing_state["revision_brief"] = {
             "mode": "targeted_revision",
             "guidance": guidance,
-            "findings": list(writing_state.get("review_findings") or []),
+            "findings": [
+                *list(writing_state.get("review_findings") or []),
+                *list(viral_review.get("findings") or []),
+            ],
+            "viral_score": viral_review.get("score"),
+            "viral_dimensions": dict(viral_review.get("dimensions") or {}),
             "target_fields": ["title", "content", "summary"],
             "evidence_gaps": evidence_gaps,
         }

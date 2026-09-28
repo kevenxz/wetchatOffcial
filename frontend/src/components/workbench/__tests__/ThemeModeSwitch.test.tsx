@@ -188,13 +188,13 @@ describe('ThemeModeSwitch', () => {
 
     expect(document.documentElement.dataset.theme).toBe('light')
     expect(getComputedStyle(document.documentElement).getPropertyValue('--app-bg').trim()).toBe(
-      '#f7f8fa',
+      '#f4f0e8',
     )
-    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f7f8fa')
+    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f4f0e8')
 
     document.documentElement.removeAttribute('data-theme')
 
-    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f7f8fa')
+    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f4f0e8')
 
     bridgeProbe.remove()
   })
@@ -292,20 +292,15 @@ describe('ThemeModeSwitch', () => {
     const footerRule = getCssRuleForClass(getCssModuleClass(lightSurfaces.footer!))
     const canvasRule = getCssRuleForClass(getCssModuleClass(lightSurfaces.canvas!))
 
-    expect(shellRule).toContain('#f7f8fa')
-    expect(sidebarRule).toContain('#111827')
-    expect(brandRule).toContain('rgba(148, 163, 184, 0.18)')
-    expect(brandCopyRule).toContain('#7f8ea3')
-    expect(navLinkRule).toContain('#9aa7ba')
-    expect(activeNavRule).toContain('#5b3ff4')
-    expect(footerRule).toContain('rgba(148, 163, 184, 0.18)')
-    expect(activeNavRule).toContain('#fff')
-    expect(sidebarRule).not.toContain('var(--text-')
-    expect(brandRule).not.toContain('var(--text-')
-    expect(brandCopyRule).not.toContain('var(--text-')
-    expect(navLinkRule).not.toContain('var(--text-')
-    expect(activeNavRule).not.toContain('var(--text-')
-    expect(footerRule).not.toContain('var(--text-')
+    expect(shellRule).toContain('var(--app-bg-gradient)')
+    expect(sidebarRule).toContain('var(--app-sidebar-bg-layer)')
+    expect(sidebarRule).toContain('var(--app-sidebar-text)')
+    expect(brandRule).toContain('var(--app-sidebar-border)')
+    expect(brandCopyRule).toContain('var(--app-sidebar-muted)')
+    expect(navLinkRule).toContain('var(--app-sidebar-muted)')
+    expect(activeNavRule).toContain('var(--app-sidebar-active)')
+    expect(activeNavRule).toContain('var(--app-sidebar-active-text)')
+    expect(footerRule).toContain('var(--app-sidebar-border)')
     expect(canvasRule).toContain('padding')
 
     act(() => {
@@ -324,18 +319,9 @@ describe('ThemeModeSwitch', () => {
     expect(darkSurfaces.footer).toBeInTheDocument()
     expect(darkSurfaces.canvas).toBeInTheDocument()
 
-    expect(resolveCssValue(getComputedStyle(darkSurfaces.sidebar as HTMLElement).backgroundColor)).toBe(
-      'rgb(17, 24, 39)',
-    )
-    expect(resolveCssValue(getComputedStyle(darkSurfaces.brand as HTMLElement).borderBottomColor)).toBe(
-      'rgba(148, 163, 184, 0.18)',
-    )
-    expect(resolveCssValue(getComputedStyle(darkSurfaces.brandCopy as HTMLElement).color)).toBe(
-      'rgb(127, 142, 163)',
-    )
-    expect(resolveCssValue(getComputedStyle(darkSurfaces.footer as HTMLElement).borderTopColor)).toBe(
-      'rgba(148, 163, 184, 0.18)',
-    )
+    expect(getComputedStyle(document.documentElement).getPropertyValue('--app-primary').trim()).toBe('#2dd4bf')
+    expect(getComputedStyle(document.documentElement).getPropertyValue('--app-sidebar-active').trim()).toBe('#14b8a6')
+    expect(getComputedStyle(document.documentElement).getPropertyValue('--app-header-bg').trim()).toContain('11, 16, 32')
     expect(darkSurfaces.canvas).toBeInTheDocument()
   })
 
@@ -364,7 +350,7 @@ describe('ThemeModeSwitch', () => {
 
     const triggerRule = getCssRuleForToken('trigger')
 
-    expect(triggerRule).toContain('var(--bg-elevated)')
+    expect(triggerRule).toContain('var(--app-surface)')
     expect(triggerRule).toContain('var(--border-color)')
     expect(triggerRule).toContain('var(--shadow-sm)')
     expect(triggerRule).not.toContain('rgba(15, 23, 42, 0.62)')

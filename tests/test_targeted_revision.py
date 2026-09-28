@@ -69,3 +69,26 @@ async def test_targeted_revision_adds_evidence_gap_guidance_to_writing_brief() -
 
     assert revision_brief["evidence_gaps"] == ["missing_data_evidence", "missing_high_confidence_fact"]
     assert any("missing_data_evidence" in item for item in revision_brief["guidance"])
+
+
+@pytest.mark.asyncio
+async def test_targeted_revision_merges_viral_critic_guidance() -> None:
+    state = {
+        "quality_state": {"next_action": "revise_writing", "evidence_gaps": []},
+        "writing_state": {"revision_guidance": ["补充数据依据"], "review_findings": []},
+        "viral_state": {
+            "review": {
+                "score": 67,
+                "dimensions": {"hook": 52},
+                "revision_guidance": ["重写前 120 字"],
+                "findings": [{"type": "hook", "message": "首屏留存不足"}],
+            }
+        },
+    }
+
+    result = await targeted_revision_node(state)
+
+    brief = result["writing_state"]["revision_brief"]
+    assert brief["viral_score"] == 67
+    assert "补充数据依据" in brief["guidance"]
+    assert "重写前 120 字" in brief["guidance"]

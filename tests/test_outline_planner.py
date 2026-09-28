@@ -31,7 +31,7 @@ async def test_outline_planner_outputs_structured_outline_from_evidence() -> Non
         },
     }
 
-    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+    with patch("workflow.model_factory.get_model_config") as mock_get_model_config:
         model_config = MagicMock()
         model_config.text.api_key = ""
         mock_get_model_config.return_value = model_config
@@ -43,6 +43,9 @@ async def test_outline_planner_outputs_structured_outline_from_evidence() -> Non
     assert outline_result["outline"]
     assert outline_result["must_use_facts"]
     assert outline_result["risk_boundaries"]
+    assert outline_result["editorial_contract"]["framework_name"] == "柔性论证型公众号文章"
+    assert "素材不足就少写" in outline_result["editorial_contract"]["development_rule"]
+    assert "来源名" in outline_result["editorial_contract"]["heading_rule"]
     assert outline_result["image_plan_seed"]["cover_needed"] is True
     assert result["planning_state"]["outline_result"] == outline_result
 

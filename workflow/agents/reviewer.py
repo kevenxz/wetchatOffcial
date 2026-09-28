@@ -1,15 +1,15 @@
 """Review the generated article draft for structural quality."""
 from __future__ import annotations
 
+import re
 from typing import Any
 
 import structlog
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
-from api.store import get_model_config
-from workflow.model_logging import build_model_context, log_model_request, log_model_response
+from workflow.model_factory import build_chat_model, llm_slot, model_context as stage_context
+from workflow.model_logging import log_model_request, log_model_response
 from workflow.state import WorkflowState
 
 logger = structlog.get_logger(__name__)
@@ -21,6 +21,45 @@ _GENERIC_OPENER_PREFIXES = (
     "我们将从",
     "本文从",
 )
+
+_PLANNING_LANGUAGE = (
+    "这一节要解决的问题",
+    "把这条线索放进正文",
+    "放到微信公众号语境",
+    "参考线索：",
+    "本节目标",
+    "目前可用资料",
+)
+
+
+def _structural_findings(content: str) -> list[dict[str, str]]:
+    findings: list[dict[str, str]] = []
+    exposed = [phrase for phrase in _PLANNING_LANGUAGE if phrase in content]
+    if exposed:
+        findings.append(
+            {
+                "type": "planning_language",
+                "message": f"正文暴露了编辑或提示词语言：{'、'.join(exposed[:3])}",
+            }
+        )
+    headings = [line[3:].strip() for line in content.splitlines() if line.startswith("## ")]
+    malformed = [
+        heading
+        for heading in headings
+        if len(heading) > 42
+        or heading.endswith(("...", "……"))
+        or re.search(r"(?:https?://|www\.|\.(?:com|cn|net|org)(?:/|$))", heading, flags=re.I)
+    ]
+    if malformed:
+        findings.append(
+            {
+                "type": "source_heading",
+                "message": "小标题使用了来源标题、网址或截断的搜索摘要",
+            }
+        )
+    if len(headings) > 6:
+        findings.append({"type": "fragmented_structure", "message": f"全文有 {len(headings)} 个小标题，叙事被切得过碎"})
+    return findings
 
 
 def _extract_section_bodies(content: str) -> list[str]:
@@ -51,18 +90,20 @@ class ReviewOutput(BaseModel):
 
 
 def _fallback_review(draft: dict[str, Any], evidence_pack: dict[str, Any] | None = None) -> ReviewOutput:
-    findings: list[dict[str, str]] = []
     content = str(draft.get("content") or "")
+    findings = _structural_findings(content)
     pack = dict(evidence_pack or {})
     research_gaps = list(pack.get("research_gaps") or [])
     quality_summary = dict(pack.get("quality_summary") or {})
     opener = content.split("\n\n## ", 1)[0].strip()
     section_bodies = _extract_section_bodies(content)
-    if "## 风险边界" not in content and "## 椋庨櫓杈圭晫" not in content:
-        findings.append({"type": "structure", "message": "missing risk boundary section"})
+    needs_boundary = bool(pack.get("research_gaps") or pack.get("risk_points"))
+    boundary_signals = ("不确定", "仍需", "尚无", "证据不足", "还不能", "有待验证", "可能")
+    if needs_boundary and not any(signal in content for signal in boundary_signals):
+        findings.append({"type": "evidence_boundary", "message": "evidence limitations are not stated near uncertain claims"})
     if opener and any(opener.startswith(prefix) for prefix in _GENERIC_OPENER_PREFIXES):
         findings.append({"type": "opener", "message": "opening hook is generic and reads like a roadmap"})
-    if section_bodies and any(len([line for line in body.splitlines() if line.strip()]) <= 1 for body in section_bodies):
+    if section_bodies and any(len("".join(body.split())) < 80 for body in section_bodies):
         findings.append({"type": "density", "message": "section body is too thin and lacks paragraph development"})
     if "missing_data_evidence" in research_gaps or "missing_high_confidence_fact" in research_gaps:
         findings.append({"type": "evidence", "message": "insufficient evidence coverage for key conclusions"})
@@ -70,14 +111,18 @@ def _fallback_review(draft: dict[str, Any], evidence_pack: dict[str, Any] | None
         findings.append({"type": "evidence", "message": "high-confidence evidence is still missing"})
     score = 85 if not findings else 68
     revision_guidance: list[str] = []
-    if any(item["type"] == "structure" for item in findings):
-        revision_guidance.append("补充风险边界章节")
+    if any(item["type"] == "evidence_boundary" for item in findings):
+        revision_guidance.append("在相关判断附近说明证据限制或验证条件，不必另设固定章节")
     if any(item["type"] == "opener" for item in findings):
         revision_guidance.append("重写开头钩子，先给判断或冲突点，不要用本文将从这类空话开场")
     if any(item["type"] == "density" for item in findings):
-        revision_guidance.append("把每个小节扩成至少两段有信息量的短段落，并补上章节之间的过渡")
+        revision_guidance.append("扩写信息不足的叙事节点并补上自然过渡；不要为了达成固定段落数机械拆分")
     if any(item["type"] == "evidence" for item in findings):
         revision_guidance.append("补充官方或数据证据，并交代当前证据边界")
+    if any(item["type"] == "planning_language" for item in findings):
+        revision_guidance.append("删除所有编辑备注和写作指令，改写为读者可以直接阅读的完整叙述")
+    if any(item["type"] in {"source_heading", "fragmented_structure"} for item in findings):
+        revision_guidance.append("按观点聚合素材并重写小标题，不要让来源数量决定章节数量")
     return ReviewOutput(
         passed=not findings,
         score=score,
@@ -127,8 +172,8 @@ async def review_article_draft_node(state: WorkflowState) -> dict[str, Any]:
     evidence_pack = dict(research_state.get("evidence_pack") or {})
     planning_state = dict(state.get("planning_state") or {})
 
-    text_model_config = get_model_config().text
-    if not text_model_config.api_key:
+    llm = build_chat_model(stage="review_article_draft", max_tokens=600, temperature=0.2)
+    if llm is None:
         review = _fallback_review(draft, evidence_pack)
         writing_state["review_findings"] = review.findings
         writing_state["revision_guidance"] = review.revision_guidance
@@ -142,7 +187,10 @@ async def review_article_draft_node(state: WorkflowState) -> dict[str, Any]:
 
     system_prompt = (
         "You are a Chinese editorial reviewer. "
-        "Review the draft for structure, evidence support, and clarity. "
+        "Review the draft for narrative effectiveness, evidence support, and clarity. "
+        "Do not require a fixed framework, section count, section order, or ritual risk section. "
+        "Fail any draft that exposes planning instructions or uses raw source titles, URLs, or one section per search result. "
+        "Check whether the article answers one central question and whether claims, evidence, explanation, and reader relevance form a coherent chain. "
         "Return concise findings and concrete revision guidance."
     )
     human_prompt = (
@@ -153,13 +201,6 @@ async def review_article_draft_node(state: WorkflowState) -> dict[str, Any]:
         "evidence_pack:\n{evidence_pack}\n"
     )
     prompt = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", human_prompt)])
-    llm = ChatOpenAI(
-        model=text_model_config.model,
-        api_key=text_model_config.api_key,
-        base_url=text_model_config.base_url or None,
-        max_tokens=1400,
-        temperature=0.2,
-    )
     chain = prompt | llm.with_structured_output(ReviewOutput)
 
     payload = {
@@ -169,31 +210,37 @@ async def review_article_draft_node(state: WorkflowState) -> dict[str, Any]:
         "content": str(draft.get("content") or ""),
         "evidence_pack": _build_evidence_summary(evidence_pack),
     }
-    model_context = build_model_context(
-        model=text_model_config.model,
-        base_url=text_model_config.base_url,
-        api_key=text_model_config.api_key,
-        structured_output="ReviewOutput",
-    )
+    model_ctx = stage_context("review_article_draft", structured_output="ReviewOutput")
     log_model_request(
         logger,
         task_id=str(state.get("task_id") or ""),
         skill="review_article_draft",
-        context=model_context,
+        context=model_ctx,
         request=payload,
     )
 
     try:
-        result = await chain.ainvoke(payload)
+        async with llm_slot():
+            result = await chain.ainvoke(payload)
         if isinstance(result, ReviewOutput):
             review = result
         else:
             review = ReviewOutput(**dict(result))
+        structural_findings = _structural_findings(str(draft.get("content") or ""))
+        if structural_findings:
+            existing_types = {item.get("type") for item in review.findings}
+            review.findings.extend(item for item in structural_findings if item.get("type") not in existing_types)
+            review.passed = False
+            review.score = min(review.score, 55)
+            if any(item["type"] == "planning_language" for item in structural_findings):
+                review.revision_guidance.append("删除所有编辑备注和写作指令，改写为读者可以直接阅读的正文")
+            if any(item["type"] in {"source_heading", "fragmented_structure"} for item in structural_findings):
+                review.revision_guidance.append("按观点聚合素材，重写或合并来源驱动的小标题")
         log_model_response(
             logger,
             task_id=str(state.get("task_id") or ""),
             skill="review_article_draft",
-            context=model_context,
+            context=model_ctx,
             response=review.model_dump(),
         )
     except Exception as exc:  # noqa: BLE001

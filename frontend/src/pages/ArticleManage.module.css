@@ -21,16 +21,16 @@
   min-width: 76px;
   height: 40px;
   border-radius: 10px;
-  border-color: #e5e7eb;
-  color: #475569;
-  background: #fff;
+  border-color: var(--app-border);
+  color: var(--app-text-secondary);
+  background: var(--app-surface);
 }
 
 .filterButtonActive {
-  border-color: #5b3ff4;
-  color: #fff;
-  background: #5b3ff4;
-  box-shadow: 0 8px 18px rgba(91, 63, 244, 0.2);
+  border-color: var(--app-primary);
+  color: var(--app-sidebar-active-text);
+  background: var(--app-primary);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--app-primary) 25%, transparent);
 }
 
 .categorySelect {
@@ -48,10 +48,10 @@
   grid-template-columns: minmax(0, 1fr) 150px;
   gap: 18px;
   padding: 22px 24px;
-  border: 1px solid #e8ebf0;
+  border: 1px solid var(--app-border);
   border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .articleInfo {
@@ -67,13 +67,13 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  color: #94a3b8;
+  color: var(--app-text-tertiary);
   font-size: 14px;
 }
 
 .articleInfo h2 {
   margin: 0;
-  color: #10203a;
+  color: var(--app-text);
   font-size: 18px;
   font-weight: 700;
   line-height: 1.35;
@@ -81,7 +81,7 @@
 
 .articleInfo p {
   margin: 0;
-  color: #64748b;
+  color: var(--app-text-secondary);
   font-size: 15px;
   line-height: 1.5;
 }
@@ -93,15 +93,15 @@
 }
 
 .reviewPassed {
-  color: #059669;
+  color: var(--color-success);
 }
 
 .reviewPending {
-  color: #d97706;
+  color: var(--color-warning);
 }
 
 .reviewRejected {
-  color: #e11d48;
+  color: var(--color-error);
 }
 
 .articleActions {
@@ -128,9 +128,9 @@
   max-height: 72vh;
   overflow: auto;
   padding: 22px;
-  border: 1px solid #e8ebf0;
+  border: 1px solid var(--app-border);
   border-radius: 12px;
-  background: #fff;
+  background: var(--app-surface);
 }
 
 .coverImage {
@@ -148,7 +148,7 @@
   gap: 12px;
   margin-top: 18px;
   padding-top: 16px;
-  border-top: 1px solid #e8ebf0;
+  border-top: 1px solid var(--app-border);
 }
 
 .imageGrid figure {
@@ -165,7 +165,7 @@
 
 .imageGrid figcaption {
   margin-top: 6px;
-  color: #64748b;
+  color: var(--app-text-secondary);
   font-size: 12px;
 }
 
@@ -180,18 +180,18 @@
 }
 
 .pushModalBody span {
-  color: #94a3b8;
+  color: var(--app-text-tertiary);
   font-size: 13px;
 }
 
 .pushModalBody strong {
-  color: #10203a;
+  color: var(--app-text);
   font-size: 16px;
 }
 
 .pushModalBody p {
   margin: 0;
-  color: #64748b;
+  color: var(--app-text-secondary);
   font-size: 13px;
   line-height: 1.6;
 }

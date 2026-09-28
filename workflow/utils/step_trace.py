@@ -34,7 +34,7 @@ def sanitize_step_payload(value: Any, *, depth: int = 0) -> Any:
     """Convert workflow data to a JSON-safe, redacted payload."""
     if depth > MAX_DEPTH:
         return {"truncated": True, "reason": "max_depth"}
-    if value is None or isinstance(value, bool | int | float):
+    if value is None or isinstance(value, (bool, int, float)):
         return value
     if isinstance(value, str):
         if len(value) <= MAX_STRING_LENGTH:
@@ -44,7 +44,7 @@ def sanitize_step_payload(value: Any, *, depth: int = 0) -> Any:
             "length": len(value),
             "preview": value[:MAX_STRING_LENGTH],
         }
-    if isinstance(value, datetime | date):
+    if isinstance(value, (datetime, date)):
         return value.isoformat()
     if isinstance(value, Enum):
         return value.value
@@ -67,7 +67,7 @@ def sanitize_step_payload(value: Any, *, depth: int = 0) -> Any:
         if len(items) > MAX_DICT_ITEMS:
             payload["_truncated_items"] = len(items) - MAX_DICT_ITEMS
         return payload
-    if isinstance(value, list | tuple | set):
+    if isinstance(value, (list, tuple, set)):
         items = list(value)
         payload = [sanitize_step_payload(item, depth=depth + 1) for item in items[:MAX_LIST_ITEMS]]
         if len(items) > MAX_LIST_ITEMS:

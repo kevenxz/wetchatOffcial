@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Query
@@ -298,8 +299,8 @@ async def list_hotspot_platforms(
 
 @router.get("/monitor", response_model=HotspotMonitorResponse)
 async def get_hotspot_monitor(
-    status: TopicStatus | None = Query(default=TopicStatus.pending),
-    category: str | None = Query(default=None),
+    status: Optional[TopicStatus] = Query(default=TopicStatus.pending),
+    category: Optional[str] = Query(default=None),
     recommended_only: bool = Query(default=False),
     limit: int = Query(default=80, ge=1, le=200),
 ) -> HotspotMonitorResponse:

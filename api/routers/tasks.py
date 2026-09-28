@@ -35,6 +35,8 @@ async def _run_task(
     keywords: str,
     generation_config: dict,
     hotspot_capture_config: dict | None,
+    publish_targets: list[dict] | None = None,
+    article_theme: str | None = None,
 ) -> None:
     """Run a LangGraph workflow in the background."""
     try:
@@ -44,9 +46,16 @@ async def _run_task(
             generation_config=generation_config,
             hotspot_capture_config=hotspot_capture_config,
             progress_callback=_progress_callback,
+            publish_targets=publish_targets,
+            article_theme=article_theme,
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("background_task_failed", task_id=task_id, error=str(exc))
+
+
+def _publish_targets(account_ids: list[str]) -> list[dict]:
+    """Build publish targets from the accounts bound to a task."""
+    return [{"account_id": account_id, "platform": "wechat_mp"} for account_id in account_ids]
 
 
 @router.post("", response_model=TaskResponse, status_code=201)
@@ -60,6 +69,7 @@ async def create_task(body: CreateTaskRequest) -> TaskResponse:
         status=TaskStatus.pending,
         created_at=datetime.now(tz=timezone.utc),
         hotspot_capture_config=body.hotspot_capture_config,
+        article_theme=body.theme_name,
     )
     task_store[task.task_id] = task
     save_tasks()
@@ -70,10 +80,17 @@ async def create_task(body: CreateTaskRequest) -> TaskResponse:
             task.keywords,
             task.generation_config.model_dump(),
             task.hotspot_capture_config,
+            publish_targets=_publish_targets(body.account_ids),
+            article_theme=body.theme_name,
         )
     )
 
-    logger.info("task_created", task_id=task.task_id, keywords=task.keywords)
+    logger.info(
+        "task_created",
+        task_id=task.task_id,
+        keywords=task.keywords,
+        target_count=len(body.account_ids),
+    )
     return task
 
 

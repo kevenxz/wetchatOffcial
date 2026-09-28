@@ -198,9 +198,11 @@ describe('themeStore helpers', () => {
     const lightTheme = getAntdTheme('light')
     const darkTheme = getAntdTheme('dark')
 
-    expect(lightTheme.token?.colorBgLayout).toBe('#f3f6fb')
+    expect(lightTheme.token?.colorBgLayout).toBe('#f4f0e8')
     expect(darkTheme.token?.colorBgLayout).toBe('#0b1020')
-    expect(lightTheme.components?.Layout?.siderBg).toBe('#ffffff')
+    expect(lightTheme.token?.colorPrimary).toBe('#0f766e')
+    expect(darkTheme.token?.colorPrimary).toBe('#2dd4bf')
+    expect(lightTheme.components?.Layout?.siderBg).toBe('#fffdf8')
     expect(darkTheme.components?.Layout?.siderBg).toBe('#0e1627')
   })
 

@@ -26,16 +26,16 @@
   min-width: 76px;
   height: 44px;
   border-radius: 10px;
-  border-color: #e5e7eb;
-  color: #475569;
-  background: #fff;
+  border-color: var(--app-border);
+  color: var(--app-text-secondary);
+  background: var(--app-surface);
 }
 
 .filterButtonActive {
-  border-color: #5b3ff4;
-  color: #fff;
-  background: #5b3ff4;
-  box-shadow: 0 8px 18px rgba(91, 63, 244, 0.2);
+  border-color: var(--app-primary);
+  color: var(--app-sidebar-active-text);
+  background: var(--app-primary);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--app-primary) 25%, transparent);
 }
 
 .summaryGrid {
@@ -47,20 +47,20 @@
 .summaryCard {
   min-height: 104px;
   padding: 20px 22px;
-  border: 1px solid #e8ebf0;
+  border: 1px solid var(--app-border);
   border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .summaryLabel {
-  color: #94a3b8;
+  color: var(--app-text-tertiary);
   font-size: 14px;
 }
 
 .summaryValue {
   margin-top: 8px;
-  color: #1e293b;
+  color: var(--app-text);
   font-size: 32px;
   font-weight: 700;
   line-height: 1;
@@ -68,10 +68,10 @@
 
 .tableCard {
   overflow: hidden;
-  border: 1px solid #e8ebf0;
+  border: 1px solid var(--app-border);
   border-radius: 18px;
-  background: #fff;
-  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+  background: var(--app-surface);
+  box-shadow: var(--app-shadow-sm);
 }
 
 .taskTitle {
@@ -80,13 +80,13 @@
 }
 
 .taskTitle strong {
-  color: #15233d;
+  color: var(--app-text);
   font-size: 16px;
   font-weight: 500;
 }
 
 .taskTitle span {
-  color: #94a3b8;
+  color: var(--app-text-tertiary);
   font-size: 13px;
 }
 
@@ -99,11 +99,11 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #475569;
+  color: var(--app-text-secondary);
 }
 
 .modeHot {
-  color: #f97316;
+  color: var(--app-warning);
 }
 
 .statusTag {
@@ -114,7 +114,7 @@
 }
 
 .iconAction {
-  color: #94a3b8;
+  color: var(--app-text-tertiary);
 }
 
 @media (max-width: 1180px) {

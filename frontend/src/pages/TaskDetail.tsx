@@ -12,7 +12,7 @@ import {
   type TaskResponse,
   type WorkflowRunStepRecord,
 } from '@/api'
-import { HeroPanel, SectionBlock, StatusRail, type StatusRailStep } from '@/components/workbench'
+import { HeroPanel, SectionBlock, StatusRail, ViralityScorecard, type StatusRailStep } from '@/components/workbench'
 import styles from './TaskDetail.module.css'
 
 const SKILL_STEPS: StatusRailStep[] = [
@@ -23,9 +23,12 @@ const SKILL_STEPS: StatusRailStep[] = [
   { key: 'plan_research', title: '研究规划', description: '拆解检索角度和证据覆盖目标。' },
   { key: 'run_research', title: '资料研究', description: '搜索、抓取并整理可信来源。' },
   { key: 'build_evidence_pack', title: '证据包', description: '提炼事实、数据、案例和风险边界。' },
+  { key: 'resolve_article_type', title: '策略路由', description: '根据目标和证据选择文章类型。' },
+  { key: 'design_viral_strategy', title: '传播策略', description: '定义读者张力、内容承诺与分享触发点。' },
   { key: 'outline_planner', title: '文章大纲', description: '基于搜索素材提炼标题、子标题、结构和证据映射。' },
   { key: 'compose_draft', title: '写作成稿', description: '输出标题、摘要和公众号正文。' },
   { key: 'review_article_draft', title: '文章审核', description: '检查结构、事实支撑和表达风险。' },
+  { key: 'review_viral_potential', title: '传播评审', description: '独立评估点击、留存、共鸣、分享与可信度。' },
   { key: 'plan_visual_assets', title: '图片规划', description: '决定封面和文内配图需求。' },
   { key: 'image_agent', title: '生图 Agent', description: '使用配置的图片模型生成封面和文内插图。' },
   { key: 'review_visual_assets', title: '图片审核', description: '检查图片完整性和内容适配度。' },
@@ -226,6 +229,7 @@ export default function TaskDetail() {
             if (result.research_state) nextTask.research_state = result.research_state
             if (result.writing_state) nextTask.writing_state = result.writing_state
             if (result.visual_state) nextTask.visual_state = result.visual_state
+            if (result.viral_state) nextTask.viral_state = result.viral_state
             if (result.quality_state) nextTask.quality_state = result.quality_state
             if (result.quality_report) nextTask.quality_report = result.quality_report
             if ('human_review_required' in result) nextTask.human_review_required = Boolean(result.human_review_required)
@@ -284,6 +288,8 @@ export default function TaskDetail() {
   const coverImage = normalizeImageSrc(finalArticle?.cover_image)
   const outlineResult = task?.outline_result || task?.planning_state?.outline_result || finalArticle?.outline_result
   const qualityReport = task?.quality_report || task?.quality_state?.quality_report
+  const viralStrategy = task?.viral_state?.strategy
+  const viralReview = task?.viral_state?.review || task?.writing_state?.viral_review
   const hotspotCandidates = task?.hotspot_candidates || []
   const searchContract = task?.planning_state?.search_contract || task?.research_state?.search_contract
   const searchEvaluation = task?.research_state?.search_evaluation || task?.research_state?.evidence_pack?.search_evaluation
@@ -353,6 +359,7 @@ export default function TaskDetail() {
         </div>
       ) : (
         <div className={styles.workspaceLayout}>
+          <ViralityScorecard strategy={viralStrategy} review={viralReview} />
           <SectionBlock
             title="执行轨迹"
             aside={<span className={styles.sectionStatus}>{statusMessage}</span>}
@@ -516,6 +523,10 @@ export default function TaskDetail() {
                 <div className={styles.signalCard}>
                   <span>质量报告</span>
                   <pre>{renderValue(qualityReport)}</pre>
+                </div>
+                <div className={styles.signalCard}>
+                  <span>传播策略</span>
+                  <pre>{renderValue(viralStrategy)}</pre>
                 </div>
                 <div className={styles.signalCard}>
                   <span>读者角色</span>

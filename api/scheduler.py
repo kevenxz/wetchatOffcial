@@ -257,6 +257,9 @@ class SchedulerEngine:
     async def _push_task(self, task: TaskResponse, account_ids: list[str], theme_name: str | None) -> None:
         """Push generated article to multiple accounts and record each result."""
         resolved_theme_name, style_config = _resolve_theme_config(theme_name)
+        publish_policy = dict((task.config_snapshot or {}).get("publish_policy") or {})
+        auto_publish = bool(publish_policy.get("auto_publish", False))
+        task.article_theme = resolved_theme_name
         for account_id in account_ids:
             account = get_account(account_id)
             now = _utc_now()
@@ -271,6 +274,8 @@ class SchedulerEngine:
                         pushed_at=now,
                         status=PushStatus.failed,
                         error=f"account {account_id!r} not found",
+                        publish_status="failed",
+                        theme_name=resolved_theme_name,
                     )
                 )
                 continue
@@ -285,6 +290,8 @@ class SchedulerEngine:
                         pushed_at=now,
                         status=PushStatus.failed,
                         error="account disabled or unsupported platform",
+                        publish_status="failed",
+                        theme_name=resolved_theme_name,
                     )
                 )
                 continue
@@ -296,6 +303,9 @@ class SchedulerEngine:
                     app_id=account.app_id,
                     app_secret=account.app_secret,
                     style_config=style_config,
+                    auto_publish=auto_publish,
+                    publish_poll_interval_seconds=float(publish_policy.get("publish_poll_interval_seconds") or 5),
+                    publish_poll_max_attempts=int(publish_policy.get("publish_poll_max_attempts") or 10),
                 )
                 task.push_records.append(
                     PushRecord(
@@ -306,10 +316,12 @@ class SchedulerEngine:
                         pushed_at=now,
                         status=PushStatus.success,
                         draft_info=draft_info,
+                        publish_status=str(draft_info.get("publish_status") or "draft_only"),
+                        publish_id=str(draft_info.get("publish_id") or "") or None,
+                        theme_name=resolved_theme_name,
                     )
                 )
                 task.draft_info = draft_info
-                task.article_theme = resolved_theme_name
             except Exception as exc:  # noqa: BLE001
                 task.push_records.append(
                     PushRecord(
@@ -320,6 +332,8 @@ class SchedulerEngine:
                         pushed_at=now,
                         status=PushStatus.failed,
                         error=str(exc),
+                        publish_status="failed",
+                        theme_name=resolved_theme_name,
                     )
                 )
             task.updated_at = _utc_now()

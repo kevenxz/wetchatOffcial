@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -8,7 +8,7 @@ from workflow.nodes.plan_article_angle import plan_article_angle_node
 
 
 @pytest.mark.asyncio
-async def test_plan_article_angle_builds_different_section_shapes_for_different_topics() -> None:
+async def test_plan_article_angle_builds_beats_from_evidence_instead_of_topic_template() -> None:
     base_state = {
         "planning_state": {
             "article_type": {
@@ -43,7 +43,9 @@ async def test_plan_article_angle_builds_different_section_shapes_for_different_
 
     assert funding_sections
     assert expansion_sections
-    assert funding_sections != expansion_sections
+    assert [section["heading"] for section in funding_sections] == [section["heading"] for section in expansion_sections]
+    assert [section["shape"] for section in funding_sections] == [section["shape"] for section in expansion_sections]
+    assert all(section["shape"] != "risks" for section in funding_sections)
 
 
 @pytest.mark.asyncio
@@ -61,7 +63,7 @@ async def test_plan_article_angle_uses_quantum_skill_fallback_framework() -> Non
         "research_state": {"evidence_pack": {"confirmed_facts": [{"claim": "量子芯片保真度提升"}]}},
     }
 
-    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+    with patch("workflow.model_factory.get_model_config") as mock_get_model_config:
         model_config = MagicMock()
         model_config.text.api_key = ""
         mock_get_model_config.return_value = model_config
@@ -71,7 +73,7 @@ async def test_plan_article_angle_uses_quantum_skill_fallback_framework() -> Non
 
     assert blueprint["selected_skill"]["skill_id"] == "quantum_tech_explainer"
     assert "量子" in blueprint["framework"]
-    assert any("工程指标" in heading or "量子技术" in heading for heading in headings)
+    assert any("工程指标" in heading or "量子" in heading for heading in headings)
     assert "量子玄学化表达" in blueprint["drop_points"]
 
 
@@ -97,7 +99,7 @@ async def test_plan_article_angle_fallback_uses_skill_guidance_for_wechat_bluepr
         "research_state": {"evidence_pack": {"research_gaps": ["missing_data_evidence"]}},
     }
 
-    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+    with patch("workflow.model_factory.get_model_config") as mock_get_model_config:
         model_config = MagicMock()
         model_config.text.api_key = ""
         mock_get_model_config.return_value = model_config
@@ -130,7 +132,7 @@ async def test_plan_article_angle_fallback_uses_neutral_title_candidates() -> No
         },
     }
 
-    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+    with patch("workflow.model_factory.get_model_config") as mock_get_model_config:
         model_config = MagicMock()
         model_config.text.api_key = ""
         mock_get_model_config.return_value = model_config
@@ -139,7 +141,8 @@ async def test_plan_article_angle_fallback_uses_neutral_title_candidates() -> No
     titles = result["planning_state"]["article_blueprint"]["title_candidates"]
     joined_titles = " ".join(titles)
     assert titles
-    assert "AI 公司融资数量回升" in joined_titles
+    assert "AI 公司融资数量回升" not in joined_titles
+    assert "36氪 AI 融资榜单" in joined_titles
     assert "真正值得" not in joined_titles
     assert "热闹" not in joined_titles
     assert "别把" not in joined_titles
@@ -193,9 +196,9 @@ async def test_plan_article_angle_uses_model_to_generate_structured_blueprint() 
         },
     }
 
-    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+    with patch("workflow.model_factory.get_model_config") as mock_get_model_config:
         with patch("workflow.nodes.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.nodes.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+            with patch("workflow.model_factory.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -235,13 +238,15 @@ async def test_plan_article_angle_uses_model_to_generate_structured_blueprint() 
     assert "WeChat public account articles" in messages[0][1]
     assert "selected_skill" in messages[1][1]
     assert "source_context" in messages[1][1]
-    mock_chat_openai.assert_called_once_with(
-        model="text-model",
-        api_key="text-key",
-        base_url="https://text.example.com/v1",
-        max_tokens=1800,
-        temperature=0.35,
-    )
+    llm_kwargs = mock_chat_openai.call_args.kwargs
+    assert llm_kwargs["model"] == "text-model"
+    assert llm_kwargs["api_key"] == "text-key"
+    assert llm_kwargs["base_url"] == "https://text.example.com/v1"
+    assert llm_kwargs["max_tokens"] == 1800
+    assert llm_kwargs["temperature"] == 0.35
+    # The factory always applies a bounded timeout and retry budget.
+    assert llm_kwargs["timeout"] > 0
+    assert llm_kwargs["max_retries"] >= 0
 
 
 @pytest.mark.asyncio
@@ -258,9 +263,9 @@ async def test_plan_article_angle_keeps_model_decided_section_count() -> None:
         for index in range(1, 8)
     ]
 
-    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+    with patch("workflow.model_factory.get_model_config") as mock_get_model_config:
         with patch("workflow.nodes.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.nodes.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+            with patch("workflow.model_factory.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -287,7 +292,8 @@ async def test_plan_article_angle_keeps_model_decided_section_count() -> None:
     blueprint = result["planning_state"]["article_blueprint"]
     messages = mock_prompt_class.from_messages.call_args.args[0]
     assert len(blueprint["sections"]) == 7
-    assert "You may decide the number, order, and shape of H2 sections" in messages[0][1]
+    assert "whether H2 sections are needed at all" in messages[0][1]
+    assert "candidate narrative beats" in messages[0][1]
     assert "Keep 4 to 6" not in messages[0][1]
 
 
@@ -301,9 +307,9 @@ async def test_plan_article_angle_does_not_add_boundary_when_evidence_is_suffici
         "research_state": {"evidence_pack": {"confirmed_facts": [{"claim": "企业正在测试 AI 销售工具"}]}},
     }
 
-    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+    with patch("workflow.model_factory.get_model_config") as mock_get_model_config:
         with patch("workflow.nodes.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.nodes.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+            with patch("workflow.model_factory.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -332,8 +338,9 @@ async def test_plan_article_angle_does_not_add_boundary_when_evidence_is_suffici
 
 
 @pytest.mark.asyncio
-async def test_plan_article_angle_adds_validation_sections_when_evidence_is_thin() -> None:
+async def test_plan_article_angle_adds_boundary_without_forcing_validation_section() -> None:
     state = {
+        "task_id": "task-thin-evidence-adaptive-structure",
         "planning_state": {
             "article_type": {
                 "type_id": "trend_analysis",
@@ -356,12 +363,37 @@ async def test_plan_article_angle_adds_validation_sections_when_evidence_is_thin
         },
     }
 
-    result = await plan_article_angle_node(state)
+    with patch("workflow.model_factory.get_model_config") as mock_get_model_config:
+        with patch("workflow.nodes.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
+            with patch("workflow.model_factory.ChatOpenAI") as mock_chat_openai:
+                model_config = MagicMock()
+                model_config.text.api_key = "text-key"
+                model_config.text.base_url = "https://text.example.com/v1"
+                model_config.text.model = "text-model"
+                mock_get_model_config.return_value = model_config
+
+                prompt = MagicMock()
+                chain = AsyncMock()
+                llm = MagicMock()
+                llm.with_structured_output.return_value = MagicMock(name="structured-llm")
+                mock_prompt_class.from_messages.return_value = prompt
+                prompt.__or__.return_value = chain
+                mock_chat_openai.return_value = llm
+                chain.ainvoke.return_value = {
+                    "thesis": "机器人出海仍只有零散信号",
+                    "reader_value": "帮助读者识别目前能确认的变化",
+                    "sections": [{"heading": "订单之外的一个信号", "goal": "沿单一线索展开", "shape": "essay"}],
+                    "must_cover_points": [],
+                    "drop_points": [],
+                }
+
+                result = await plan_article_angle_node(state)
     blueprint = result["planning_state"]["article_blueprint"]
     headings = [section["heading"] for section in blueprint["sections"]]
 
-    assert any("验证" in heading for heading in headings)
-    assert "补齐官方或数据证据" in blueprint["must_cover_points"]
+    assert headings == ["订单之外的一个信号"]
+    assert any(point.startswith("补齐官方或数据证据") for point in blueprint["must_cover_points"])
+    assert any("条件化表达" in point for point in blueprint["must_cover_points"])
 
 
 @pytest.mark.asyncio
@@ -387,9 +419,9 @@ async def test_plan_article_angle_passes_research_quality_summary_to_model() -> 
         },
     }
 
-    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+    with patch("workflow.model_factory.get_model_config") as mock_get_model_config:
         with patch("workflow.nodes.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.nodes.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+            with patch("workflow.model_factory.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -443,9 +475,9 @@ async def test_plan_article_angle_model_prompt_requests_wechat_style_structure()
         },
     }
 
-    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+    with patch("workflow.model_factory.get_model_config") as mock_get_model_config:
         with patch("workflow.nodes.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.nodes.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+            with patch("workflow.model_factory.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -527,8 +559,36 @@ async def test_plan_article_angle_builds_framework_from_search_materials() -> No
 
     assert blueprint["source_driven_framework"]
     assert blueprint["evidence_map"]
-    assert any("Enterprise buyers slow AI agent rollout" in heading for heading in headings)
-    assert any("AI sales tools face longer payback cycles" in heading for heading in headings)
+    assert len(headings) <= 4
+    assert all("Enterprise buyers slow AI agent rollout" not in heading for heading in headings)
+    assert all("AI sales tools face longer payback cycles" not in heading for heading in headings)
+    assert any("发生了什么" in heading for heading in headings)
+
+
+@pytest.mark.asyncio
+async def test_plan_article_angle_clusters_many_sources_into_a_few_narrative_jobs() -> None:
+    evidence_items = [
+        {
+            "angle": "fact" if index < 5 else "analysis" if index < 9 else "risk",
+            "title": f"搜索来源标题 {index}",
+            "claim": f"第 {index} 条可核验材料说明了一个不同侧面的变化。",
+            "source_type": "official" if index < 5 else "news",
+            "url": f"https://example.com/{index}",
+        }
+        for index in range(12)
+    ]
+    state = {
+        "task_brief": {"topic": "Kimi 新版本"},
+        "planning_state": {"article_type": {"type_id": "trend_analysis"}},
+        "research_state": {"evidence_items": evidence_items, "evidence_pack": {}},
+    }
+
+    result = await plan_article_angle_node(state)
+    sections = result["planning_state"]["article_blueprint"]["sections"]
+
+    assert 1 <= len(sections) <= 4
+    assert all("搜索来源标题" not in section["heading"] for section in sections)
+    assert all("https://" not in section["heading"] for section in sections)
 
 
 @pytest.mark.asyncio
@@ -556,9 +616,9 @@ async def test_plan_article_angle_passes_search_materials_to_model() -> None:
         },
     }
 
-    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+    with patch("workflow.model_factory.get_model_config") as mock_get_model_config:
         with patch("workflow.nodes.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.nodes.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+            with patch("workflow.model_factory.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"
@@ -639,9 +699,9 @@ async def test_plan_article_angle_passes_extracted_source_context_to_model() -> 
         },
     }
 
-    with patch("workflow.nodes.plan_article_angle.get_model_config") as mock_get_model_config:
+    with patch("workflow.model_factory.get_model_config") as mock_get_model_config:
         with patch("workflow.nodes.plan_article_angle.ChatPromptTemplate") as mock_prompt_class:
-            with patch("workflow.nodes.plan_article_angle.ChatOpenAI") as mock_chat_openai:
+            with patch("workflow.model_factory.ChatOpenAI") as mock_chat_openai:
                 model_config = MagicMock()
                 model_config.text.api_key = "text-key"
                 model_config.text.base_url = "https://text.example.com/v1"

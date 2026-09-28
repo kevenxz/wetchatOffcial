@@ -176,7 +176,7 @@ export default function AccountConfigPage() {
     )
     try {
       await updateAccount(record.account_id, { enabled: checked })
-    } catch (err) {
+    } catch {
       setAccounts((prev) =>
         prev.map((account) =>
           account.account_id === record.account_id ? { ...account, enabled: !checked } : account,

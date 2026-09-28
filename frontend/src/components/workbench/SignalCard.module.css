@@ -3,9 +3,9 @@
   align-items: flex-start;
   gap: 12px;
   padding: 16px 18px;
-  border: 1px solid rgba(56, 189, 248, 0.24);
+  border: 1px solid color-mix(in srgb, var(--app-primary) 28%, transparent);
   border-radius: 18px;
-  background: rgba(8, 47, 73, 0.34);
+  background: var(--app-primary-bg);
 }
 
 .icon {
@@ -15,8 +15,8 @@
   width: 36px;
   height: 36px;
   border-radius: 12px;
-  background: rgba(56, 189, 248, 0.14);
-  color: #7dd3fc;
+  background: var(--app-primary-bg-hover);
+  color: var(--app-primary);
 }
 
 .body {
