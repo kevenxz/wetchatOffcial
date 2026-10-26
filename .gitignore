@@ -1,4 +1,7 @@
 .venv/
+# 解释器升级时保留的旧虚拟环境备份
+.venv*.backup/
+.venv311/
 .pytest_cache/
 .idea/
 .env

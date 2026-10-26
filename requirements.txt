@@ -1,3 +1,7 @@
+# 运行环境：Python 3.11（已在 3.11.17 与 3.9.19 下通过全部测试）
+# 说明：langgraph / langchain-openai / pytest 使用已验证的版本区间，
+#       其余依赖锁定版本以保证可复现。
+
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 pydantic==2.10.5
@@ -5,12 +9,34 @@ pydantic-settings==2.7.1
 python-dotenv==1.0.1
 httpx==0.28.1
 structlog==24.4.0
-langgraph>=0.2.0
-pytest>=8.0.0
-pytest-asyncio>=0.23.0
+
+# 工作流与 LLM：已验证 langgraph 0.6.x 与 1.x 两代行为一致
+# （并发分支的状态 reducer 与「路径函数返回列表」式 fan-out 均已验证）
+langgraph>=0.6.0,<2
+langchain-openai>=0.1.0,<2
+
+# 存储（PostgreSQL 为可选后端，未配置 DATABASE_URL 时使用 JSON 文件）
+sqlalchemy>=2.0.0,<3
+psycopg2-binary>=2.9.9
+greenlet>=3.0.0
+
+# 缓存（可选：access_token 与搜索结果缓存）
+redis>=5.0.0
+
+# 定时任务 cron 表达式解析
+apscheduler>=3.10.0,<4
+
+# 检索与解析
 trafilatura>=1.8.0
 beautifulsoup4>=4.12.0
 lxml_html_clean>=0.1.0
-langchain-openai>=0.1.0
 markdown>=3.10
-redis>=5.0.0
+
+# 图片处理：来源图的真实尺寸/宽高比/纯色校验、webp→jpeg 转码、封面裁剪到 2.35:1。
+# 微信上传只接受 jpeg/png/gif（见 wechat_api.ARTICLE_ALLOWED_IMG_TYPES），
+# 而来源图里 webp 很常见，必须转码；裁剪也无法用标准库完成。
+Pillow>=11.0.0
+
+# 测试
+pytest>=8.0.0,<10
+pytest-asyncio>=0.23.0
