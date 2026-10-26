@@ -61,7 +61,7 @@ def _normalize_hotspot_capture_config(raw_config: Any) -> dict[str, Any]:
     if not isinstance(raw_config, dict):
         return {
             "enabled": False,
-            "source": "tophub",
+            "source": "newsnow",
             "categories": [],
             "platforms": [],
             "filters": {
@@ -76,7 +76,7 @@ def _normalize_hotspot_capture_config(raw_config: Any) -> dict[str, Any]:
     filters = raw_config.get("filters") if isinstance(raw_config.get("filters"), dict) else {}
     return {
         "enabled": bool(raw_config.get("enabled", False)),
-        "source": str(raw_config.get("source", "tophub") or "tophub"),
+        "source": str(raw_config.get("source", "newsnow") or "newsnow"),
         "categories": _normalize_list(raw_config.get("categories")),
         "platforms": [
             normalized
@@ -202,23 +202,71 @@ async def capture_hot_topics_node(state: WorkflowState) -> dict[str, Any]:
             platforms=_platform_log_sample(platforms),
         )
 
-        fetch_results = await asyncio.gather(
-            *[
-                fetch_hotspot_platform_items(
-                    {**platform, "category": _platform_category(platform, categories)},
-                    top_n=top_n_per_platform,
-                )
-                for platform in platforms
-            ],
-            return_exceptions=True,
+        # Prefer the scheduled snapshot: it is fetched by the background refresher, so a
+        # task no longer waits on (or fails with) the upstream. Only platforms the
+        # snapshot does not cover are fetched live, so a partially-covered request cannot
+        # silently shrink the candidate pool.
+        from api.hotspot_snapshot import (
+            candidates_for,
+            is_fresh,
+            recently_failed_platforms,
+            split_covered_platforms,
         )
 
         candidates: list[dict[str, Any]] = []
-        for result in fetch_results:
-            if isinstance(result, Exception):
-                logger.warning("capture_hot_topics_platform_failed", task_id=task_id, error=str(result))
-                continue
-            candidates.extend(result)
+        snapshot_used = False
+        if is_fresh():
+            snapshot_candidates = candidates_for(platforms)
+            if snapshot_candidates:
+                _, still_live = split_covered_platforms(platforms, snapshot_candidates)
+                # A platform that returned nothing during the last refresh has no snapshot
+                # coverage, so it would be re-fetched here — repeating a failure the refresher
+                # just confirmed, and stalling task creation for seconds. The next scheduled
+                # refresh still retries it.
+                failed = recently_failed_platforms()
+                known_down = [
+                    platform
+                    for platform in still_live
+                    if str(platform.get("provider_id") or platform.get("path") or platform.get("name") or "")
+                    in failed
+                ]
+                platforms_to_fetch = [platform for platform in still_live if platform not in known_down]
+                candidates.extend(snapshot_candidates)
+                snapshot_used = True
+                logger.info(
+                    "capture_hot_topics_snapshot_used",
+                    task_id=task_id,
+                    snapshot_candidates=len(snapshot_candidates),
+                    live_platforms=len(platforms_to_fetch),
+                    skipped_known_failed=[str(item.get("provider_id") or "") for item in known_down],
+                )
+            else:
+                platforms_to_fetch = platforms
+        else:
+            platforms_to_fetch = platforms
+            logger.info("capture_hot_topics_snapshot_stale_or_missing", task_id=task_id)
+
+        if platforms_to_fetch:
+            fetch_results = await asyncio.gather(
+                *[
+                    fetch_hotspot_platform_items(
+                        {**platform, "category": _platform_category(platform, categories)},
+                        top_n=top_n_per_platform,
+                    )
+                    for platform in platforms_to_fetch
+                ],
+                return_exceptions=True,
+            )
+            for result in fetch_results:
+                if isinstance(result, Exception):
+                    logger.warning(
+                        "capture_hot_topics_platform_failed",
+                        task_id=task_id,
+                        error=str(result),
+                        exc_info=True,
+                    )
+                    continue
+                candidates.extend(result)
 
         ranked_candidates = rank_hotspots(
             candidates,
@@ -242,6 +290,8 @@ async def capture_hot_topics_node(state: WorkflowState) -> dict[str, Any]:
             status="done",
             duration_ms=duration_ms,
             platform_count=len(platforms),
+            snapshot_used=snapshot_used,
+            live_platform_count=len(platforms_to_fetch),
             candidate_count=len(candidates),
             ranked_count=len(ranked_candidates),
             selected=selected_hotspot.get("title") if selected_hotspot else None,
@@ -265,6 +315,7 @@ async def capture_hot_topics_node(state: WorkflowState) -> dict[str, Any]:
             task_id=task_id,
             duration_ms=duration_ms,
             error=str(exc),
+            exc_info=True,
         )
         return {
             "status": "running",

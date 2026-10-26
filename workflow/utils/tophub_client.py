@@ -142,6 +142,7 @@ class TopHubClient:
                     attempt=attempt,
                     max_retries=self.max_retries,
                     error=str(exc),
+                    exc_info=True,
                 )
                 if attempt < self.max_retries:
                     await asyncio.sleep(0.3 * attempt)

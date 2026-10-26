@@ -1,7 +1,14 @@
 """Tests for hotspot capture schedule models and legacy compatibility."""
 from __future__ import annotations
 
-from api.models import CreateScheduleRequest, HotspotSource, ScheduleConfig, ScheduleMode, UpdateScheduleRequest
+from api.models import (
+    CreateScheduleRequest,
+    HotspotCaptureConfig,
+    HotspotSource,
+    ScheduleConfig,
+    ScheduleMode,
+    UpdateScheduleRequest,
+)
 
 
 def test_schedule_config_hydrates_legacy_hot_topics_into_hotspot_capture() -> None:
@@ -16,8 +23,21 @@ def test_schedule_config_hydrates_legacy_hot_topics_into_hotspot_capture() -> No
 
     assert schedule.hot_topics == ["AI", "财经"]
     assert schedule.hotspot_capture.enabled is False
-    assert schedule.hotspot_capture.source == HotspotSource.tophub
+    # A config with no explicit source defaults to `newsnow`, the structured multi-platform
+    # source the background refresher fills the snapshot from. The field is descriptive only
+    # (dispatch is per-platform), so this cannot change how an existing task is fetched.
+    assert schedule.hotspot_capture.source == HotspotSource.newsnow
     assert schedule.hotspot_capture.fallback_topics == ["AI", "财经"]
+
+
+def test_hotspot_capture_defaults_to_the_snapshot_backed_source() -> None:
+    """Defaulting to `tophub` misreported what a new task would do, and TopHub is the
+    unreliable live-scrape path (429 retries / source unavailable in production)."""
+    assert HotspotCaptureConfig().source == HotspotSource.newsnow
+
+
+def test_an_explicit_source_still_wins() -> None:
+    assert HotspotCaptureConfig(source=HotspotSource.tophub).source == HotspotSource.tophub
 
 
 def test_create_schedule_request_prefers_structured_hotspot_capture_and_normalizes_path() -> None:

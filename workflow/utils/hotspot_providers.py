@@ -2,16 +2,19 @@
 from __future__ import annotations
 
 import asyncio
+import os
+import random
 import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 import structlog
 from bs4 import BeautifulSoup
 
+from workflow.utils.newsnow_catalog import newsnow_domains_for, newsnow_platform_catalog
 from workflow.utils.tophub_client import TopHubClient, list_builtin_platforms
 
 logger = structlog.get_logger(__name__)
@@ -22,6 +25,15 @@ DEFAULT_HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     )
 }
+
+# newsnow serves the multi-platform hot lists that TrendRadar consumes. Configurable so
+# a self-hosted newsnow instance can be used instead of the public one.
+NEWSNOW_API_BASE = (os.getenv("NEWSNOW_API_BASE") or "https://newsnow.busiyi.world/api").rstrip("/")
+NEWSNOW_TIMEOUT_SECONDS = 12.0
+# Statuses the upstream returns. `cache` means it served a recent cached snapshot rather
+# than re-crawling; that data is still usable, but rejecting it would drop whole platforms.
+NEWSNOW_ACCEPTED_STATUSES = frozenset({"success", "cache"})
+NEWSNOW_MAX_RETRIES = 2
 
 
 def _utc_now_iso() -> str:
@@ -41,6 +53,9 @@ def _platform_source(platform: dict[str, Any]) -> str:
         if "rss" in path.lower() or "feed" in path.lower():
             return "rss_or_feed"
         return "ranking_page"
+    # A bare identifier (no scheme) is a newsnow platform id, e.g. "weibo" or "cls-hot".
+    if path and "/" not in path:
+        return "newsnow"
     return "tophub"
 
 
@@ -83,6 +98,178 @@ class TopHubHotspotProvider(HotspotProvider):
             top_n=top_n,
             platform_weight=float(platform.get("weight") or 1.0),
         )
+
+
+def _newsnow_platform_id(platform: dict[str, Any]) -> str:
+    """Resolve the upstream platform id for a newsnow entry."""
+    return (
+        _clean_text(platform.get("provider_id"))
+        or _clean_text(platform.get("path"))
+        or _clean_text(platform.get("url"))
+    )
+
+
+def _link_is_expected_domain(url: str, domains: tuple[str, ...]) -> bool:
+    """Whether a returned link is HTTPS and belongs to the platform's expected domain.
+
+    The hot lists come from a third-party API, so a compromised or spoofed response could
+    point our downstream fetching at arbitrary hosts. Parsing with ``urlsplit`` and
+    comparing the *hostname* (not the raw string) is what stops a
+    ``https://baidu.com@evil.com/`` style bypass, where the userinfo section reads like a
+    trusted domain.
+    """
+    if not domains:
+        return True
+    parsed = urlsplit(str(url or ""))
+    if parsed.scheme != "https":
+        return False
+    hostname = (parsed.hostname or "").lower()
+    if not hostname:
+        return False
+    return any(hostname == domain.lower() or hostname.endswith("." + domain.lower()) for domain in domains)
+
+
+class NewsNowHotspotProvider(HotspotProvider):
+    """Fetch one platform's hot list from the newsnow API.
+
+    This is the endpoint TrendRadar itself consumes, so a single structured JSON call
+    replaces HTML scraping and covers the same 16 platforms. The behaviour below is
+    ported from TrendRadar's ``trendradar/crawler/fetcher.py`` (GPL-3.0) as *behaviour*,
+    not code: status validation, jittered retry, invalid-title guards, duplicate title
+    ranking, and link-domain safety.
+    """
+
+    source_type = "newsnow"
+
+    async def fetch_platform_items(
+        self,
+        platform: dict[str, Any],
+        *,
+        top_n: int,
+    ) -> list[dict[str, Any]]:
+        platform_id = _newsnow_platform_id(platform)
+        if not platform_id:
+            return []
+
+        payload = await self._fetch_payload(platform_id, platform_name=_clean_text(platform.get("name")))
+        if payload is None:
+            return []
+
+        items = payload.get("items")
+        if not isinstance(items, list):
+            logger.warning("newsnow_items_missing", platform_id=platform_id)
+            return []
+
+        # Same title may appear at several ranks; keep one candidate and record all ranks.
+        ranked: dict[str, list[int]] = {}
+        details: dict[str, dict[str, str]] = {}
+        for index, item in enumerate(items, start=1):
+            if not isinstance(item, dict):
+                continue
+            raw_title = item.get("title")
+            # Require a real string: the upstream has returned numbers and nulls, and
+            # stringifying them turns a broken payload into headlines like "1.5".
+            # Downstream title handling also assumes text.
+            if not isinstance(raw_title, str):
+                continue
+            title = _clean_text(raw_title)
+            if not title:
+                continue
+            ranked.setdefault(title, []).append(index)
+            details.setdefault(
+                title,
+                {
+                    "url": _clean_text(item.get("url")),
+                    "mobile_url": _clean_text(item.get("mobileUrl")),
+                    "extra_text": _newsnow_extra_text(item.get("extra")),
+                },
+            )
+
+        domains = newsnow_domains_for(platform_id)
+        candidates: list[dict[str, Any]] = []
+        for title, ranks in list(ranked.items())[: max(0, top_n)]:
+            detail = details.get(title, {})
+            url = detail.get("url") or detail.get("mobile_url")
+            if url and not _link_is_expected_domain(url, domains):
+                logger.warning(
+                    "newsnow_link_domain_rejected",
+                    platform_id=platform_id,
+                    url=url[:120],
+                    expected=list(domains),
+                )
+                continue
+            candidate = _candidate_from_platform(
+                platform,
+                title=title,
+                url=url or "",
+                rank=ranks[0],
+                extra_text=detail.get("extra_text") or "",
+            )
+            candidate["all_ranks"] = ranks
+            candidate["appearances"] = len(ranks)
+            candidates.append(candidate)
+
+        logger.debug(
+            "newsnow_platform_fetched",
+            platform_id=platform_id,
+            status=str(payload.get("status") or ""),
+            returned=len(candidates),
+        )
+        return candidates
+
+    async def _fetch_payload(self, platform_id: str, *, platform_name: str = "") -> dict[str, Any] | None:
+        """GET one platform, retrying transient failures with jittered backoff."""
+        url = f"{NEWSNOW_API_BASE}/s?id={platform_id}&latest"
+        headers = {
+            **DEFAULT_HEADERS,
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        }
+        last_error = ""
+        for attempt in range(NEWSNOW_MAX_RETRIES + 1):
+            if attempt:
+                # Jitter matters: 16 platforms are fetched together, and a fixed delay
+                # would keep them in lockstep against the upstream.
+                await asyncio.sleep(random.uniform(0.4, 1.2) * attempt)
+            try:
+                async with httpx.AsyncClient(timeout=NEWSNOW_TIMEOUT_SECONDS, headers=headers) as client:
+                    response = await client.get(url)
+                    response.raise_for_status()
+                    payload = response.json()
+                if not isinstance(payload, dict):
+                    last_error = "response is not a JSON object"
+                    continue
+                status = str(payload.get("status") or "").strip().lower()
+                if status not in NEWSNOW_ACCEPTED_STATUSES:
+                    last_error = f"unexpected status {status!r}"
+                    continue
+                return payload
+            except Exception as exc:  # noqa: BLE001
+                last_error = f"{type(exc).__name__}: {exc}"
+        logger.warning(
+            "newsnow_platform_failed",
+            platform_id=platform_id,
+            platform_name=platform_name,
+            attempts=NEWSNOW_MAX_RETRIES + 1,
+            error=last_error,
+            exc_info=True,
+        )
+        return None
+
+
+def _newsnow_extra_text(extra: Any) -> str:
+    """Extract a human-readable summary from newsnow's ``extra`` field.
+
+    Shape varies per platform (``hover`` on baidu, ``date`` on ifeng, ``icon`` on most),
+    so only descriptive text is taken.
+    """
+    if not isinstance(extra, dict):
+        return ""
+    for key in ("hover", "info", "desc", "description"):
+        value = _clean_text(extra.get(key))
+        if value:
+            return value
+    return ""
 
 
 class RssHotspotProvider(HotspotProvider):
@@ -129,7 +316,7 @@ def _parse_feed_items(xml_text: str, platform: dict[str, Any], *, top_n: int) ->
     try:
         root = ET.fromstring(xml_text)
     except ET.ParseError:
-        logger.warning("hotspot_feed_parse_failed", platform=platform.get("name"))
+        logger.warning("hotspot_feed_parse_failed", platform=platform.get("name"), exc_info=True)
         return []
 
     items: list[dict[str, Any]] = []
@@ -230,6 +417,8 @@ def _candidate_from_platform(
 def get_hotspot_provider(source_type: str) -> HotspotProvider:
     """Return the provider adapter for one source type."""
     normalized = _clean_text(source_type) or "tophub"
+    if normalized == "newsnow":
+        return NewsNowHotspotProvider()
     if normalized == "rss_or_feed":
         return RssHotspotProvider()
     if normalized == "ranking_page":
@@ -275,6 +464,10 @@ def list_builtin_hotspot_platforms(categories: list[str] | None = None, *, limit
     items: list[dict[str, Any]] = []
     for item in list_builtin_platforms(categories):
         items.append({**item, "source": "tophub", "provider_id": "tophub"})
+
+    # The newsnow platforms lead: one structured JSON call per platform beats scraping
+    # ranking HTML, and it is where the retry/timeout failures were coming from.
+    items.extend(newsnow_platform_catalog(categories))
 
     presets = [
         {

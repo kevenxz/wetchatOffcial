@@ -1,4 +1,4 @@
-﻿"""Hotspot preview routes."""
+"""Hotspot preview routes."""
 from __future__ import annotations
 
 import uuid
@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 from api.models import (
     HotspotMonitorCaptureRequest,
@@ -295,6 +295,49 @@ async def list_hotspot_platforms(
         items=items,
         updated_at=datetime.now(tz=timezone.utc),
     )
+
+
+@router.get("/snapshot")
+async def get_hotspot_snapshot_status() -> dict:
+    """Report the cached hotspot snapshot: freshness, coverage and last failure count.
+
+    Task creation reads this cache instead of hitting the upstream, so its freshness is
+    the thing to check when hotspots look stale.
+    """
+    from api.hotspot_snapshot import snapshot_status
+
+    status = snapshot_status()
+    logger.info(
+        "hotspot_snapshot_status",
+        available=status.get("available"),
+        fresh=status.get("fresh"),
+        age_minutes=status.get("age_minutes"),
+        candidate_count=status.get("candidate_count"),
+        failed_platforms=len(status.get("failed_platforms") or []),
+    )
+    return status
+
+
+@router.post("/snapshot/refresh")
+async def refresh_hotspot_snapshot_now() -> dict:
+    """Force an immediate snapshot refresh and return the resulting status."""
+    from api.hotspot_snapshot import refresh_hotspot_snapshot, snapshot_status
+
+    logger.info("hotspot_snapshot_manual_refresh_requested")
+    try:
+        await refresh_hotspot_snapshot(force=True)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("hotspot_snapshot_manual_refresh_failed", error=str(exc), exc_info=True)
+        raise HTTPException(status_code=502, detail=f"hotspot refresh failed: {exc}") from exc
+
+    status = snapshot_status()
+    logger.info(
+        "hotspot_snapshot_manual_refresh_done",
+        candidate_count=status.get("candidate_count"),
+        raw_count=status.get("raw_count"),
+        failed_platforms=status.get("failed_platforms"),
+    )
+    return status
 
 
 @router.get("/monitor", response_model=HotspotMonitorResponse)
