@@ -12,6 +12,12 @@ import structlog
 from api.store import get_model_config
 from workflow import runtime_settings
 from workflow.state import WorkflowState
+from workflow.utils import source_images
+from workflow.utils.visual_spec import (
+    assemble_image_prompt,
+    build_fallback_spec,
+    resolve_prompt_settings,
+)
 
 logger = structlog.get_logger(__name__)
 GENERATED_IMAGES_DIR = Path("artifacts/generated_images")
@@ -337,6 +343,7 @@ async def _generate_single_asset(
                 task_id=task_id,
                 role=str(brief.get("role") or ""),
                 error=str(exc),
+                exc_info=True,
             )
             return _placeholder_asset(brief)
 
@@ -351,6 +358,105 @@ async def _generate_single_asset(
     }
 
 
+def _cited_source_urls(state: WorkflowState) -> set[str]:
+    """URLs the article's evidence actually cites.
+
+    Scoped to citations rather than every page that was fetched: an image pulled from a page
+    the article never relies on is both less relevant and much harder to justify. Returns an
+    empty set when no citation carries a URL, which the harvester reads as "no restriction".
+    """
+    evidence_pack = dict(state.get("research_state", {}).get("evidence_pack") or {})
+    urls: set[str] = set()
+    for group in ("citations", "key_facts", "confirmed_facts", "usable_cases", "usable_data_points"):
+        for item in list(evidence_pack.get(group) or []):
+            if isinstance(item, dict):
+                url = str(item.get("url") or item.get("source_id") or "").strip()
+                if url.startswith("http"):
+                    urls.add(url)
+    return urls
+
+
+async def _harvest_source_assets(
+    state: WorkflowState,
+    *,
+    task_id: str,
+    role_order: list[str],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Turn photographs from the reference pages into pipeline assets.
+
+    The cover is cropped to the WeChat 2.35:1 ratio and the discarded fraction is recorded —
+    this code cannot see *what* it cropped, so a large discard is surfaced for human review
+    rather than silently accepted.
+    """
+    extracted = list(state.get("research_state", {}).get("extracted_contents") or [])
+    report: dict[str, Any] = {"enabled": source_images.harvesting_enabled(), "found": 0, "used": 0}
+
+    if not source_images.harvesting_enabled() or not extracted:
+        report["skipped"] = "disabled" if not source_images.harvesting_enabled() else "no_extracted_pages"
+        return [], report
+
+    cited = _cited_source_urls(state)
+    harvested, harvest_report = await source_images.harvest_source_images(
+        extracted,
+        task_id=task_id,
+        cited_urls=cited or None,
+    )
+    report.update(harvest_report)
+    report["cited_urls"] = len(cited)
+    report["found"] = len(harvested)
+    if not harvested:
+        return [], report
+
+    credit = source_images.credit_enabled()
+    cover_role_present = "cover" in role_order
+    use_for_cover = cover_role_present and source_images.cover_source_preferred()
+    report["cover_from_source"] = use_for_cover
+
+    assets: list[dict[str, Any]] = []
+    for index, item in enumerate(harvested, start=1):
+        is_cover = use_for_cover and index == 1
+        # Non-cover photos reuse the existing `contextual_illustration` role so the tested
+        # heading-slot matching places them next to case-like sections without new logic.
+        role = "cover" if is_cover else "contextual_illustration"
+        aspect = "2.35:1" if is_cover else "4:3"
+
+        asset = item.to_asset(role=role, index=index, aspect_ratio=aspect, credit=credit)
+
+        if is_cover:
+            try:
+                cropped_path, discarded = source_images.crop_to_aspect(
+                    item.local_path, aspect_ratio=aspect
+                )
+                asset["path"] = cropped_path
+                asset["crop_discarded_ratio"] = discarded
+                if discarded >= source_images.crop_discard_warn_ratio():
+                    note = f"封面裁切丢弃 {discarded:.0%} 画面，请确认主体是否被裁掉"
+                    asset["notes"] = list(asset.get("notes") or []) + [note]
+                    report["cover_crop_warning"] = note
+            except Exception as exc:  # noqa: BLE001
+                # A crop failure is not fatal: the uncropped photo is still usable.
+                logger.warning(
+                    "source_image_cover_crop_failed",
+                    task_id=task_id,
+                    path=item.local_path,
+                    error=str(exc),
+                    exc_info=True,
+                )
+                asset["notes"] = list(asset.get("notes") or []) + ["封面裁剪失败，使用原图"]
+
+        assets.append(asset)
+
+    report["used"] = len(assets)
+    logger.info(
+        "source_images_attached",
+        task_id=task_id,
+        used=len(assets),
+        cover_from_source=use_for_cover,
+        converted=[item.converted_from for item in harvested if item.converted_from],
+    )
+    return assets, report
+
+
 async def generate_visual_assets_node(state: WorkflowState) -> dict[str, Any]:
     """Generate or fall back visual assets from image briefs."""
     visual_state = dict(state.get("visual_state") or {})
@@ -361,6 +467,40 @@ async def generate_visual_assets_node(state: WorkflowState) -> dict[str, Any]:
 
     use_real_generation = bool(image_model_config.enabled and image_model_config.api_key)
     effective_briefs = [_apply_visual_revision_brief(brief, revision_brief) for brief in briefs]
+
+    # Safety net: the prompt is authored by `describe_visual_assets_node`. If a brief
+    # reaches here without one (a resumed run, imported state, or a stage that was
+    # skipped), build a safe text-free prompt instead of sending an empty string to the
+    # provider — an empty prompt produces arbitrary pictures.
+    prompt_repaired: list[str] = []
+    if use_real_generation:
+        for brief in effective_briefs:
+            if str(brief.get("compressed_prompt") or "").strip():
+                continue
+            role = str(brief.get("role") or "")
+            image_policy = dict(state.get("config_snapshot", {}).get("image_policy") or {})
+            style_id, max_chars = resolve_prompt_settings(image_policy)
+            brief["compressed_prompt"] = assemble_image_prompt(
+                spec=build_fallback_spec(
+                    role,
+                    topic=str(state.get("keywords") or ""),
+                    section=str(brief.get("section") or ""),
+                    claim=str(brief.get("purpose") or ""),
+                ),
+                style_id=style_id,
+                role=role,
+                brand_colors=[str(item) for item in list(image_policy.get("brand_colors") or [])],
+                max_chars=max_chars,
+                allow_text=bool(image_policy.get("allow_text_overlay")),
+            )
+            prompt_repaired.append(role or "visual")
+        if prompt_repaired:
+            logger.warning(
+                "image_prompt_repaired",
+                task_id=task_id,
+                roles=prompt_repaired,
+                reason="brief arrived without a visual spec",
+            )
 
     if not use_real_generation:
         assets: list[dict[str, str]] = [_placeholder_asset(brief) for brief in effective_briefs]
@@ -383,9 +523,22 @@ async def generate_visual_assets_node(state: WorkflowState) -> dict[str, Any]:
             )
         )
 
-    visual_state["assets"] = assets
+    # Real photographs from the reference articles come first: a genuine press photo of the
+    # actual subject beats a synthetic one, and it costs no image-model call. Harvesting
+    # failure is not an error — the generated assets above still stand on their own.
+    source_assets, harvest_report = await _harvest_source_assets(
+        state,
+        task_id=task_id,
+        role_order=[str(brief.get("role") or "") for brief in effective_briefs],
+    )
+
+    combined = source_assets + assets
+
+    visual_state["assets"] = combined
     visual_state["revision_brief"] = {}
-    generated_article = _merge_assets_into_article(dict(state.get("generated_article") or {}), assets)
+    visual_state["source_image_report"] = harvest_report
+    visual_state["source_image_count"] = len(source_assets)
+    generated_article = _merge_assets_into_article(dict(state.get("generated_article") or {}), combined)
     return {
         "status": "running",
         "current_skill": "generate_visual_assets",
