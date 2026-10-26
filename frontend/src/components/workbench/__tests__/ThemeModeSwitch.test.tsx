@@ -187,14 +187,16 @@ describe('ThemeModeSwitch', () => {
     document.body.appendChild(bridgeProbe)
 
     expect(document.documentElement.dataset.theme).toBe('light')
-    expect(getComputedStyle(document.documentElement).getPropertyValue('--app-bg').trim()).toBe(
-      '#f4f0e8',
+    // Light is the default theme: the literal lives on the primitive and every
+    // semantic / legacy name resolves through it.
+    expect(getComputedStyle(document.documentElement).getPropertyValue('--paper-50').trim()).toBe(
+      '#fafafa',
     )
-    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f4f0e8')
+    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#fafafa')
 
     document.documentElement.removeAttribute('data-theme')
 
-    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#f4f0e8')
+    expect(resolveCssValue(getComputedStyle(bridgeProbe).backgroundColor)).toBe('#fafafa')
 
     bridgeProbe.remove()
   })
@@ -292,16 +294,36 @@ describe('ThemeModeSwitch', () => {
     const footerRule = getCssRuleForClass(getCssModuleClass(lightSurfaces.footer!))
     const canvasRule = getCssRuleForClass(getCssModuleClass(lightSurfaces.canvas!))
 
-    expect(shellRule).toContain('var(--app-bg-gradient)')
-    expect(sidebarRule).toContain('var(--app-sidebar-bg-layer)')
-    expect(sidebarRule).toContain('var(--app-sidebar-text)')
-    expect(brandRule).toContain('var(--app-sidebar-border)')
-    expect(brandCopyRule).toContain('var(--app-sidebar-muted)')
-    expect(navLinkRule).toContain('var(--app-sidebar-muted)')
-    expect(activeNavRule).toContain('var(--app-sidebar-active)')
-    expect(activeNavRule).toContain('var(--app-sidebar-active-text)')
-    expect(footerRule).toContain('var(--app-sidebar-border)')
+    // The shell now consumes semantic tokens directly; the `--app-*` names remain
+    // only as a temporary compatibility layer for un-migrated pages.
+    expect(shellRule).toContain('var(--surface-page)')
+    expect(sidebarRule).toContain('var(--surface-raised)')
+    expect(sidebarRule).toContain('var(--text-primary)')
+    expect(brandRule).toContain('var(--border-hairline)')
+    expect(brandCopyRule).toContain('var(--text-tertiary)')
+    expect(navLinkRule).toContain('var(--text-tertiary)')
+    expect(activeNavRule).toContain('var(--text-primary)')
+    expect(footerRule).toContain('var(--border-hairline)')
     expect(canvasRule).toContain('padding')
+
+    // The active marker is an accent rule on ::before, not a filled background.
+    const activeMarkerRule = Array.from(document.styleSheets)
+      .flatMap((sheet) => {
+        try {
+          return Array.from(sheet.cssRules)
+        } catch {
+          return []
+        }
+      })
+      .find(
+        (rule) =>
+          'cssText' in rule &&
+          rule.cssText.includes('_navLinkActive_') &&
+          rule.cssText.includes('::before'),
+      ) as CSSStyleRule | undefined
+
+    expect(activeMarkerRule).toBeDefined()
+    expect(activeMarkerRule!.style.getPropertyValue('background')).toContain('var(--accent)')
 
     act(() => {
       useThemeStore.getState().setMode('dark', true)
@@ -319,9 +341,10 @@ describe('ThemeModeSwitch', () => {
     expect(darkSurfaces.footer).toBeInTheDocument()
     expect(darkSurfaces.canvas).toBeInTheDocument()
 
-    expect(getComputedStyle(document.documentElement).getPropertyValue('--app-primary').trim()).toBe('#2dd4bf')
-    expect(getComputedStyle(document.documentElement).getPropertyValue('--app-sidebar-active').trim()).toBe('#14b8a6')
-    expect(getComputedStyle(document.documentElement).getPropertyValue('--app-header-bg').trim()).toContain('11, 16, 32')
+    // Dark theme swaps the accent to the lighter teal and darkens the overlay.
+    expect(getComputedStyle(document.documentElement).getPropertyValue('--accent-400').trim()).toBe('#2dd4bf')
+    expect(getComputedStyle(document.documentElement).getPropertyValue('--app-primary').trim()).toBe('var(--accent)')
+    expect(getComputedStyle(document.documentElement).getPropertyValue('--surface-overlay').trim()).toContain('10, 10, 10')
     expect(darkSurfaces.canvas).toBeInTheDocument()
   })
 

@@ -1,0 +1,256 @@
+/* ==========================================================================
+   Design tokens — the single source of truth for every visual decision.
+
+   Structure:
+     1. Primitive layer  — theme-agnostic values, declared exactly once.
+     2. Semantic layer   — what components are allowed to consume.
+     3. Dark theme       — overrides ONLY the semantic layer.
+
+   Before this file the app carried two competing palettes (`--app-*` warm/teal
+   and `--color-*`/`--text-*` cool/blue-grey) and the light palette was duplicated
+   verbatim in both `:root` and `:root[data-theme='light']`, so any colour change
+   had to be made twice and inevitably drifted. These tokens replace both.
+
+   Legacy names are still resolved through the compatibility block in
+   `variables.css`; that block is removed once every page has migrated.
+
+   Direction: bright minimal Swiss / International Typographic Style.
+   Near-monochrome, hairlines instead of shadows, zero decorative radii, strict
+   modular scale, a single accent, no serif display face.
+   ========================================================================== */
+
+:root {
+  /* ---------------------------------------------------------------------
+     1. Primitives
+     --------------------------------------------------------------------- */
+
+  /* Ink — neutral greys, warm cast deliberately removed */
+  --ink-900: #0a0a0a;
+  --ink-800: #18181b;
+  --ink-700: #3f3f46;
+  --ink-600: #52525b;
+  --ink-500: #71717a;
+  --ink-400: #a1a1aa;
+  --ink-300: #d4d4d8;
+  --ink-200: #e4e4e7;
+  --ink-100: #f1f1f2;
+
+  /* Paper */
+  --paper-0: #ffffff;
+  --paper-50: #fafafa;
+  --paper-100: #f4f4f5;
+  --paper-200: #ededee;
+
+  /* Hairlines */
+  --line-100: #f0f0f1;
+  --line-200: #e4e4e7;
+  --line-300: #d4d4d8;
+
+  /* Accent — the single accent colour. Teal is kept because red/amber/green are
+     already reserved for status semantics; a second red would be ambiguous. */
+  --accent-400: #2dd4bf;
+  --accent-500: #14b8a6;
+  --accent-600: #0f766e;
+  --accent-700: #115e59;
+  --accent-900: #042f2e;
+
+  /* Status — flat and saturated, not pastel */
+  --status-success: #15803d;
+  --status-warning: #b45309;
+  --status-danger: #b91c1c;
+  --status-info: #0369a1;
+
+  /* Space — 4px base, 8px rhythm */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
+
+  /* Type scale — strict, no arbitrary sizes */
+  --type-xs: 12px;
+  --type-sm: 13px;
+  --type-base: 14px;
+  --type-md: 16px;
+  --type-lg: 20px;
+  --type-xl: 28px;
+  --type-2xl: 40px;
+  --type-3xl: 64px;
+  --type-4xl: 96px;
+
+  --leading-none: 1.05;
+  --leading-tight: 1.2;
+  --leading-snug: 1.4;
+  --leading-base: 1.5;
+  --leading-relaxed: 1.7;
+
+  --tracking-tight: -0.03em;
+  --tracking-snug: -0.015em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.06em;
+  --tracking-wider: 0.16em;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Radius — Swiss surfaces are square; only controls get a hair of rounding.
+     NOTE: `--radius-hair` is the intended value for every interactive control. */
+  --radius-none: 0;
+  --radius-hair: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+
+  /* Elevation — overlays only. Hierarchy is carried by hairlines, not shadows. */
+  --elevation-overlay: 0 1px 2px rgba(9, 9, 11, 0.06), 0 8px 24px -12px rgba(9, 9, 11, 0.18);
+  --elevation-popover: 0 2px 4px rgba(9, 9, 11, 0.06), 0 16px 40px -16px rgba(9, 9, 11, 0.22);
+
+  /* Motion */
+  --dur-instant: 80ms;
+  --dur-fast: 140ms;
+  --dur-base: 240ms;
+  --dur-slow: 420ms;
+  --dur-cinematic: 800ms;
+
+  --ease-swiss: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
+
+  /* Typography families.
+     Latin uses a system stack and Chinese deliberately uses system fonts too:
+     a subset CJK webfont is measured in megabytes and this app is served from a
+     2C2G box. The Swiss identity here comes from scale, tracking, rules and grid
+     rather than from a bundled face.
+     To adopt a licensed grotesque later, host it in `public/fonts/` and prepend
+     it to `--font-sans` plus add the matching `@font-face` block below. */
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI Variable Text', 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei',
+    'Noto Sans CJK SC', sans-serif;
+  --font-mono:
+    ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, 'Liberation Mono',
+    monospace;
+  --font-display: var(--font-sans);
+
+  /* Layout */
+  --layout-sidebar: 264px;
+  --layout-sidebar-collapsed: 72px;
+  --layout-header: 72px;
+  --layout-content-max: 1440px;
+  --layout-gutter: 24px;
+
+  /* Z-index */
+  --z-base: 1;
+  --z-sticky: 20;
+  --z-dropdown: 1050;
+  --z-modal: 1000;
+  --z-tooltip: 1070;
+  --z-toast: 1080;
+
+  /* ---------------------------------------------------------------------
+     2. Semantic layer — components must only use these
+     --------------------------------------------------------------------- */
+
+  --surface-page: var(--paper-50);
+  --surface-raised: var(--paper-0);
+  --surface-sunken: var(--paper-100);
+  --surface-interactive: var(--paper-0);
+  --surface-hover: var(--paper-100);
+  --surface-active: var(--paper-200);
+  --surface-inverse: var(--ink-900);
+  --surface-overlay: rgba(255, 255, 255, 0.86);
+
+  --text-primary: var(--ink-900);
+  --text-secondary: var(--ink-700);
+  --text-tertiary: var(--ink-500);
+  --text-quaternary: var(--ink-400);
+  --text-inverse: var(--paper-0);
+  --text-on-accent: var(--paper-0);
+
+  --border-hairline: var(--line-200);
+  --border-subtle: var(--line-100);
+  --border-strong: var(--line-300);
+  --border-inverse: var(--ink-900);
+
+  --accent: var(--accent-600);
+  --accent-hover: var(--accent-500);
+  --accent-active: var(--accent-700);
+  --accent-subtle: rgba(15, 118, 110, 0.08);
+  --accent-subtle-hover: rgba(15, 118, 110, 0.14);
+  --accent-border: rgba(15, 118, 110, 0.3);
+  --focus-ring: var(--accent-600);
+
+  --status-success-text: var(--status-success);
+  --status-success-subtle: rgba(21, 128, 61, 0.1);
+  --status-warning-text: var(--status-warning);
+  --status-warning-subtle: rgba(180, 83, 9, 0.1);
+  --status-danger-text: var(--status-danger);
+  --status-danger-subtle: rgba(185, 28, 28, 0.1);
+  --status-info-text: var(--status-info);
+  --status-info-subtle: rgba(3, 105, 161, 0.1);
+
+  /* Exposed to the scroll-driven pipeline diagram on the landing page. */
+  --grid-line: var(--line-100);
+}
+
+/* --------------------------------------------------------------------------
+   3. Dark theme — semantic layer only (no palette duplication)
+   -------------------------------------------------------------------------- */
+
+:root[data-theme='dark'] {
+  --surface-page: #0a0a0a;
+  --surface-raised: #121212;
+  --surface-sunken: #050505;
+  --surface-interactive: #161616;
+  --surface-hover: #1c1c1c;
+  --surface-active: #232323;
+  --surface-inverse: var(--paper-0);
+  --surface-overlay: rgba(10, 10, 10, 0.88);
+
+  --text-primary: #fafafa;
+  --text-secondary: #d4d4d8;
+  --text-tertiary: #a1a1aa;
+  --text-quaternary: #71717a;
+  --text-inverse: var(--ink-900);
+  --text-on-accent: var(--ink-900);
+
+  --border-hairline: #262626;
+  --border-subtle: #1a1a1a;
+  --border-strong: #3f3f46;
+  --border-inverse: var(--paper-0);
+
+  --accent: var(--accent-400);
+  --accent-hover: #5eead4;
+  --accent-active: var(--accent-500);
+  --accent-subtle: rgba(45, 212, 191, 0.12);
+  --accent-subtle-hover: rgba(45, 212, 191, 0.2);
+  --accent-border: rgba(94, 234, 212, 0.38);
+  --focus-ring: var(--accent-400);
+
+  --status-success-text: #4ade80;
+  --status-success-subtle: rgba(74, 222, 128, 0.12);
+  --status-warning-text: #fbbf24;
+  --status-warning-subtle: rgba(251, 191, 36, 0.12);
+  --status-danger-text: #f87171;
+  --status-danger-subtle: rgba(248, 113, 113, 0.12);
+  --status-info-text: #7dd3fc;
+  --status-info-subtle: rgba(125, 211, 252, 0.12);
+
+  --elevation-overlay: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px -12px rgba(0, 0, 0, 0.7);
+  --elevation-popover: 0 2px 4px rgba(0, 0, 0, 0.5), 0 16px 40px -16px rgba(0, 0, 0, 0.8);
+
+  --grid-line: #1f1f1f;
+}

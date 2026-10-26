@@ -1,4 +1,5 @@
 import styles from './ViralityScorecard.module.css'
+import { TruncatedText } from '@/components/layout'
 
 const DIMENSION_LABELS: Record<string, string> = {
   headline: '标题点击力',
@@ -43,8 +44,8 @@ export default function ViralityScorecard({ strategy, review }: ViralityScorecar
 
       <div className={styles.strategyColumn}>
         <span className={styles.eyebrow}>Editorial Bet</span>
-        <h3>{strategy?.core_promise || '传播承诺尚未生成'}</h3>
-        <p>{strategy?.audience_tension || '系统将先识别读者张力，再决定内容角度。'}</p>
+        <TruncatedText as="h3" lines={2}>{strategy?.core_promise || '传播承诺尚未生成'}</TruncatedText>
+        <TruncatedText as="p" lines={3}>{strategy?.audience_tension || '系统将先识别读者张力，再决定内容角度。'}</TruncatedText>
         {strategy?.share_trigger ? <blockquote>{strategy.share_trigger}</blockquote> : null}
       </div>
 

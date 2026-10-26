@@ -1,246 +1,148 @@
+/* ==========================================================================
+   Legacy token compatibility layer.
+
+   `tokens.css` is now the single source of truth. This file exists only so the
+   pages that still reference the old `--app-*` / `--color-*` / `--shadow-*` names
+   keep rendering during the page-by-page migration.
+
+   It is deleted at the end of the console migration (phase 5); the guard test
+   `noLegacyTokens.test.ts` fails while any source file still uses these names, so
+   the removal cannot be forgotten.
+   ========================================================================== */
+
+@import './tokens.css';
+
 :root {
-  --app-primary: #0f766e;
-  --app-primary-hover: #0d9488;
-  --app-primary-active: #115e59;
-  --app-primary-bg: rgba(15, 118, 110, 0.09);
-  --app-primary-bg-hover: rgba(15, 118, 110, 0.15);
+  /* Brand ---------------------------------------------------------------- */
+  --app-primary: var(--accent);
+  --app-primary-hover: var(--accent-hover);
+  --app-primary-active: var(--accent-active);
+  --app-primary-bg: var(--accent-subtle);
+  --app-primary-bg-hover: var(--accent-subtle-hover);
 
-  --app-success: #34d399;
-  --app-warning: #fbbf24;
-  --app-error: #f87171;
-  --app-info: #7dd3fc;
+  --app-success: var(--status-success-text);
+  --app-warning: var(--status-warning-text);
+  --app-error: var(--status-danger-text);
+  --app-info: var(--status-info-text);
 
-  --app-bg: #f4f0e8;
-  --app-bg-gradient: linear-gradient(135deg, #f6f2ea 0%, #efe9df 100%);
-  --app-surface: #fffdf8;
-  --app-surface-muted: #f8f3ea;
-  --app-surface-strong: #eee6d9;
-  --app-toolbar-bg: #fffdf8;
-  --app-list-row-hover: #f8f3ea;
-  --app-border: #e3dacd;
-  --app-border-strong: #d3c6b6;
-  --app-text: #1c1917;
-  --app-text-secondary: #625b52;
-  --app-text-tertiary: #8a8177;
-  --app-text-disabled: rgba(15, 23, 42, 0.38);
-  --app-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.06);
-  --app-shadow-md: 0 18px 40px -24px rgba(15, 23, 42, 0.18), 0 10px 24px -18px rgba(15, 23, 42, 0.12);
-  --app-shadow-lg: 0 30px 60px -28px rgba(15, 23, 42, 0.22);
-  --app-sidebar-bg-layer:
-    radial-gradient(circle at 10% 0%, rgba(15, 118, 110, 0.1), transparent 30%),
-    #f8fbfa;
-  --app-sidebar-text: #18312f;
-  --app-sidebar-muted: #69807c;
-  --app-sidebar-border: rgba(15, 118, 110, 0.14);
-  --app-sidebar-status-bg: #e8f4f2;
-  --app-sidebar-hover: rgba(15, 118, 110, 0.09);
-  --app-sidebar-active: #0f766e;
-  --app-sidebar-active-text: #ffffff;
-  --app-header-bg: rgba(255, 253, 248, 0.92);
-  --app-header-border: #e3dacd;
-  --app-avatar-bg: rgba(15, 118, 110, 0.11);
-  --app-avatar-text: #0f766e;
-  --app-overlay-surface: rgba(255, 253, 248, 0.9);
+  /* Surfaces ------------------------------------------------------------- */
+  /* The legacy gradient is deliberately flattened: Swiss surfaces are flat. */
+  --app-bg: var(--surface-page);
+  --app-bg-gradient: var(--surface-page);
+  --app-surface: var(--surface-raised);
+  --app-surface-muted: var(--surface-sunken);
+  --app-surface-strong: var(--surface-hover);
+  --app-toolbar-bg: var(--surface-raised);
+  --app-list-row-hover: var(--surface-hover);
+  --app-overlay-surface: var(--surface-overlay);
 
-  --color-primary: var(--app-primary);
-  --color-primary-hover: var(--app-primary-hover);
-  --color-primary-active: var(--app-primary-active);
-  --color-primary-bg: var(--app-primary-bg);
-  --color-primary-bg-hover: var(--app-primary-bg-hover);
+  /* Lines and text ------------------------------------------------------- */
+  --app-border: var(--border-hairline);
+  --app-border-strong: var(--border-strong);
+  --app-text: var(--text-primary);
+  --app-text-secondary: var(--text-secondary);
+  --app-text-tertiary: var(--text-tertiary);
+  --app-text-disabled: var(--text-quaternary);
 
-  --color-success: #34d399;
-  --color-success-bg: rgba(52, 211, 153, 0.12);
-  --color-warning: #fbbf24;
-  --color-warning-bg: rgba(251, 191, 36, 0.12);
-  --color-error: #f87171;
-  --color-error-bg: rgba(248, 113, 113, 0.12);
-  --color-info: #7dd3fc;
-  --color-info-bg: rgba(125, 211, 252, 0.12);
+  /* Elevation: cards lose their shadow, only overlays keep depth ---------- */
+  --app-shadow-sm: none;
+  --app-shadow-md: none;
+  --app-shadow-lg: var(--elevation-popover);
 
-  --color-gray-1: #f8fbff;
-  --color-gray-2: #e6edf7;
-  --color-gray-3: #c7d3e4;
-  --color-gray-4: #98a7bf;
-  --color-gray-5: #72829b;
-  --color-gray-6: #50607a;
-  --color-gray-7: #39465d;
-  --color-gray-8: #273449;
-  --color-gray-9: #182235;
-  --color-gray-10: #0b1020;
+  /* Shell regions -------------------------------------------------------- */
+  --app-sidebar-bg-layer: var(--surface-raised);
+  --app-sidebar-text: var(--text-primary);
+  --app-sidebar-muted: var(--text-tertiary);
+  --app-sidebar-border: var(--border-hairline);
+  --app-sidebar-status-bg: var(--surface-sunken);
+  --app-sidebar-hover: var(--surface-hover);
+  --app-sidebar-active: var(--accent);
+  --app-sidebar-active-text: var(--text-on-accent);
+  --app-header-bg: var(--surface-overlay);
+  --app-header-border: var(--border-hairline);
+  --app-avatar-bg: var(--accent-subtle);
+  --app-avatar-text: var(--accent);
 
-  --text-primary: var(--app-text);
-  --text-secondary: #516074;
-  --text-tertiary: #738196;
-  --text-disabled: rgba(15, 23, 42, 0.38);
-  --text-inverse: #0f172a;
+  /* Status aliases ------------------------------------------------------- */
+  --color-primary: var(--accent);
+  --color-primary-hover: var(--accent-hover);
+  --color-primary-active: var(--accent-active);
+  --color-primary-bg: var(--accent-subtle);
+  --color-primary-bg-hover: var(--accent-subtle-hover);
+  --color-success: var(--status-success-text);
+  --color-success-bg: var(--status-success-subtle);
+  --color-warning: var(--status-warning-text);
+  --color-warning-bg: var(--status-warning-subtle);
+  --color-error: var(--status-danger-text);
+  --color-error-bg: var(--status-danger-subtle);
+  --color-info: var(--status-info-text);
+  --color-info-bg: var(--status-info-subtle);
 
-  --bg-workbench: var(--app-bg);
-  --bg-workbench-gradient: var(--app-bg-gradient);
-  --bg-container: var(--app-surface);
-  --bg-elevated: var(--app-surface-strong);
-  --bg-sider: var(--app-surface);
+  --color-gray-1: var(--paper-50);
+  --color-gray-2: var(--paper-100);
+  --color-gray-3: var(--ink-200);
+  --color-gray-4: var(--ink-300);
+  --color-gray-5: var(--ink-400);
+  --color-gray-6: var(--ink-500);
+  --color-gray-7: var(--ink-600);
+  --color-gray-8: var(--ink-700);
+  --color-gray-9: var(--ink-800);
+  --color-gray-10: var(--ink-900);
 
-  --border-color: var(--app-border);
-  --border-color-strong: var(--app-border-strong);
-  --border-radius-sm: 6px;
-  --border-radius: 10px;
-  --border-radius-lg: 14px;
-  --border-radius-xl: 18px;
+  /* Layout aliases ------------------------------------------------------- */
+  --bg-workbench: var(--surface-page);
+  --bg-workbench-gradient: var(--surface-page);
+  --bg-container: var(--surface-raised);
+  --bg-elevated: var(--surface-hover);
+  --bg-sider: var(--surface-raised);
+  --border-color: var(--border-hairline);
+  --border-color-strong: var(--border-strong);
 
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 16px;
-  --space-lg: 24px;
-  --space-xl: 32px;
-  --space-2xl: 48px;
-  --space-3xl: 64px;
+  --border-radius-sm: var(--radius-hair);
+  --border-radius: var(--radius-hair);
+  --border-radius-lg: var(--radius-sm);
+  --border-radius-xl: var(--radius-md);
 
-  --font-family-sans: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-family-display: 'Noto Serif SC', 'Songti SC', SimSun, serif;
-  --font-family-mono: 'SFMono-Regular', Consolas, monospace;
-  --font-xs: 12px;
-  --font-sm: 14px;
-  --font-base: 16px;
-  --font-lg: 18px;
-  --font-xl: 20px;
-  --font-2xl: 24px;
-  --font-3xl: 32px;
+  --space-xs: var(--space-1);
+  --space-sm: var(--space-2);
+  --space-md: var(--space-4);
+  --space-lg: var(--space-6);
+  --space-xl: var(--space-8);
+  --space-2xl: var(--space-12);
+  --space-3xl: var(--space-16);
 
-  --line-height-tight: 1.25;
-  --line-height-base: 1.6;
-  --line-height-loose: 1.9;
+  /* Typography aliases --------------------------------------------------- */
+  --font-family-sans: var(--font-sans);
+  --font-family-display: var(--font-display);
+  --font-family-mono: var(--font-mono);
 
-  --font-weight-normal: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
+  --font-xs: var(--type-xs);
+  --font-sm: var(--type-sm);
+  --font-base: var(--type-md);
+  --font-lg: var(--type-lg);
+  --font-xl: var(--type-lg);
+  --font-2xl: var(--type-xl);
+  --font-3xl: var(--type-2xl);
 
-  --shadow-sm: var(--app-shadow-sm);
-  --shadow-md: var(--app-shadow-md);
-  --shadow-lg: var(--app-shadow-lg);
+  --line-height-tight: var(--leading-tight);
+  --line-height-base: var(--leading-base);
+  --line-height-loose: var(--leading-relaxed);
 
-  --transition-fast: 0.1s ease;
-  --transition-base: 0.2s ease;
-  --transition-slow: 0.3s ease;
+  --font-weight-normal: var(--weight-regular);
+  --font-weight-medium: var(--weight-medium);
+  --font-weight-semibold: var(--weight-semibold);
+  --font-weight-bold: var(--weight-bold);
 
-  --sider-width: 220px;
-  --sider-collapsed-width: 80px;
-  --header-height: 64px;
-  --content-padding: 24px;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: var(--elevation-popover);
 
-  --z-base: 1;
-  --z-dropdown: 1050;
-  --z-modal: 1000;
-  --z-tooltip: 1070;
-}
+  --transition-fast: var(--dur-fast) var(--ease-swiss);
+  --transition-base: var(--dur-base) var(--ease-swiss);
+  --transition-slow: var(--dur-slow) var(--ease-swiss);
 
-:root[data-theme='light'] {
-  --app-primary: #0f766e;
-  --app-primary-hover: #0d9488;
-  --app-primary-active: #115e59;
-  --app-primary-bg: rgba(15, 118, 110, 0.09);
-  --app-primary-bg-hover: rgba(15, 118, 110, 0.15);
-  --app-bg: #f4f0e8;
-  --app-bg-gradient: linear-gradient(135deg, #f6f2ea 0%, #efe9df 100%);
-  --app-surface: #fffdf8;
-  --app-surface-muted: #f8f3ea;
-  --app-surface-strong: #eee6d9;
-  --app-toolbar-bg: #fffdf8;
-  --app-list-row-hover: #f8f3ea;
-  --app-border: #e3dacd;
-  --app-border-strong: #d3c6b6;
-  --app-text: #1c1917;
-  --app-text-secondary: #625b52;
-  --app-text-tertiary: #8a8177;
-  --app-text-disabled: rgba(15, 23, 42, 0.38);
-  --app-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.06);
-  --app-shadow-md: 0 18px 40px -24px rgba(15, 23, 42, 0.18), 0 10px 24px -18px rgba(15, 23, 42, 0.12);
-  --app-shadow-lg: 0 30px 60px -28px rgba(15, 23, 42, 0.22);
-  --app-sidebar-bg-layer:
-    radial-gradient(circle at 10% 0%, rgba(15, 118, 110, 0.1), transparent 30%),
-    #f8fbfa;
-  --app-sidebar-text: #18312f;
-  --app-sidebar-muted: #69807c;
-  --app-sidebar-border: rgba(15, 118, 110, 0.14);
-  --app-sidebar-status-bg: #e8f4f2;
-  --app-sidebar-hover: rgba(15, 118, 110, 0.09);
-  --app-sidebar-active: #0f766e;
-  --app-sidebar-active-text: #ffffff;
-  --app-header-bg: rgba(255, 253, 248, 0.92);
-  --app-header-border: #e3dacd;
-  --app-avatar-bg: rgba(15, 118, 110, 0.11);
-  --app-avatar-text: #0f766e;
-  --app-overlay-surface: rgba(255, 253, 248, 0.9);
-
-  --bg-workbench: var(--app-bg);
-  --bg-workbench-gradient: var(--app-bg-gradient);
-  --bg-container: var(--app-surface);
-  --bg-elevated: var(--app-surface-strong);
-  --bg-sider: var(--app-surface);
-  --text-primary: var(--app-text);
-  --text-secondary: var(--app-text-secondary);
-  --text-tertiary: var(--app-text-tertiary);
-  --text-disabled: var(--app-text-disabled);
-  --border-color: var(--app-border);
-  --border-color-strong: var(--app-border-strong);
-  --shadow-sm: var(--app-shadow-sm);
-  --shadow-md: var(--app-shadow-md);
-  --shadow-lg: var(--app-shadow-lg);
-}
-
-:root[data-theme='dark'] {
-  --app-primary: #2dd4bf;
-  --app-primary-hover: #5eead4;
-  --app-primary-active: #14b8a6;
-  --app-primary-bg: rgba(45, 212, 191, 0.12);
-  --app-primary-bg-hover: rgba(45, 212, 191, 0.2);
-  --app-bg: #0b1020;
-  --app-bg-gradient:
-    radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 28%),
-    radial-gradient(circle at top right, rgba(167, 139, 250, 0.1), transparent 24%),
-    linear-gradient(180deg, #0b1020 0%, #0f172a 100%);
-  --app-surface: #121a2b;
-  --app-surface-muted: #0f172a;
-  --app-surface-strong: #182235;
-  --app-toolbar-bg: #121a2b;
-  --app-list-row-hover: #182235;
-  --app-border: #273449;
-  --app-border-strong: #364760;
-  --app-text: #e5edf9;
-  --app-text-secondary: #a6b4c9;
-  --app-text-tertiary: #71829e;
-  --app-text-disabled: rgba(229, 237, 249, 0.38);
-  --app-shadow-sm: 0 1px 2px rgba(2, 8, 23, 0.18), 0 2px 6px rgba(2, 8, 23, 0.12);
-  --app-shadow-md: 0 18px 40px -24px rgba(2, 8, 23, 0.85), 0 10px 24px -18px rgba(2, 8, 23, 0.7);
-  --app-shadow-lg: 0 30px 60px -28px rgba(2, 8, 23, 0.95);
-  --app-sidebar-bg-layer:
-    radial-gradient(circle at 10% 0%, rgba(45, 212, 191, 0.13), transparent 30%),
-    #091719;
-  --app-sidebar-text: #e6f5f2;
-  --app-sidebar-muted: #89aaa5;
-  --app-sidebar-border: rgba(94, 234, 212, 0.15);
-  --app-sidebar-status-bg: #102724;
-  --app-sidebar-hover: rgba(45, 212, 191, 0.1);
-  --app-sidebar-active: #14b8a6;
-  --app-sidebar-active-text: #042f2e;
-  --app-header-bg: rgba(11, 16, 32, 0.9);
-  --app-header-border: #273449;
-  --app-avatar-bg: rgba(45, 212, 191, 0.14);
-  --app-avatar-text: #5eead4;
-  --app-overlay-surface: rgba(18, 26, 43, 0.92);
-
-  --bg-workbench: var(--app-bg);
-  --bg-workbench-gradient: var(--app-bg-gradient);
-  --bg-container: var(--app-surface);
-  --bg-elevated: var(--app-surface-strong);
-  --bg-sider: #0e1627;
-  --text-primary: var(--app-text);
-  --text-secondary: var(--app-text-secondary);
-  --text-tertiary: var(--app-text-tertiary);
-  --text-disabled: var(--app-text-disabled);
-  --border-color: var(--app-border);
-  --border-color-strong: var(--app-border-strong);
-  --shadow-sm: var(--app-shadow-sm);
-  --shadow-md: var(--app-shadow-md);
-  --shadow-lg: var(--app-shadow-lg);
+  --sider-width: var(--layout-sidebar);
+  --sider-collapsed-width: var(--layout-sidebar-collapsed);
+  --header-height: var(--layout-header);
+  --content-padding: var(--layout-gutter);
 }

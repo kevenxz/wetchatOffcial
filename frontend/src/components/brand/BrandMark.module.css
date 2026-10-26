@@ -1,0 +1,23 @@
+.mark {
+  display: block;
+  flex: none;
+}
+
+/* Inverts with the theme: ink plate on light, paper plate on dark. */
+.plate {
+  fill: var(--surface-inverse);
+}
+
+.rule,
+.bar {
+  fill: var(--surface-page);
+}
+
+.barMuted {
+  fill: var(--surface-page);
+  opacity: 0.72;
+}
+
+.accent {
+  fill: var(--accent);
+}

@@ -1,0 +1,25 @@
+/* Console landing (内容资产) — Swiss page scaffolding. */
+
+.page {
+  display: grid;
+  gap: var(--space-6);
+}
+
+/* Replaces the inline `fontFamily: monospace` + a hard-coded slate hex. */
+.taskId {
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  color: var(--text-tertiary);
+}
+
+/* Replaces an inline Space with flex + wrap. */
+.roles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.emptyPad {
+  padding: var(--space-10) 0;
+}

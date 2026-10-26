@@ -1,71 +1,117 @@
 import { theme as antdTheme, type ThemeConfig } from 'antd'
 import type { ResolvedTheme } from './store/themeStore'
+import { darkTokens, px, primitiveTokens as t, seconds, withAlpha } from './styles/tokens'
+
+/**
+ * antd theme, generated from the design tokens.
+ *
+ * The previous version hard-coded a second copy of the palette here, which is how
+ * the documented brand colour (`#1677FF`) and the implemented one (`#0f766e`) drifted
+ * apart. Every value below is now derived from `styles/tokens.ts`, which the
+ * `tokenParity` test keeps in sync with `styles/tokens.css`.
+ *
+ * Re-skin direction (bright minimal Swiss): square corners, hairlines instead of
+ * shadows, a single accent, no decorative glow.
+ */
+
+const accent = {
+  primary: t['--accent-600'],
+  hover: t['--accent-500'],
+  active: t['--accent-700'],
+}
 
 const sharedToken = {
-  colorPrimary: '#0f766e',
-  colorSuccess: '#34d399',
-  colorWarning: '#fbbf24',
-  colorError: '#f87171',
-  colorInfo: '#0f766e',
-  fontFamily:
-    "'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif",
-  fontFamilyCode: "'JetBrains Mono', 'SFMono-Regular', Consolas, monospace",
+  fontFamily: 'var(--font-sans)',
+  fontFamilyCode: 'var(--font-mono)',
   fontWeightStrong: 600,
-  fontSize: 14,
-  fontSizeSM: 12,
-  fontSizeLG: 16,
-  fontSizeXL: 20,
-  fontSizeHeading1: 32,
-  fontSizeHeading2: 26,
-  fontSizeHeading3: 22,
-  fontSizeHeading4: 18,
-  fontSizeHeading5: 16,
-  lineHeight: 1.6,
-  borderRadius: 10,
-  borderRadiusSM: 6,
-  borderRadiusLG: 14,
-  motionDurationFast: '0.1s',
-  motionDurationMid: '0.2s',
-  motionDurationSlow: '0.3s',
+  fontSize: px(t['--type-base']),
+  fontSizeSM: px(t['--type-sm']),
+  fontSizeLG: px(t['--type-md']),
+  fontSizeXL: px(t['--type-lg']),
+  fontSizeHeading1: px(t['--type-2xl']),
+  fontSizeHeading2: px(t['--type-xl']),
+  fontSizeHeading3: px(t['--type-lg']),
+  fontSizeHeading4: px(t['--type-md']),
+  fontSizeHeading5: px(t['--type-base']),
+  lineHeight: Number.parseFloat(t['--leading-base']),
+  // Square surfaces, a hair of rounding on controls only.
+  borderRadius: px(t['--radius-hair']),
+  borderRadiusSM: px(t['--radius-hair']),
+  borderRadiusLG: px(t['--radius-sm']),
+  borderRadiusXS: px(t['--radius-none']),
+  controlHeight: 36,
+  controlHeightSM: 28,
+  controlHeightLG: 44,
+  motionDurationFast: seconds(t['--dur-fast']),
+  motionDurationMid: seconds(t['--dur-base']),
+  motionDurationSlow: seconds(t['--dur-slow']),
+  // Swiss: hierarchy comes from rules and space, not from glow.
+  boxShadow: 'none',
+  boxShadowSecondary: 'none',
+  boxShadowTertiary: 'none',
+  wireframe: false,
 } as const
 
 const lightTheme: ThemeConfig = {
   algorithm: antdTheme.defaultAlgorithm,
   token: {
     ...sharedToken,
-    colorBgLayout: '#f4f0e8',
-    colorBgContainer: '#fffdf8',
-    colorBgElevated: '#fffdf8',
-    colorBorder: '#d3c6b6',
-    colorBorderSecondary: '#e3dacd',
-    colorSplit: '#e3dacd',
-    colorText: '#1c1917',
-    colorTextSecondary: '#625b52',
-    colorTextTertiary: '#8a8177',
-    colorTextQuaternary: '#a8a096',
-    colorFillSecondary: 'rgba(68, 44, 30, 0.05)',
-    colorFillQuaternary: 'rgba(68, 44, 30, 0.03)',
-    colorPrimaryBg: 'rgba(15, 118, 110, 0.09)',
-    colorPrimaryBgHover: 'rgba(15, 118, 110, 0.15)',
-    colorPrimaryBorder: 'rgba(15, 118, 110, 0.28)',
-    colorPrimaryBorderHover: 'rgba(15, 118, 110, 0.46)',
-    colorLink: '#0f766e',
-    colorLinkHover: '#0d9488',
-    boxShadow:
-      '0 18px 40px -24px rgba(15, 23, 42, 0.18), 0 10px 24px -18px rgba(15, 23, 42, 0.16)',
-    boxShadowSecondary:
-      '0 12px 28px -20px rgba(15, 23, 42, 0.12), 0 6px 16px -10px rgba(15, 23, 42, 0.1)',
+    colorPrimary: accent.primary,
+    colorPrimaryHover: accent.hover,
+    colorPrimaryActive: accent.active,
+    colorPrimaryBg: withAlpha(accent.primary, 0.08),
+    colorPrimaryBgHover: withAlpha(accent.primary, 0.14),
+    colorPrimaryBorder: withAlpha(accent.primary, 0.3),
+    colorPrimaryBorderHover: withAlpha(accent.primary, 0.48),
+
+    colorSuccess: t['--status-success'],
+    colorWarning: t['--status-warning'],
+    colorError: t['--status-danger'],
+    colorInfo: t['--status-info'],
+    colorLink: accent.primary,
+    colorLinkHover: accent.hover,
+
+    colorBgLayout: t['--paper-50'],
+    colorBgContainer: t['--paper-0'],
+    colorBgElevated: t['--paper-0'],
+    colorBgSpotlight: t['--ink-900'],
+
+    colorBorder: t['--line-300'],
+    colorBorderSecondary: t['--line-200'],
+    colorSplit: t['--line-200'],
+
+    colorText: t['--ink-900'],
+    colorTextSecondary: t['--ink-700'],
+    colorTextTertiary: t['--ink-500'],
+    colorTextQuaternary: t['--ink-400'],
+    colorFillSecondary: 'rgba(10, 10, 10, 0.04)',
+    colorFillQuaternary: 'rgba(10, 10, 10, 0.02)',
   },
   components: {
-    Layout: {
-      siderBg: '#fffdf8',
-      triggerBg: '#eee6d9',
-    },
+    Layout: { bodyBg: t['--paper-50'], headerBg: t['--paper-0'], siderBg: t['--paper-0'] },
     Menu: {
       itemBg: 'transparent',
-      itemSelectedBg: 'rgba(15, 118, 110, 0.11)',
-      itemSelectedColor: '#1c1917',
+      itemSelectedBg: withAlpha(accent.primary, 0.08),
+      itemSelectedColor: t['--ink-900'],
+      itemHoverBg: t['--paper-100'],
     },
+    Table: {
+      headerBg: t['--paper-0'],
+      headerColor: t['--ink-500'],
+      rowHoverBg: t['--paper-50'],
+      borderColor: t['--line-200'],
+      headerSplitColor: 'transparent',
+    },
+    Card: { headerBg: 'transparent', paddingLG: 20 },
+    Button: {
+      primaryShadow: 'none',
+      defaultShadow: 'none',
+      dangerShadow: 'none',
+      fontWeight: 500,
+    },
+    Input: { paddingBlock: 6 },
+    Segmented: { itemSelectedBg: t['--paper-0'] },
+    Tabs: { horizontalItemGutter: 28 },
   },
 }
 
@@ -73,44 +119,69 @@ const darkTheme: ThemeConfig = {
   algorithm: antdTheme.darkAlgorithm,
   token: {
     ...sharedToken,
-    colorPrimary: '#2dd4bf',
-    colorBgLayout: '#0b1020',
-    colorBgContainer: '#121a2b',
-    colorBgElevated: '#182235',
-    colorBorder: '#273449',
-    colorBorderSecondary: '#1f2a3d',
-    colorSplit: '#1f2a3d',
-    colorText: '#e5edf9',
-    colorTextSecondary: '#a6b4c9',
-    colorTextTertiary: '#71829e',
-    colorTextQuaternary: '#4b5b75',
-    colorFillSecondary: 'rgba(45, 212, 191, 0.1)',
-    colorFillQuaternary: 'rgba(255, 255, 255, 0.04)',
-    colorPrimaryBg: 'rgba(45, 212, 191, 0.14)',
-    colorPrimaryBgHover: 'rgba(45, 212, 191, 0.22)',
-    colorPrimaryBorder: 'rgba(94, 234, 212, 0.38)',
-    colorPrimaryBorderHover: 'rgba(94, 234, 212, 0.58)',
-    colorLink: '#2dd4bf',
+    colorPrimary: t['--accent-400'],
+    colorPrimaryHover: '#5eead4',
+    colorPrimaryActive: t['--accent-500'],
+    colorPrimaryBg: withAlpha(t['--accent-400'], 0.12),
+    colorPrimaryBgHover: withAlpha(t['--accent-400'], 0.2),
+    colorPrimaryBorder: withAlpha(t['--accent-400'], 0.38),
+    colorPrimaryBorderHover: withAlpha(t['--accent-400'], 0.58),
+
+    colorSuccess: '#4ade80',
+    colorWarning: '#fbbf24',
+    colorError: '#f87171',
+    colorInfo: '#7dd3fc',
+    colorLink: t['--accent-400'],
     colorLinkHover: '#5eead4',
-    boxShadow:
-      '0 18px 40px -24px rgba(2, 8, 23, 0.85), 0 10px 24px -18px rgba(2, 8, 23, 0.7)',
-    boxShadowSecondary:
-      '0 12px 28px -20px rgba(2, 8, 23, 0.72), 0 6px 16px -10px rgba(2, 8, 23, 0.56)',
+
+    colorBgLayout: darkTokens['--surface-page'],
+    colorBgContainer: darkTokens['--surface-raised'],
+    colorBgElevated: darkTokens['--surface-interactive'],
+    colorBgSpotlight: t['--paper-0'],
+
+    colorBorder: darkTokens['--border-strong'],
+    colorBorderSecondary: darkTokens['--border-hairline'],
+    colorSplit: darkTokens['--border-hairline'],
+
+    colorText: darkTokens['--text-primary'],
+    colorTextSecondary: darkTokens['--text-secondary'],
+    colorTextTertiary: darkTokens['--text-tertiary'],
+    colorTextQuaternary: darkTokens['--text-quaternary'],
+    colorFillSecondary: 'rgba(255, 255, 255, 0.06)',
+    colorFillQuaternary: 'rgba(255, 255, 255, 0.03)',
   },
   components: {
     Layout: {
-      siderBg: '#0e1627',
-      triggerBg: '#162033',
+      bodyBg: darkTokens['--surface-page'],
+      headerBg: darkTokens['--surface-raised'],
+      siderBg: darkTokens['--surface-raised'],
     },
     Menu: {
-      darkItemBg: '#0e1627',
-      darkSubMenuItemBg: '#0b1020',
-      darkItemSelectedBg: 'rgba(45, 212, 191, 0.2)',
+      darkItemBg: 'transparent',
+      darkSubMenuItemBg: 'transparent',
+      darkItemSelectedBg: withAlpha(t['--accent-400'], 0.16),
+      darkItemSelectedColor: darkTokens['--text-primary'],
     },
+    Table: {
+      headerBg: darkTokens['--surface-raised'],
+      headerColor: darkTokens['--text-tertiary'],
+      rowHoverBg: darkTokens['--surface-hover'],
+      borderColor: darkTokens['--border-hairline'],
+      headerSplitColor: 'transparent',
+    },
+    Card: { headerBg: 'transparent', paddingLG: 20 },
+    Button: {
+      primaryShadow: 'none',
+      defaultShadow: 'none',
+      dangerShadow: 'none',
+      fontWeight: 500,
+    },
+    Input: { paddingBlock: 6 },
+    Segmented: { itemSelectedBg: darkTokens['--surface-active'] },
+    Tabs: { horizontalItemGutter: 28 },
   },
 }
 
 export function getAntdTheme(resolvedTheme: ResolvedTheme): ThemeConfig {
   return resolvedTheme === 'light' ? lightTheme : darkTheme
 }
-

@@ -6,6 +6,7 @@
 } from '@ant-design/icons'
 import { Progress, Tag } from 'antd'
 import styles from './StatusRail.module.css'
+import { TruncatedText } from '@/components/layout'
 
 export interface StatusRailStep {
   key: string
@@ -129,9 +130,9 @@ export default function StatusRail({
               <div className={styles.stepBody}>
                 <div className={styles.stepHeading}>
                   <span className={styles.stepIndex}>{String(index + 1).padStart(2, '0')}</span>
-                  <h3>{step.title}</h3>
+                  <TruncatedText as="h3" lines={2}>{step.title}</TruncatedText>
                 </div>
-                <p>{step.description}</p>
+                <TruncatedText as="p" lines={2}>{step.description}</TruncatedText>
               </div>
             </li>
           )

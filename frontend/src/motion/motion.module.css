@@ -1,0 +1,114 @@
+/* ==========================================================================
+   Motion primitives.
+
+   Two rules keep this from becoming the usual animation soup:
+   1. Only `opacity` and `transform` are animated, so nothing leaves the compositor.
+   2. Every animation is opt-out: `prefers-reduced-motion` (and the CSS guard in
+      `global.css`) turns all of it off, and the hooks resolve to their final state.
+   ========================================================================== */
+
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, 20px, 0);
+}
+
+.revealed {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--dur-slow) var(--ease-out),
+    transform var(--dur-slow) var(--ease-out);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+/* Scroll-linked marker: uses the custom property written by useScrollProgress. */
+.scrollRule {
+  transform: scaleX(var(--scroll-progress, 0));
+  transform-origin: left center;
+}
+
+/* --------------------------------------------------------------------------
+   Keyframes — the codebase previously had none at all.
+   -------------------------------------------------------------------------- */
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes sweep {
+  from {
+    transform: translate3d(-100%, 0, 0);
+  }
+  to {
+    transform: translate3d(100%, 0, 0);
+  }
+}
+
+@keyframes pulseDot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+@keyframes drawLine {
+  from {
+    stroke-dashoffset: var(--draw-length, 1000);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.pageEnter {
+  animation: rise var(--dur-slow) var(--ease-out) both;
+}
+
+.flowNode {
+  animation: rise var(--dur-base) var(--ease-out) both;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+.statusPulse {
+  animation: pulseDot 2400ms var(--ease-inout) infinite;
+}
+
+.flowPath {
+  stroke-dasharray: var(--draw-length, 1000);
+  animation: drawLine 1400ms var(--ease-out) forwards;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+  }
+
+  .scrollRule {
+    transform: none;
+  }
+
+  .pageEnter,
+  .flowNode,
+  .statusPulse,
+  .flowPath {
+    animation: none;
+  }
+
+  .flowPath {
+    stroke-dashoffset: 0;
+  }
+}

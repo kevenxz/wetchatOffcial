@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="微信公众号文章自动发布系统">
+  <!--
+    Brand mark: a Swiss grid holding a single ink column, echoing "one article
+    flowing out of a pipeline". Deliberately monochrome so it reads at 16px.
+  -->
+  <rect width="64" height="64" fill="#0a0a0a" />
+  <rect x="14" y="12" width="4" height="40" fill="#ffffff" />
+  <rect x="22" y="12" width="28" height="4" fill="#ffffff" />
+  <rect x="22" y="24" width="20" height="4" fill="#ffffff" opacity="0.72" />
+  <rect x="22" y="36" width="28" height="4" fill="#ffffff" opacity="0.72" />
+  <rect x="22" y="48" width="14" height="4" fill="#2dd4bf" />
+</svg>

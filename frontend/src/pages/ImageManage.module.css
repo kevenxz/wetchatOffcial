@@ -1,0 +1,134 @@
+/* 图片管理 — generated asset review.
+
+   The page was an eleven-line placeholder while ~90 generated pictures accumulated on
+   disk un-reviewed. This is the audit surface: it shows the picture, the prompt that
+   produced it and the visual description behind that prompt, so "does this match the
+   article?" can finally be answered inside the product. */
+
+.page {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.notice {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-hair);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: var(--type-sm);
+  line-height: var(--leading-base);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--space-4);
+}
+
+.card {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  padding: var(--space-4);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-none);
+  background: var(--surface-raised);
+}
+
+.cardDegraded {
+  border-color: var(--status-danger-text);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.role {
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border: 1px solid var(--border-hairline);
+  background: var(--surface-sunken);
+}
+
+.thumbMissing {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  border: 1px dashed var(--status-danger-text);
+  color: var(--status-danger-text);
+  font-size: var(--type-sm);
+}
+
+.cardTitle {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--type-base);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-snug);
+}
+
+.specList {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.specRow {
+  display: grid;
+  grid-template-columns: 68px 1fr;
+  gap: var(--space-2);
+  font-size: var(--type-sm);
+  line-height: var(--leading-base);
+}
+
+.specTerm {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  padding-top: 2px;
+}
+
+.specValue {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.prompt {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border-hairline);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  line-height: var(--leading-base);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  color: var(--text-tertiary);
+  font-size: var(--type-xs);
+}
+
+.metaLink {
+  color: var(--accent);
+}

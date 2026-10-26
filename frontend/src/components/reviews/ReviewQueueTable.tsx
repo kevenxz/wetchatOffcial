@@ -1,5 +1,5 @@
 import { Button, Progress, Space, Table, Tag, Tooltip, Typography } from 'antd'
-import { CheckOutlined, CloseOutlined, RollbackOutlined } from '@ant-design/icons'
+import { CheckOutlined, CloseOutlined, FileTextOutlined, ProfileOutlined, RollbackOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { ReviewDecision, ReviewStatus } from '@/api'
 
@@ -26,6 +26,8 @@ type ReviewQueueTableProps = {
   onApprove: (reviewId: string) => void
   onReject: (reviewId: string) => void
   onRequestRevision: (reviewId: string) => void
+  onViewTask?: (taskId: string) => void
+  onViewArticle?: (taskId: string) => void
 }
 
 function score(value: number | null | undefined) {
@@ -43,6 +45,8 @@ export default function ReviewQueueTable({
   onApprove,
   onReject,
   onRequestRevision,
+  onViewTask,
+  onViewArticle,
 }: ReviewQueueTableProps) {
   const columns: ColumnsType<ReviewDecision> = [
     {
@@ -57,6 +61,28 @@ export default function ReviewQueueTable({
           <Space size={[4, 4]} wrap>
             <Tag>{record.target_type}</Tag>
             <Tag color={statusColor[record.status]}>{statusText[record.status]}</Tag>
+          </Space>
+          <Space size={4} wrap>
+            <Button
+              size="small"
+              type="link"
+              icon={<ProfileOutlined />}
+              aria-label="查看任务详情"
+              disabled={!taskId}
+              onClick={() => taskId && onViewTask?.(taskId)}
+            >
+              查看任务详情
+            </Button>
+            <Button
+              size="small"
+              type="link"
+              icon={<FileTextOutlined />}
+              aria-label="查看文章"
+              disabled={!taskId}
+              onClick={() => taskId && onViewArticle?.(taskId)}
+            >
+              查看文章
+            </Button>
           </Space>
         </Space>
       ),

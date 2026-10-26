@@ -1,0 +1,427 @@
+/* ==========================================================================
+   Landing page — the public surface.
+
+   This is the page a jury actually sees, so the art direction is at full strength:
+   a strict column grid, oversized display type, hairline rules, mono index labels,
+   and scroll-driven motion. No stock photography — the pipeline diagram and the
+   typography carry the visual idea.
+   ========================================================================== */
+
+.page {
+  min-height: 100vh;
+  background: var(--surface-page);
+  color: var(--text-primary);
+}
+
+.shell {
+  max-width: var(--layout-content-max);
+  margin: 0 auto;
+  padding: 0 var(--space-6);
+}
+
+/* --------------------------------------------------------------------------
+   Top bar
+   -------------------------------------------------------------------------- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  border-bottom: 1px solid var(--border-hairline);
+  background: var(--surface-overlay);
+  backdrop-filter: blur(16px) saturate(120%);
+}
+
+.topbarInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  min-height: var(--layout-header);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.brandText {
+  display: grid;
+  gap: 1px;
+}
+
+.brandName {
+  font-size: var(--type-sm);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-snug);
+  line-height: var(--leading-tight);
+}
+
+.brandMeta {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  line-height: var(--leading-tight);
+}
+
+.topbarActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.quietLink {
+  color: var(--text-secondary);
+  font-size: var(--type-sm);
+  transition: color var(--dur-fast) var(--ease-swiss);
+}
+
+.quietLink:hover {
+  color: var(--text-primary);
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--text-primary);
+  border-radius: var(--radius-none);
+  background: var(--text-primary);
+  color: var(--surface-page);
+  font-size: var(--type-sm);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-snug);
+  transition:
+    background-color var(--dur-fast) var(--ease-swiss),
+    color var(--dur-fast) var(--ease-swiss),
+    transform var(--dur-fast) var(--ease-swiss);
+}
+
+.cta:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+  transform: translate3d(0, -1px, 0);
+}
+
+.ctaSecondary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-none);
+  color: var(--text-primary);
+  font-size: var(--type-sm);
+  font-weight: var(--weight-medium);
+  transition:
+    border-color var(--dur-fast) var(--ease-swiss),
+    background-color var(--dur-fast) var(--ease-swiss);
+}
+
+.ctaSecondary:hover {
+  border-color: var(--text-primary);
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+/* --------------------------------------------------------------------------
+   Hero
+   -------------------------------------------------------------------------- */
+
+.hero {
+  position: relative;
+  padding: clamp(var(--space-16), 12vh, var(--space-32)) 0 clamp(var(--space-12), 8vh, var(--space-24));
+}
+
+/* Column grid, drawn behind the hero only — a full-page grid would be noise. */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px);
+  background-size: 50% 100%;
+  opacity: 0.9;
+}
+
+.heroInner {
+  position: relative;
+  display: grid;
+  gap: var(--space-8);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.eyebrowRule {
+  display: inline-block;
+  width: 32px;
+  height: 1px;
+  background: var(--text-tertiary);
+}
+
+.headline {
+  max-width: 20ch;
+  font-size: clamp(2.75rem, 8.4vw, 7rem);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-none);
+  letter-spacing: -0.045em;
+  text-wrap: balance;
+}
+
+.headlineAccent {
+  display: block;
+  color: var(--accent);
+}
+
+.lede {
+  max-width: 62ch;
+  color: var(--text-secondary);
+  font-size: clamp(var(--type-md), 1.4vw, var(--type-lg));
+  line-height: var(--leading-snug);
+}
+
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.heroMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border-hairline);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------------------
+   Pipeline — scroll driven
+   -------------------------------------------------------------------------- */
+
+.pipeline {
+  padding: clamp(var(--space-12), 10vh, var(--space-24)) 0;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.sectionHead {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-10);
+}
+
+.sectionTitle {
+  max-width: 26ch;
+  font-size: clamp(var(--type-xl), 3.4vw, var(--type-3xl));
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.sectionLede {
+  max-width: 60ch;
+  color: var(--text-secondary);
+  font-size: var(--type-md);
+}
+
+/* The rule fills as the section scrolls — progress comes from useScrollProgress. */
+.progressTrack {
+  position: relative;
+  height: 1px;
+  margin-bottom: var(--space-8);
+  background: var(--border-hairline);
+}
+
+.progressFill {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  transform: scaleX(var(--scroll-progress, 0));
+  transform-origin: left center;
+}
+
+.flow {
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  border: 1px solid var(--border-hairline);
+  background: var(--border-hairline);
+}
+
+.flowStep {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  padding: var(--space-6);
+  background: var(--surface-raised);
+}
+
+.flowIndex {
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  color: var(--accent);
+}
+
+.flowTitle {
+  font-size: var(--type-md);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-snug);
+  line-height: var(--leading-tight);
+}
+
+.flowBody {
+  color: var(--text-secondary);
+  font-size: var(--type-sm);
+  line-height: var(--leading-base);
+}
+
+/* --------------------------------------------------------------------------
+   Capabilities
+   -------------------------------------------------------------------------- */
+
+.capabilities {
+  padding: clamp(var(--space-12), 10vh, var(--space-24)) 0;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.capabilityGrid {
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  border: 1px solid var(--border-hairline);
+  background: var(--border-hairline);
+}
+
+.capability {
+  display: grid;
+  gap: var(--space-3);
+  align-content: start;
+  padding: var(--space-8) var(--space-6);
+  background: var(--surface-raised);
+}
+
+.capabilityTitle {
+  font-size: var(--type-md);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-snug);
+}
+
+.capabilityBody {
+  color: var(--text-secondary);
+  font-size: var(--type-sm);
+  line-height: var(--leading-relaxed);
+}
+
+/* --------------------------------------------------------------------------
+   Metrics
+   -------------------------------------------------------------------------- */
+
+.metrics {
+  padding: clamp(var(--space-12), 10vh, var(--space-20)) 0;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.metricGrid {
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  border: 1px solid var(--border-hairline);
+  background: var(--border-hairline);
+}
+
+.metric {
+  display: grid;
+  gap: var(--space-2);
+  align-content: start;
+  padding: var(--space-8) var(--space-6);
+  background: var(--surface-raised);
+}
+
+.metricValue {
+  font-size: clamp(var(--type-2xl), 5vw, var(--type-4xl));
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-none);
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+.metricLabel {
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* --------------------------------------------------------------------------
+   Closing + footer
+   -------------------------------------------------------------------------- */
+
+.closing {
+  display: grid;
+  gap: var(--space-5);
+  justify-items: start;
+  padding: clamp(var(--space-12), 10vh, var(--space-20)) 0;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.closingTitle {
+  max-width: 22ch;
+  font-size: clamp(var(--type-xl), 3.6vw, var(--type-2xl));
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-8) 0 var(--space-12);
+  border-top: 1px solid var(--border-hairline);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+@media (max-width: 720px) {
+  .shell {
+    padding: 0 var(--space-4);
+  }
+
+  .topbarActions .quietLink {
+    display: none;
+  }
+
+  .hero::before {
+    background-size: 100% 100%;
+  }
+}

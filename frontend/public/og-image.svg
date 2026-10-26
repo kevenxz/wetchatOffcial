@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="微信公众号文章自动发布系统">
+  <rect width="1200" height="630" fill="#fafafa" />
+
+  <!-- Swiss grid rules -->
+  <g stroke="#e4e4e7" stroke-width="1">
+    <line x1="80" y1="0" x2="80" y2="630" />
+    <line x1="1120" y1="0" x2="1120" y2="630" />
+    <line x1="80" y1="96" x2="1120" y2="96" />
+  </g>
+
+  <g fill="#0a0a0a">
+    <rect x="80" y="48" width="3" height="24" />
+  </g>
+  <text x="100" y="67" fill="#52525b" font-family="system-ui, sans-serif" font-size="15" letter-spacing="4">
+    WECHAT ARTICLE AUTOMATION
+  </text>
+
+  <text x="80" y="250" fill="#0a0a0a" font-family="system-ui, sans-serif" font-size="76" font-weight="700" letter-spacing="-3">
+    从热点到草稿箱
+  </text>
+  <text x="80" y="340" fill="#0a0a0a" font-family="system-ui, sans-serif" font-size="76" font-weight="700" letter-spacing="-3">
+    全流程自动生成
+  </text>
+
+  <text x="80" y="410" fill="#3f3f46" font-family="system-ui, sans-serif" font-size="24">
+    热点捕获 · 原文优先 · 来源过滤 · 动态结构 · 双重评审 · 一键发布
+  </text>
+
+  <!-- Pipeline abstraction -->
+  <g stroke="#0a0a0a" stroke-width="2">
+    <line x1="80" y1="500" x2="1120" y2="500" />
+  </g>
+  <g fill="#0a0a0a">
+    <circle cx="80" cy="500" r="6" />
+    <circle cx="340" cy="500" r="6" />
+    <circle cx="600" cy="500" r="6" />
+    <circle cx="860" cy="500" r="6" />
+  </g>
+  <circle cx="1120" cy="500" r="8" fill="#0f766e" />
+
+  <text x="80" y="545" fill="#71717a" font-family="ui-monospace, monospace" font-size="15">
+    23 NODES · 2C2G · POSTGRESQL + REDIS
+  </text>
+</svg>

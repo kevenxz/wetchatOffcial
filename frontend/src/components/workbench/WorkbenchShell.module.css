@@ -1,9 +1,22 @@
+/* ==========================================================================
+   Workbench shell — Swiss.
+
+   Structure: a fixed-width sidebar of hairline-separated rows, a sticky topbar with
+   a real editorial hierarchy (mono eyebrow → page title → description), and a flat
+   content canvas. No rounded corners, no shadows; the active nav item is marked
+   with an accent rule instead of a filled block.
+   ========================================================================== */
+
 .shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  background: var(--app-bg-gradient);
+  grid-template-columns: var(--layout-sidebar) minmax(0, 1fr);
+  background: var(--surface-page);
 }
+
+/* --------------------------------------------------------------------------
+   Sidebar
+   -------------------------------------------------------------------------- */
 
 .sidebar {
   position: sticky;
@@ -11,247 +24,338 @@
   height: 100vh;
   display: grid;
   grid-template-rows: auto auto 1fr auto;
-  gap: 20px;
-  padding: 20px 14px;
-  background: var(--app-sidebar-bg-layer);
-  color: var(--app-sidebar-text);
-  border-right: 1px solid var(--app-sidebar-border);
+  gap: var(--space-5);
+  padding: var(--space-5) var(--space-4);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  border-right: 1px solid var(--border-hairline);
   transition:
-    background var(--transition-base),
-    color var(--transition-base),
-    border-color var(--transition-base);
+    background-color var(--dur-base) var(--ease-swiss),
+    color var(--dur-base) var(--ease-swiss),
+    border-color var(--dur-base) var(--ease-swiss);
 }
 
 .brand {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
   align-items: center;
-  padding: 0 2px 18px;
-  border-bottom: 1px solid var(--app-sidebar-border);
-}
-
-.brandMark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  background: var(--app-sidebar-active);
-  color: var(--app-sidebar-active-text);
-  font-size: 18px;
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--border-hairline);
 }
 
 .brandTitle {
   display: block;
-  color: var(--app-sidebar-text);
-  font-size: 19px;
-  font-weight: 700;
-  line-height: 1.2;
+  color: var(--text-primary);
+  font-size: var(--type-md);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
 }
 
 .brandCopy {
   display: block;
   margin-top: 2px;
-  color: var(--app-sidebar-muted);
-  font-size: 13px;
-  line-height: 1.2;
+  color: var(--text-tertiary);
+  font-size: var(--type-xs);
+  letter-spacing: var(--tracking-wide);
+  line-height: var(--leading-tight);
 }
 
 .systemStatus {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 44px;
-  padding: 0 14px;
-  border-radius: 10px;
-  color: var(--app-sidebar-text);
-  background: var(--app-sidebar-status-bg);
-  font-size: 13px;
+  gap: var(--space-3);
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-none);
+  color: var(--text-secondary);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
 }
 
 .statusDot {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: #10b981;
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--status-success-text);
 }
 
 .online {
-  color: #22c55e;
+  margin-left: auto;
+  color: var(--status-success-text);
 }
 
 .nav {
   display: grid;
-  gap: 6px;
+  gap: 2px;
   align-content: start;
 }
 
 .navLink {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
-  height: 50px;
-  padding: 0 16px;
-  border-radius: 10px;
-  color: var(--app-sidebar-muted);
+  gap: var(--space-3);
+  height: 40px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-none);
+  color: var(--text-tertiary);
   white-space: nowrap;
+  font-size: var(--type-base);
   transition:
-    background-color var(--transition-fast),
-    color var(--transition-fast),
-    transform var(--transition-fast);
+    background-color var(--dur-fast) var(--ease-swiss),
+    color var(--dur-fast) var(--ease-swiss);
 }
 
 .navLink:hover {
-  color: var(--app-sidebar-text);
-  background: var(--app-sidebar-hover);
+  color: var(--text-primary);
+  background: var(--surface-hover);
 }
 
+/* Active state is a rule, not a filled block. */
 .navLinkActive {
-  color: var(--app-sidebar-active-text);
-  background: var(--app-sidebar-active);
-  font-weight: 600;
+  color: var(--text-primary);
+  background: transparent;
+  font-weight: var(--weight-semibold);
+}
+
+.navLinkActive::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--space-3) * -1);
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
 }
 
 .navIcon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 22px;
-  width: 22px;
-  height: 22px;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
   color: currentColor;
-  font-size: 17px;
+  font-size: 15px;
 }
 
 .sidebarFooter {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
   align-items: center;
-  padding: 18px 4px 0;
-  border-top: 1px solid var(--app-sidebar-border);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--border-hairline);
 }
 
 .avatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 38px;
-  height: 38px;
-  border-radius: 999px;
-  color: var(--app-avatar-text);
-  background: var(--app-avatar-bg);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  color: var(--accent);
+  background: var(--accent-subtle);
+  font-size: 15px;
 }
 
 .adminName {
-  color: var(--app-sidebar-text);
-  font-size: 15px;
-  line-height: 1.2;
+  color: var(--text-primary);
+  font-size: var(--type-sm);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-tight);
 }
 
 .adminMail {
-  margin-top: 3px;
-  color: var(--app-sidebar-muted);
-  font-size: 13px;
-  line-height: 1.2;
+  margin-top: 2px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  line-height: var(--leading-tight);
 }
+
+/* --------------------------------------------------------------------------
+   Main column
+   -------------------------------------------------------------------------- */
 
 .main {
   min-width: 0;
   display: grid;
-  grid-template-rows: 84px minmax(0, 1fr);
+  grid-template-rows: var(--layout-header) minmax(0, 1fr);
 }
 
 .topbar {
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: var(--z-sticky);
   display: grid;
-  grid-template-columns: auto minmax(260px, 392px) 1fr auto;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 360px) auto;
   align-items: center;
-  gap: 24px;
-  padding: 0 28px;
-  border-bottom: 1px solid var(--app-header-border);
-  background: var(--app-header-bg);
-  backdrop-filter: blur(18px) saturate(130%);
+  gap: var(--space-6);
+  padding: 0 var(--space-6);
+  border-bottom: 1px solid var(--border-hairline);
+  background: var(--surface-overlay);
+  backdrop-filter: blur(16px) saturate(120%);
   transition:
-    background-color var(--transition-base),
-    border-color var(--transition-base);
+    background-color var(--dur-base) var(--ease-swiss),
+    border-color var(--dur-base) var(--ease-swiss);
 }
 
 .routeContext {
   min-width: 0;
+  display: grid;
+  gap: 2px;
 }
 
+/* The eyebrow and description were previously `display: none`, which discarded the
+   editorial hierarchy the navigation metadata already provided. */
 .eyebrow {
-  display: none;
+  display: block;
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--text-tertiary);
 }
 
 .routeContext h1 {
   margin: 0;
-  color: var(--app-text);
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.25;
+  color: var(--text-primary);
+  font-size: var(--type-lg);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
 }
 
 .routeContext p {
-  display: none;
+  display: block;
+  overflow: hidden;
+  max-width: 80ch;
+  color: var(--text-tertiary);
+  font-size: var(--type-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .globalSearch {
-  max-width: 392px;
+  max-width: 360px;
+}
+
+.commandHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-hair);
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  line-height: 1.4;
 }
 
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 14px;
+  gap: var(--space-3);
 }
 
 .bell {
-  color: var(--app-text-secondary);
-  font-size: 20px;
+  color: var(--text-secondary);
+  font-size: 18px;
+}
+
+.bellButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-hair);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease-swiss);
+}
+
+.bellButton:hover {
+  background: var(--surface-hover);
+}
+
+.searchPanel {
+  min-width: 320px;
+  max-width: 460px;
+  max-height: 60vh;
+  overflow: auto;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-none);
+  background: var(--surface-raised);
+  box-shadow: var(--elevation-overlay);
+}
+
+.searchPanel :global(.ant-empty) {
+  margin: var(--space-3) 0;
+}
+
+.searchPanel :global(.ant-menu) {
+  border-inline-end: 0;
 }
 
 .topAvatar {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 999px;
-  color: var(--app-avatar-text);
-  background: var(--app-avatar-bg);
-  font-size: 18px;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-pill);
+  color: var(--accent);
+  background: var(--accent-subtle);
+  font-size: 15px;
 }
 
 .canvas {
   min-width: 0;
-  padding: 30px 28px 58px;
+  max-width: var(--layout-content-max);
+  padding: var(--space-6) var(--space-6) var(--space-16);
 }
 
 @media (max-width: 1180px) {
   .shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .sidebar {
     position: static;
     height: auto;
+    grid-template-rows: auto auto auto auto;
   }
 
   .nav {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   }
 
+  .main {
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
   .topbar {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
     height: auto;
-    padding: 18px;
+    padding: var(--space-4);
+  }
+
+  .canvas {
+    padding: var(--space-5) var(--space-4) var(--space-12);
   }
 }
