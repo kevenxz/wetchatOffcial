@@ -143,6 +143,7 @@ async def _push_to_target(
             "push_to_draft_account_failed",
             account_id=target["account_id"],
             error=str(exc),
+            exc_info=True,
         )
         return {}, _build_record(target=target, status="failed", error=str(exc), theme_name=theme_name)
 
@@ -274,6 +275,7 @@ async def push_to_draft_node(state: WorkflowState) -> dict:
             status="failed",
             duration_ms=duration_ms,
             error=error_msg,
+            exc_info=True,
         )
         return {
             "status": "failed",

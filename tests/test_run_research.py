@@ -1,8 +1,33 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import pytest
 
 from workflow.nodes.run_research import run_research_node
+
+
+def _long_body(topic: str, marker: str) -> str:
+    """Topic-relevant extracted body that survives source filtering.
+
+    ``marker`` is woven into every sentence so two bodies are genuinely different
+    text; otherwise the near-duplicate gate would (correctly) collapse them. Real
+    extractions are long and on-topic, unlike the single unrelated sentence these
+    fixtures used before relevance and quality filtering existed.
+    """
+    sentences = [
+        f"{marker}显示，{topic}的参与方在最近一个季度出现了调整，投入规模与落地场景同时变化。",
+        f"根据{marker}披露的口径，{topic}的推进节奏明显快于去年同期，但统计标准尚未统一。",
+        f"{marker}确认，{topic}的影响首先出现在供给端，随后才会传导到需求端与价格端。",
+        f"从{marker}列举的案例看，{topic}正在从试点走向规模化，验证周期仍然偏长。",
+        f"{marker}指出，{topic}的成本结构在过去半年发生调整，直接改变了下游的采购决策。",
+        f"{marker}记录的反向信号表明，{topic}的商业化节奏仍存在分歧，风险集中在中游环节。",
+        f"按照{marker}的表述，{topic}相关的政策口径趋严，不确定性因此有所上升。",
+        f"{marker}强调，判断{topic}需要区分已经落地的交付结果与仍停留在预期的规划。",
+        f"{marker}提供的对比数据显示，{topic}在不同区域的进展差异明显，不能一概而论。",
+        f"结合{marker}与其它来源，{topic}的结论需要保留边界，避免把单点信息当成趋势。",
+        f"{marker}提醒，{topic}接下来要观察的指标包括交付结果、成本变化与政策口径。",
+        f"如果{marker}之外的来源出现相反证据，关于{topic}的判断就需要及时修正。",
+    ]
+    return "".join(sentences)
 
 
 @pytest.mark.asyncio
@@ -35,7 +60,7 @@ async def test_run_research_builds_evidence_items_from_search_and_extract(monkey
                 {
                     "url": "https://example.com/report",
                     "title": "Example Report",
-                    "text": "Robotics funding accelerated in 2026. Investors are paying close attention to embodied AI.",
+                    "text": _long_body("机器人融资潮", "官方公告"),
                     "source_meta": {
                         "query": state["search_results"][0]["query"],
                         "query_intent": "fact",
@@ -103,7 +128,7 @@ async def test_run_research_marks_low_authority_sources_for_caution(monkeypatch:
                 {
                     "url": "https://community.example.com/post",
                     "title": "Forum Post",
-                    "text": "People are debating the robotics market and disagree on commercial timing.",
+                    "text": _long_body("机器人商业化", "社区讨论"),
                     "source_meta": {
                         "query": state["search_results"][0]["query"],
                         "query_intent": "opinion",
@@ -170,7 +195,7 @@ async def test_run_research_batches_queries_and_aggregates_results(monkeypatch: 
                 {
                     "url": item["url"],
                     "title": item["title"],
-                    "text": f"Expanded {item['query_intent']} evidence from {item['title']}.",
+                    "text": _long_body("机器人市场", f"{item['query_intent']} {item['title']}"),
                     "source_meta": {
                         "query": item["query"],
                         "query_intent": item["query_intent"],

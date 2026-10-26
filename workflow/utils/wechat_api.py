@@ -117,7 +117,12 @@ async def _download_image(
         )
     except Exception as exc:  # noqa: BLE001
         if _is_ssl_verification_error(exc) and _should_retry_without_ssl_verify():
-            logger.warning("download_image_ssl_verify_failed_retry_insecure", url=image_ref, error=str(exc))
+            logger.warning(
+                "download_image_ssl_verify_failed_retry_insecure",
+                url=image_ref,
+                error=str(exc),
+                exc_info=True,
+            )
             try:
                 async with httpx.AsyncClient(timeout=15.0, follow_redirects=True, verify=False) as insecure_client:
                     response = await insecure_client.get(image_ref, follow_redirects=True, timeout=15.0)
@@ -133,10 +138,11 @@ async def _download_image(
                     "download_image_failed_after_insecure_retry",
                     url=image_ref,
                     error=str(insecure_exc),
+                    exc_info=True,
                 )
                 return b"", "", ""
 
-        logger.warning("download_image_failed", url=image_ref, error=str(exc))
+        logger.warning("download_image_failed", url=image_ref, error=str(exc), exc_info=True)
         return b"", "", ""
 
 
@@ -158,7 +164,7 @@ def _load_local_image(image_ref: str, allowed_types: set[str]) -> tuple[bytes, s
             filename_hint=path.name,
         )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("load_local_image_failed", image_ref=image_ref, error=str(exc))
+        logger.warning("load_local_image_failed", image_ref=image_ref, error=str(exc), exc_info=True)
         return b"", "", ""
 
 
@@ -193,7 +199,7 @@ async def upload_cover_material(client: httpx.AsyncClient, image_ref: str, acces
         logger.error("upload_material_failed", result=data, image_ref=image_ref)
         return ""
     except Exception as exc:  # noqa: BLE001
-        logger.error("upload_material_exception", image_ref=image_ref, error=str(exc))
+        logger.error("upload_material_exception", image_ref=image_ref, error=str(exc), exc_info=True)
         return ""
 
 
@@ -218,5 +224,5 @@ async def upload_article_image(client: httpx.AsyncClient, image_ref: str, access
         logger.warning("uploadimg_failed", result=data, image_ref=image_ref)
         return image_ref if _is_remote_image_ref(image_ref) else ""
     except Exception as exc:  # noqa: BLE001
-        logger.warning("uploadimg_exception", image_ref=image_ref, error=str(exc))
+        logger.warning("uploadimg_exception", image_ref=image_ref, error=str(exc), exc_info=True)
         return image_ref if _is_remote_image_ref(image_ref) else ""

@@ -8,7 +8,7 @@ import structlog
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
-from workflow.model_factory import build_chat_model, llm_slot, model_context as stage_context
+from workflow.model_factory import invoke_structured, model_context as stage_context, structured_chain
 from workflow.model_logging import log_model_request, log_model_response
 from workflow.state import WorkflowState
 from workflow.utils.draft_quality import (
@@ -18,6 +18,7 @@ from workflow.utils.draft_quality import (
     normalize_draft_content,
     safe_heading as _safe_heading,
 )
+from workflow.utils.headings import subject_from_claim
 
 logger = structlog.get_logger(__name__)
 
@@ -189,16 +190,32 @@ def _repair_draft(
     return repaired, fixes, _draft_quality_violations(repaired, article_length)
 
 
+def _fallback_heading(claim: str, neutral: str, used: set[str]) -> str:
+    """Prefer a heading derived from the claim; fall back to a neutral label."""
+    subject = subject_from_claim(claim)
+    for candidate in (subject, neutral):
+        if candidate and candidate not in used and len(candidate) <= 42:
+            return candidate
+    return neutral
+
+
 def _build_fallback_draft(
     topic: str,
     blueprint: dict[str, Any],
     evidence_pack: dict[str, Any] | None = None,
     viral_strategy: dict[str, Any] | None = None,
+    outline_result: dict[str, Any] | None = None,
 ) -> DraftOutput:
+    """Deterministic last-resort draft.
+
+    Only used when no model is configured or the structured call failed. Section
+    headings are derived from the evidence itself, so two different stories do not
+    produce the same outline.
+    """
     evidence_pack = dict(evidence_pack or {})
     viral_strategy = dict(viral_strategy or {})
-    outline_result = dict(blueprint.get("outline_result") or {})
-    sections = list(outline_result.get("outline") or blueprint.get("sections") or [])[:4]
+    outline_result = dict(outline_result or blueprint.get("outline_result") or {})
+    sections = list(outline_result.get("outline") or blueprint.get("sections") or [])[:5]
     title_candidates = list(
         outline_result.get("title_candidates")
         or viral_strategy.get("title_hypotheses")
@@ -206,14 +223,6 @@ def _build_fallback_draft(
         or []
     )
     title = str(title_candidates[0] if title_candidates else blueprint.get("thesis") or topic or "未命名主题").strip()
-    alt_titles = [
-        candidate
-        for candidate in (
-            f"{topic}背后，真正要看的是这几个信号",
-            f"从搜索资料看{topic}：机会、证据和边界",
-        )
-        if candidate and candidate != title
-    ][:2]
     opening_hook = str(viral_strategy.get("opening_hook") or "").strip()
     if any(phrase in opening_hook for phrase in _PLANNING_LANGUAGE) or len(opening_hook) < 24:
         opening_hook = ""
@@ -228,21 +237,35 @@ def _build_fallback_draft(
         for index, section in enumerate(sections)
         if isinstance(section, dict) and _section_title(section)
     ]
+
+    used_headings: set[str] = set()
     if not section_blocks:
-        section_blocks = []
-        if evidence_pack.get("confirmed_facts"):
-            section_blocks.append(f"## 已经发生的变化\n\n{_claim_text(evidence_pack['confirmed_facts'][0])}")
-        if evidence_pack.get("usable_data_points"):
-            section_blocks.append(f"## 数据把问题带向哪里\n\n{_claim_text(evidence_pack['usable_data_points'][0])}")
-        if evidence_pack.get("usable_cases"):
-            section_blocks.append(f"## 放进真实场景再看\n\n{_claim_text(evidence_pack['usable_cases'][0])}")
-        if evidence_pack.get("risk_points") or evidence_pack.get("research_gaps"):
-            boundary = _claim_text((evidence_pack.get("risk_points") or evidence_pack.get("research_gaps"))[0])
-            section_blocks.append(f"## 现在还不能下什么结论\n\n{boundary}")
+        # No outline available: build beats from the evidence, heading each one with
+        # its own claim rather than a fixed template label.
+        for key, neutral in (
+            ("confirmed_facts", "已确认的事实"),
+            ("usable_data_points", "关键数据"),
+            ("usable_cases", "可用案例"),
+            ("risk_points", "风险与反向信号"),
+        ):
+            items = list(evidence_pack.get(key) or [])
+            if not items:
+                continue
+            claim = _claim_text(items[0])
+            heading = _fallback_heading(claim, neutral, used_headings)
+            used_headings.add(heading)
+            section_blocks.append(f"## {heading}\n\n{claim}")
+        if evidence_pack.get("research_gaps"):
+            gaps = "；".join(str(item) for item in list(evidence_pack["research_gaps"])[:3])
+            boundary_heading = f"{subject_from_claim(topic, limit=16) or topic}的结论边界"
+            if boundary_heading not in used_headings:
+                section_blocks.append(f"## {boundary_heading}\n\n{gaps}")
         if not section_blocks:
             section_blocks.append(
-                f"## 目前能确认的信号\n\n{topic}已经值得观察，但现有公开资料不足以支撑统一结论。与其套用固定分析框架，更重要的是区分已确认事实和仍待验证的判断。"
+                f"## 目前能确认的信号\n\n{topic}已经值得观察，但现有公开资料不足以支撑统一结论。"
+                "与其套用固定分析框架，更重要的是区分已确认事实和仍待验证的判断。"
             )
+
     closing = (
         f"因此，判断{topic}不必急着追求一个终局答案。更有用的做法，是记住当前最可靠的证据，"
         "同时盯住接下来会改变判断的指标：真实使用、交付结果、持续数据，以及不同来源能否相互印证。"
@@ -261,6 +284,24 @@ def _build_fallback_draft(
         ]
     )
     summary = str(outline_result.get("reader_value") or blueprint.get("reader_value") or f"围绕{topic}提炼事实、判断和风险边界。")
+
+    # Alternate titles come from the real candidates; failing that, from the
+    # material itself — never from a fixed sentence template.
+    alt_titles: list[str] = []
+    for candidate in title_candidates[1:3]:
+        text = str(candidate).strip()
+        if text and text != title:
+            alt_titles.append(text)
+    if not alt_titles:
+        primary_items = (
+            list(evidence_pack.get("confirmed_facts") or [])
+            or list(evidence_pack.get("usable_data_points") or [])
+        )
+        if primary_items:
+            derived = subject_from_claim(_claim_text(primary_items[0]), limit=24)
+            if derived and derived != title:
+                alt_titles.append(derived)
+
     return DraftOutput(title=title, alt_titles=alt_titles, content=content, summary=summary)
 
 
@@ -285,34 +326,7 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
     previous_draft = dict((state.get("writing_state") or {}).get("draft") or {})
     revision_guidance = list(revision_brief.get("guidance") or [])
     is_revision = bool(revision_brief) and bool(previous_draft.get("content"))
-
-    llm = build_chat_model(
-        stage="compose_draft",
-        # A targeted revision edits an existing draft, so it needs far fewer output tokens.
-        max_tokens=2500 if is_revision else 4000,
-        temperature=0.45,
-    )
-    if llm is None:
-        fallback = _build_fallback_draft(topic, blueprint, evidence_pack, viral_strategy)
-        fallback_violations = _draft_quality_violations(fallback, article_length)
-        return {
-            "status": "running",
-            "current_skill": "compose_draft",
-            "progress": 54,
-            "writing_state": {
-                "draft": fallback.model_dump(),
-                "review_findings": [],
-                "outline_result": outline_result,
-                "draft_generation_mode": "fallback",
-                "draft_quality_violations": fallback_violations,
-            },
-            "generated_article": {
-                "title": fallback.title,
-                "alt_titles": fallback.alt_titles,
-                "summary": fallback.summary,
-                "content": fallback.content,
-            },
-        }
+    draft_stage = "compose_draft_revision" if is_revision else "compose_draft"
 
     system_prompt = (
         "You are a Chinese content drafting agent. "
@@ -355,7 +369,36 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
     )
 
     prompt = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", human_prompt)])
-    chain = prompt | llm.with_structured_output(DraftOutput)
+    chain, retry_factory = structured_chain(
+        prompt,
+        stage=draft_stage,
+        schema=DraftOutput,
+        temperature=0.45,
+    )
+
+    if chain is None:
+        # No model configured: ship the deterministic draft, but say so explicitly.
+        fallback = _build_fallback_draft(topic, blueprint, evidence_pack, viral_strategy, outline_result)
+        fallback_violations = _draft_quality_violations(fallback, article_length)
+        return {
+            "status": "running",
+            "current_skill": "compose_draft",
+            "progress": 54,
+            "writing_state": {
+                "draft": fallback.model_dump(),
+                "review_findings": [],
+                "outline_result": outline_result,
+                "draft_generation_mode": "fallback",
+                "draft_quality_violations": fallback_violations,
+                "draft_degraded_reason": "no_model_configured",
+            },
+            "generated_article": {
+                "title": fallback.title,
+                "alt_titles": fallback.alt_titles,
+                "summary": fallback.summary,
+                "content": fallback.content,
+            },
+        }
 
     payload = {
         "topic": topic,
@@ -373,7 +416,7 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
         "previous_draft": previous_draft if is_revision else {},
         "draft_violations": revision_guidance if is_revision else [],
     }
-    model_ctx = stage_context("compose_draft", structured_output="DraftOutput")
+    model_ctx = stage_context(draft_stage, structured_output="DraftOutput")
     log_model_request(
         logger,
         task_id=str(state.get("task_id") or ""),
@@ -385,9 +428,14 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
     draft_generation_mode = "model_revision" if is_revision else "model"
     draft_quality_violations: list[str] = []
     normalization_fixes: list[str] = []
+    degraded_reason = ""
     try:
-        async with llm_slot():
-            result = await chain.ainvoke(payload)
+        result = await invoke_structured(
+            chain,
+            payload,
+            stage=draft_stage,
+            build_retry_chain=retry_factory,
+        )
         if isinstance(result, DraftOutput):
             draft = result
         else:
@@ -414,8 +462,12 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
                 "previous_draft": draft.model_dump(),
                 "draft_violations": draft_quality_violations,
             }
-            async with llm_slot():
-                repaired_result = await chain.ainvoke(repair_payload)
+            repaired_result = await invoke_structured(
+                chain,
+                repair_payload,
+                stage=draft_stage,
+                build_retry_chain=retry_factory,
+            )
             draft = repaired_result if isinstance(repaired_result, DraftOutput) else DraftOutput(**dict(repaired_result))
             draft, repair_fixes, draft_quality_violations = _repair_draft(draft, article_length)
             normalization_fixes = [*normalization_fixes, *repair_fixes]
@@ -426,8 +478,9 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
                 task_id=str(state.get("task_id") or ""),
                 violations=draft_quality_violations,
             )
-            draft = _build_fallback_draft(topic, blueprint, evidence_pack, viral_strategy)
+            draft = _build_fallback_draft(topic, blueprint, evidence_pack, viral_strategy, outline_result)
             draft_generation_mode = "fallback"
+            degraded_reason = "content_level_violations"
             draft_quality_violations = _draft_quality_violations(draft, article_length)
         log_model_response(
             logger,
@@ -437,28 +490,35 @@ async def compose_draft_node(state: WorkflowState) -> dict[str, Any]:
             response=draft.model_dump(),
         )
     except Exception as exc:  # noqa: BLE001
+        degraded_reason = getattr(exc, "reason", "") or "error"
         logger.warning(
             "compose_draft_fallback",
             task_id=str(state.get("task_id") or ""),
+            degraded_reason=degraded_reason,
             error=str(exc),
+            exc_info=True,
         )
-        draft = _build_fallback_draft(topic, blueprint, evidence_pack, viral_strategy)
+        draft = _build_fallback_draft(topic, blueprint, evidence_pack, viral_strategy, outline_result)
         draft_generation_mode = "fallback"
         draft_quality_violations = _draft_quality_violations(draft, article_length)
+
+    writing_state_payload: dict[str, Any] = {
+        "draft": draft.model_dump(),
+        "review_findings": [],
+        "revision_brief": {},
+        "outline_result": outline_result,
+        "draft_generation_mode": draft_generation_mode,
+        "draft_quality_violations": draft_quality_violations,
+        "draft_normalization": normalization_fixes,
+    }
+    if degraded_reason:
+        writing_state_payload["draft_degraded_reason"] = degraded_reason
 
     return {
         "status": "running",
         "current_skill": "compose_draft",
         "progress": 54,
-        "writing_state": {
-            "draft": draft.model_dump(),
-            "review_findings": [],
-            "revision_brief": {},
-            "outline_result": outline_result,
-            "draft_generation_mode": draft_generation_mode,
-            "draft_quality_violations": draft_quality_violations,
-            "draft_normalization": normalization_fixes,
-        },
+        "writing_state": writing_state_payload,
         "generated_article": {
             "title": draft.title,
             "alt_titles": draft.alt_titles,

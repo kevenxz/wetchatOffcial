@@ -8,7 +8,7 @@ import structlog
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
-from workflow.model_factory import build_chat_model, llm_slot, model_context as stage_context
+from workflow.model_factory import invoke_structured, model_context as stage_context, structured_chain
 from workflow.model_logging import log_model_request, log_model_response
 from workflow.state import WorkflowState
 
@@ -172,26 +172,14 @@ async def review_article_draft_node(state: WorkflowState) -> dict[str, Any]:
     evidence_pack = dict(research_state.get("evidence_pack") or {})
     planning_state = dict(state.get("planning_state") or {})
 
-    llm = build_chat_model(stage="review_article_draft", max_tokens=600, temperature=0.2)
-    if llm is None:
-        review = _fallback_review(draft, evidence_pack)
-        writing_state["review_findings"] = review.findings
-        writing_state["revision_guidance"] = review.revision_guidance
-        writing_state["article_review"] = {"passed": review.passed, "score": review.score}
-        return {
-            "status": "running",
-            "current_skill": "review_article_draft",
-            "progress": 60,
-            "writing_state": writing_state,
-        }
-
     system_prompt = (
         "You are a Chinese editorial reviewer. "
         "Review the draft for narrative effectiveness, evidence support, and clarity. "
         "Do not require a fixed framework, section count, section order, or ritual risk section. "
         "Fail any draft that exposes planning instructions or uses raw source titles, URLs, or one section per search result. "
         "Check whether the article answers one central question and whether claims, evidence, explanation, and reader relevance form a coherent chain. "
-        "Return concise findings and concrete revision guidance."
+        "Return concise findings and concrete revision guidance. "
+        "Keep the output small: at most five findings and at most five short guidance items."
     )
     human_prompt = (
         "topic:\n{topic}\n\n"
@@ -201,7 +189,26 @@ async def review_article_draft_node(state: WorkflowState) -> dict[str, Any]:
         "evidence_pack:\n{evidence_pack}\n"
     )
     prompt = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", human_prompt)])
-    chain = prompt | llm.with_structured_output(ReviewOutput)
+    chain, retry_factory = structured_chain(
+        prompt,
+        stage="review_article_draft",
+        schema=ReviewOutput,
+        temperature=0.2,
+    )
+
+    if chain is None:
+        # No model configured: fall back to the rule-based review.
+        review = _fallback_review(draft, evidence_pack)
+        writing_state["review_findings"] = review.findings
+        writing_state["revision_guidance"] = review.revision_guidance
+        writing_state["article_review"] = {"passed": review.passed, "score": review.score}
+        writing_state["review_degraded_reason"] = "no_model_configured"
+        return {
+            "status": "running",
+            "current_skill": "review_article_draft",
+            "progress": 60,
+            "writing_state": writing_state,
+        }
 
     payload = {
         "topic": str(state.get("task_brief", {}).get("topic") or state.get("keywords") or ""),
@@ -220,8 +227,12 @@ async def review_article_draft_node(state: WorkflowState) -> dict[str, Any]:
     )
 
     try:
-        async with llm_slot():
-            result = await chain.ainvoke(payload)
+        result = await invoke_structured(
+            chain,
+            payload,
+            stage="review_article_draft",
+            build_retry_chain=retry_factory,
+        )
         if isinstance(result, ReviewOutput):
             review = result
         else:
@@ -244,11 +255,15 @@ async def review_article_draft_node(state: WorkflowState) -> dict[str, Any]:
             response=review.model_dump(),
         )
     except Exception as exc:  # noqa: BLE001
+        degraded_reason = getattr(exc, "reason", "") or "error"
         logger.warning(
             "review_article_draft_fallback",
             task_id=str(state.get("task_id") or ""),
+            degraded_reason=degraded_reason,
             error=str(exc),
+            exc_info=True,
         )
+        writing_state["review_degraded_reason"] = degraded_reason
         review = _fallback_review(draft, evidence_pack)
 
     writing_state["review_findings"] = review.findings

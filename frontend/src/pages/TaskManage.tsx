@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Empty, Input, Popconfirm, Space, Table, Tag, Tooltip, message } from 'antd'
+import { Button, Input, Popconfirm, Space, Table, Tag, Tooltip, message } from 'antd'
 import {
   CheckCircleOutlined,
   DeleteOutlined,
@@ -14,16 +14,19 @@ import type { ColumnsType } from 'antd/es/table'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { deleteTask, listTasks, retryTask, type TaskResponse } from '@/api'
+import { EmptyState, Panel, Stat, StatGrid } from '@/components/layout'
 import styles from './TaskManage.module.css'
 
-type TaskFilter = 'all' | 'done' | 'review' | 'pending' | 'failed'
+type TaskFilter = 'all' | 'done' | 'review' | 'pending' | 'queued' | 'failed' | 'cancelled'
 
 const filterOptions: Array<{ label: string; value: TaskFilter }> = [
   { label: '全部', value: 'all' },
   { label: '已完成', value: 'done' },
   { label: '审核中', value: 'review' },
   { label: '等待中', value: 'pending' },
+  { label: '排队中', value: 'queued' },
   { label: '失败', value: 'failed' },
+  { label: '已取消', value: 'cancelled' },
 ]
 
 const categoryPalette: Record<string, string> = {
@@ -67,8 +70,10 @@ function getTaskMode(task: TaskResponse) {
 
 function getTaskStatus(task: TaskResponse): { label: string; color: string; filter: TaskFilter } {
   if (task.status === 'failed') return { label: '失败', color: 'error', filter: 'failed' }
+  if (task.status === 'cancelled') return { label: '已取消', color: 'default', filter: 'cancelled' }
   if (task.human_review_required) return { label: '审核中', color: 'warning', filter: 'review' }
   if (task.status === 'done') return { label: '已完成', color: 'success', filter: 'done' }
+  if (task.status === 'queued') return { label: '排队中', color: 'cyan', filter: 'queued' }
   return { label: '等待中', color: 'processing', filter: 'pending' }
 }
 
@@ -302,34 +307,18 @@ export default function TaskManage() {
         </div>
       </div>
 
-      <div className={styles.summaryGrid}>
-        <div className={styles.summaryCard}>
-          <div className={styles.summaryLabel}>总任务</div>
-          <div className={styles.summaryValue}>{summary.total}</div>
-        </div>
-        <div className={styles.summaryCard}>
-          <div className={styles.summaryLabel}>已完成</div>
-          <div className={styles.summaryValue} style={{ color: '#059669' }}>
-            {summary.done}
-          </div>
-        </div>
-        <div className={styles.summaryCard}>
-          <div className={styles.summaryLabel}>审核中</div>
-          <div className={styles.summaryValue} style={{ color: '#d97706' }}>
-            {summary.review}
-          </div>
-        </div>
-        <div className={styles.summaryCard}>
-          <div className={styles.summaryLabel}>失败</div>
-          <div className={styles.summaryValue} style={{ color: '#e11d48' }}>
-            {summary.failed}
-          </div>
-        </div>
-      </div>
+      <StatGrid>
+        <Stat label="总任务" value={summary.total} />
+        <Stat label="已完成" value={summary.done} tone="positive" />
+        <Stat label="审核中" value={summary.review} tone="warning" />
+        <Stat label="失败" value={summary.failed} tone="negative" />
+      </StatGrid>
 
-      <div className={styles.tableCard}>
+      <Panel flush>
         {filteredTasks.length === 0 && !loading ? (
-          <Empty description="暂无任务" style={{ padding: 48 }} />
+          <div className={styles.emptyPad}>
+            <EmptyState title="暂无任务" description="调整筛选条件，或新建一个任务开始生成。" />
+          </div>
         ) : (
           <Table
             columns={columns}
@@ -340,7 +329,7 @@ export default function TaskManage() {
             size="middle"
           />
         )}
-      </div>
+      </Panel>
     </div>
   )
 }

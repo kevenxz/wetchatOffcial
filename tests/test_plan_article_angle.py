@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from workflow import runtime_settings
 from workflow.nodes.plan_article_angle import plan_article_angle_node
 
 
@@ -242,7 +243,7 @@ async def test_plan_article_angle_uses_model_to_generate_structured_blueprint() 
     assert llm_kwargs["model"] == "text-model"
     assert llm_kwargs["api_key"] == "text-key"
     assert llm_kwargs["base_url"] == "https://text.example.com/v1"
-    assert llm_kwargs["max_tokens"] == 1800
+    assert llm_kwargs["max_tokens"] == runtime_settings.budget_for_tier("plan_article_angle", "strong")
     assert llm_kwargs["temperature"] == 0.35
     # The factory always applies a bounded timeout and retry budget.
     assert llm_kwargs["timeout"] > 0
@@ -509,7 +510,9 @@ async def test_plan_article_angle_model_prompt_requests_wechat_style_structure()
     messages = mock_prompt_class.from_messages.call_args.args[0]
     system_prompt = messages[0][1]
     assert "wechat" in system_prompt.lower()
-    assert "section headings should be content-specific" in system_prompt.lower()
+    assert "specific to this story" in system_prompt.lower()
+    # The prompt must explicitly forbid the fixed placeholder headings.
+    assert "先确认发生了什么" in system_prompt
 
 
 @pytest.mark.asyncio
@@ -559,10 +562,17 @@ async def test_plan_article_angle_builds_framework_from_search_materials() -> No
 
     assert blueprint["source_driven_framework"]
     assert blueprint["evidence_map"]
-    assert len(headings) <= 4
+    assert headings, "material must produce at least one narrative beat"
+    # Headings must never echo a raw source title or URL.
     assert all("Enterprise buyers slow AI agent rollout" not in heading for heading in headings)
     assert all("AI sales tools face longer payback cycles" not in heading for heading in headings)
-    assert any("发生了什么" in heading for heading in headings)
+    assert all("http" not in heading for heading in headings)
+    # Headings must be derived from this story's own material rather than a fixed
+    # placeholder set (the old implementation always emitted the same four).
+    assert any(
+        "payback" in heading.lower() or "companies" in heading.lower() or "sales" in heading.lower()
+        for heading in headings
+    )
 
 
 @pytest.mark.asyncio

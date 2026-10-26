@@ -7,6 +7,7 @@ grading its own work and gives the quality gate a stable, inspectable contract.
 """
 from __future__ import annotations
 
+import json
 import re
 from typing import Any
 
@@ -14,7 +15,7 @@ import structlog
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
-from workflow.model_factory import build_chat_model, llm_slot, model_context as stage_context
+from workflow.model_factory import invoke_structured, model_context as stage_context, structured_chain
 from workflow.model_logging import log_model_request, log_model_response
 from workflow.state import WorkflowState
 
@@ -86,39 +87,53 @@ async def design_viral_strategy_node(state: WorkflowState) -> dict[str, Any]:
     evidence_pack = dict(research_state.get("evidence_pack") or {})
     topic = str(selected_topic.get("title") or task_brief.get("topic") or state.get("keywords") or "").strip()
     fallback = _fallback_strategy(topic, task_brief)
-    llm = build_chat_model(stage="design_viral_strategy", max_tokens=700, temperature=0.45)
+    degraded_reason = ""
 
-    if llm is None:
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are a Chinese WeChat distribution strategist. Define an evidence-safe editorial bet before writing. "
+                "Optimise for qualified clicks, reading completion, saves and meaningful shares, never clickbait. "
+                "Find one reader tension, one concrete promise and one non-obvious angle. Keep all claims within the evidence boundary. "
+                "If a primary hotspot source is provided, build the angle on what that article actually says.",
+            ),
+            (
+                "human",
+                "topic:\n{topic}\n\ntask_brief:\n{task_brief}\n\nselected_topic:\n{selected_topic}\n\n"
+                "primary_source:\n{primary_source}\n\n"
+                "evidence_quality:\n{evidence_quality}\n\naccount_profile:\n{account_profile}",
+            ),
+        ]
+    )
+    chain, retry_factory = structured_chain(
+        prompt,
+        stage="design_viral_strategy",
+        schema=ViralStrategyOutput,
+        temperature=0.45,
+    )
+
+    if chain is None:
         strategy = fallback
+        degraded_reason = "no_model_configured"
     else:
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    "You are a Chinese WeChat distribution strategist. Define an evidence-safe editorial bet before writing. "
-                    "Optimise for qualified clicks, reading completion, saves and meaningful shares, never clickbait. "
-                    "Find one reader tension, one concrete promise and one non-obvious angle. Keep all claims within the evidence boundary.",
-                ),
-                (
-                    "human",
-                    "topic:\n{topic}\n\ntask_brief:\n{task_brief}\n\nselected_topic:\n{selected_topic}\n\n"
-                    "evidence_quality:\n{evidence_quality}\n\naccount_profile:\n{account_profile}",
-                ),
-            ]
-        )
-        chain = prompt | llm.with_structured_output(ViralStrategyOutput)
         payload = {
             "topic": topic,
             "task_brief": task_brief,
             "selected_topic": selected_topic,
+            "primary_source": _primary_source_summary(research_state),
             "evidence_quality": dict(evidence_pack.get("quality_summary") or {}),
             "account_profile": dict(state.get("config_snapshot", {}).get("account_profile") or {}),
         }
         context = stage_context("design_viral_strategy", structured_output="ViralStrategyOutput")
         log_model_request(logger, task_id=str(state.get("task_id") or ""), skill="design_viral_strategy", context=context, request=payload)
         try:
-            async with llm_slot():
-                result = await chain.ainvoke(payload)
+            result = await invoke_structured(
+                chain,
+                payload,
+                stage="design_viral_strategy",
+                build_retry_chain=retry_factory,
+            )
             strategy = result if isinstance(result, ViralStrategyOutput) else ViralStrategyOutput(**dict(result))
             log_model_response(
                 logger,
@@ -128,15 +143,42 @@ async def design_viral_strategy_node(state: WorkflowState) -> dict[str, Any]:
                 response=strategy.model_dump(),
             )
         except Exception as exc:  # noqa: BLE001
-            logger.warning("design_viral_strategy_fallback", task_id=str(state.get("task_id") or ""), error=str(exc))
+            degraded_reason = getattr(exc, "reason", "") or "error"
+            logger.warning(
+                "design_viral_strategy_fallback",
+                task_id=str(state.get("task_id") or ""),
+                degraded_reason=degraded_reason,
+                error=str(exc),
+                exc_info=True,
+            )
             strategy = fallback
+
+    viral_state: dict[str, Any] = {"strategy": strategy.model_dump(), "review": {}}
+    if degraded_reason:
+        viral_state["strategy_degraded_reason"] = degraded_reason
 
     return {
         "status": "running",
         "current_skill": "design_viral_strategy",
         "progress": 48,
-        "viral_state": {"strategy": strategy.model_dump(), "review": {}},
+        "viral_state": viral_state,
     }
+
+
+def _primary_source_summary(research_state: dict[str, Any]) -> str:
+    """Compact view of the hotspot's own article for the strategy prompt."""
+    sources = [item for item in list(research_state.get("hotspot_sources") or []) if isinstance(item, dict)]
+    if not sources:
+        return "(none)"
+    primary = sources[0]
+    return json.dumps(
+        {
+            "title": str(primary.get("title") or "")[:200],
+            "url": str(primary.get("url") or ""),
+            "excerpt": str(primary.get("text") or "")[:1200],
+        },
+        ensure_ascii=False,
+    )
 
 
 def _opening(content: str) -> str:
@@ -249,26 +291,34 @@ async def review_viral_potential_node(state: WorkflowState) -> dict[str, Any]:
     review_policy = dict(state.get("config_snapshot", {}).get("review_policy") or {})
     threshold = int(review_policy.get("viral_threshold") or 78)
     fallback = _heuristic_review(draft, strategy, evidence_pack)
-    llm = build_chat_model(stage="review_viral_potential", max_tokens=700, temperature=0.15)
+    degraded_reason = ""
 
-    if llm is None:
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are an independent Chinese WeChat growth editor. Score the finished draft, not the plan. "
+                "Judge qualified headline appeal, first-screen retention, non-obvious insight, reader resonance, "
+                "meaningful share motivation, evidence credibility and mobile readability. Never reward clickbait or unsupported certainty. "
+                "Return the seven scores plus at most three findings and three short guidance items.",
+            ),
+            (
+                "human",
+                "strategy:\n{strategy}\n\ntitle:\n{title}\n\ncontent:\n{content}\n\nevidence_quality:\n{evidence_quality}",
+            ),
+        ]
+    )
+    chain, retry_factory = structured_chain(
+        prompt,
+        stage="review_viral_potential",
+        schema=ViralReviewOutput,
+        temperature=0.15,
+    )
+
+    if chain is None:
         review = fallback
+        degraded_reason = "no_model_configured"
     else:
-        prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    "You are an independent Chinese WeChat growth editor. Score the finished draft, not the plan. "
-                    "Judge qualified headline appeal, first-screen retention, non-obvious insight, reader resonance, "
-                    "meaningful share motivation, evidence credibility and mobile readability. Never reward clickbait or unsupported certainty.",
-                ),
-                (
-                    "human",
-                    "strategy:\n{strategy}\n\ntitle:\n{title}\n\ncontent:\n{content}\n\nevidence_quality:\n{evidence_quality}",
-                ),
-            ]
-        )
-        chain = prompt | llm.with_structured_output(ViralReviewOutput)
         payload = {
             "strategy": strategy,
             "title": str(draft.get("title") or ""),
@@ -284,8 +334,12 @@ async def review_viral_potential_node(state: WorkflowState) -> dict[str, Any]:
             request=payload,
         )
         try:
-            async with llm_slot():
-                result = await chain.ainvoke(payload)
+            result = await invoke_structured(
+                chain,
+                payload,
+                stage="review_viral_potential",
+                build_retry_chain=retry_factory,
+            )
             review = result if isinstance(result, ViralReviewOutput) else ViralReviewOutput(**dict(result))
             log_model_response(
                 logger,
@@ -295,8 +349,18 @@ async def review_viral_potential_node(state: WorkflowState) -> dict[str, Any]:
                 response=review.model_dump(),
             )
         except Exception as exc:  # noqa: BLE001
-            logger.warning("review_viral_potential_fallback", task_id=str(state.get("task_id") or ""), error=str(exc))
+            degraded_reason = getattr(exc, "reason", "") or "error"
+            logger.warning(
+                "review_viral_potential_fallback",
+                task_id=str(state.get("task_id") or ""),
+                degraded_reason=degraded_reason,
+                error=str(exc),
+                exc_info=True,
+            )
             review = fallback
+
+    if degraded_reason:
+        viral_state["review_degraded_reason"] = degraded_reason
 
     review_data = _review_payload(review, threshold)
     viral_state["review"] = review_data

@@ -8,8 +8,20 @@ import AccountConfigPage from '@/pages/AccountConfig'
 import ModelConfigPage from '@/pages/ModelConfig'
 import StyleConfigPage from '@/pages/StyleConfig'
 import globalStylesSource from '@/styles/global.css?inline'
+import tokensSource from '@/styles/tokens.css?inline'
+import { primitiveTokens } from '@/styles/tokens'
 import variablesSource from '@/styles/variables.css?inline'
 import { renderWithRouter } from '@/test/renderWithRouter'
+
+/** WCAG relative luminance, used to prove "light mode" is genuinely light. */
+function relativeLuminance(hex: string) {
+  const normalized = hex.replace('#', '')
+  const channels = [0, 2, 4].map((offset) => {
+    const value = Number.parseInt(normalized.slice(offset, offset + 2), 16) / 255
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  })
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+}
 
 const {
   getStyleConfigMock,
@@ -17,12 +29,16 @@ const {
   getCustomThemesMock,
   getModelConfigMock,
   listAccountsMock,
+  listTasksMock,
+  searchAllMock,
 } = vi.hoisted(() => ({
   getStyleConfigMock: vi.fn(),
   getPresetThemesMock: vi.fn(),
   getCustomThemesMock: vi.fn(),
   getModelConfigMock: vi.fn(),
   listAccountsMock: vi.fn(),
+  listTasksMock: vi.fn(),
+  searchAllMock: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -31,6 +47,8 @@ vi.mock('@/api', () => ({
   getCustomThemes: getCustomThemesMock,
   getModelConfig: getModelConfigMock,
   listAccounts: listAccountsMock,
+  listTasks: listTasksMock,
+  searchAll: searchAllMock,
 }))
 
 let previousTheme: string | undefined
@@ -59,6 +77,8 @@ beforeEach(() => {
     image: { enabled: false, api_key: '', base_url: '', model: 'dall-e-3' },
   })
   listAccountsMock.mockResolvedValue([])
+  listTasksMock.mockResolvedValue([])
+  searchAllMock.mockResolvedValue({ tasks: [], articles: [], topics: [] })
 })
 
 afterEach(() => {
@@ -81,7 +101,7 @@ function getDeclarationValue(ruleBody: string, property: string) {
   return match?.[1]?.replace(/\s*!important\s*$/i, '').trim() ?? ''
 }
 
-test('renders a dark 280px sidebar shell with top context bar', () => {
+test('renders a sidebar shell with a top context bar', () => {
   const { container } = renderWithRouter(<WorkbenchShell />, { route: '/task', theme: 'light' })
 
   const shell = container.firstElementChild as HTMLElement | null
@@ -97,12 +117,11 @@ test('renders a dark 280px sidebar shell with top context bar', () => {
   const shellStyle = getComputedStyle(shell as HTMLElement)
   const topbarStyle = getComputedStyle(topbar as HTMLElement)
 
-  expect(shellStyle.getPropertyValue('grid-template-columns')).toBe('280px minmax(0, 1fr)')
+  // jsdom does not resolve custom properties, so assert the token reference rather
+  // than a resolved pixel value.
+  expect(shellStyle.getPropertyValue('grid-template-columns')).toContain('var(--layout-sidebar)')
   expect(shellStyle.getPropertyValue('background-image')).toBe('')
-  expect(topbarStyle.paddingTop).toBe('0px')
-  expect(topbarStyle.paddingRight).toBe('28px')
-  expect(topbarStyle.paddingBottom).toBe('0px')
-  expect(topbarStyle.paddingLeft).toBe('28px')
+  expect(topbarStyle.getPropertyValue('padding')).toContain('var(--space-6)')
 })
 
 test('renders a compact HeroPanel with spaced title and description', () => {
@@ -166,7 +185,7 @@ test('collapses the shell to a single column at the breakpoint', () => {
   ) as CSSStyleRule | undefined
 
   expect(shellRule).toBeDefined()
-  expect(shellRule!.style.getPropertyValue('grid-template-columns')).toBe('1fr')
+  expect(shellRule!.style.getPropertyValue('grid-template-columns')).toBe('minmax(0, 1fr)')
 })
 
 test('keeps shared surfaces light in light mode', () => {
@@ -180,10 +199,23 @@ test('keeps shared surfaces light in light mode', () => {
   expect(sidebar).toBeInTheDocument()
   expect(canvas).toBeInTheDocument()
 
-  const rootRuleBody = getRuleBody(variablesSource, ":root[data-theme='light']")
-  expect(getDeclarationValue(rootRuleBody, '--app-surface-muted')).toBe('#f8f3ea')
-  expect(getDeclarationValue(rootRuleBody, '--app-toolbar-bg')).toBe('#fffdf8')
-  expect(getDeclarationValue(rootRuleBody, '--app-list-row-hover')).toBe('#f8f3ea')
+  // Light is the default theme now, so the values live in the token layer and the
+  // legacy names are aliases onto the semantic tokens. Look these up across the
+  // whole sheet: `?inline` inlines the `@import`, so matching a single `:root`
+  // block would find the token layer's block instead of the alias block.
+  expect(getDeclarationValue(variablesSource, '--app-surface-muted')).toBe('var(--surface-sunken)')
+  expect(getDeclarationValue(variablesSource, '--app-toolbar-bg')).toBe('var(--surface-raised)')
+  expect(getDeclarationValue(variablesSource, '--app-list-row-hover')).toBe('var(--surface-hover)')
+
+  expect(getDeclarationValue(tokensSource, '--surface-sunken')).toBe('var(--paper-100)')
+  expect(getDeclarationValue(tokensSource, '--surface-raised')).toBe('var(--paper-0)')
+  expect(getDeclarationValue(tokensSource, '--surface-hover')).toBe('var(--paper-100)')
+
+  // "Light mode" must actually be light: assert the resolved primitives rather than
+  // restating hex codes, so a palette change does not silently make this lie.
+  for (const name of ['--paper-0', '--paper-50', '--paper-100'] as const) {
+    expect(relativeLuminance(primitiveTokens[name])).toBeGreaterThan(0.9)
+  }
 
   const toolbarRuleBody = getRuleBody(globalStylesSource, '.backstage-toolbar')
   expect(getDeclarationValue(toolbarRuleBody, 'background')).toBe('var(--app-toolbar-bg)')
@@ -195,7 +227,7 @@ test('keeps shared surfaces light in light mode', () => {
   expect(getDeclarationValue(previewRuleBody, 'background')).toBe('var(--app-surface-muted)')
 
   const hoverRuleBody = getRuleBody(globalStylesSource, '.ant-table-wrapper .ant-table-tbody > tr:hover > td')
-  expect(getDeclarationValue(hoverRuleBody, 'background')).toBe('var(--app-list-row-hover)')
+  expect(getDeclarationValue(hoverRuleBody, 'background')).toBe('var(--surface-hover)')
   expect(hoverRuleBody).toContain('!important')
 })
 

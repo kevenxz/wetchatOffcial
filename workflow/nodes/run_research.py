@@ -10,6 +10,7 @@ from workflow.tools.search_web import search_web_node
 from workflow.state import WorkflowState
 from workflow.utils.research_contract import SEARCH_DEPTH_LIMITS
 from workflow.utils.search_evaluator import evaluate_search_sufficiency
+from workflow.utils.source_filter import filter_sources
 
 
 def _chunk_search_queries(search_queries: list[dict[str, Any]], batch_size: int = 1) -> list[list[dict[str, Any]]]:
@@ -84,6 +85,59 @@ def _build_evidence_items(extracted_contents: list[dict[str, Any]], angle_by_que
             }
         )
     return evidence_items
+
+
+def _topic_keywords(state: WorkflowState) -> list[str]:
+    """Topic keywords used as extra relevance tokens."""
+    brief = dict(state.get("task_brief") or {})
+    keywords: list[str] = []
+    for value in (
+        brief.get("keywords"),
+        state.get("keywords"),
+        brief.get("topic"),
+        (state.get("selected_topic") or {}).get("title"),
+        (state.get("selected_hotspot") or {}).get("title"),
+    ):
+        text = str(value or "").strip()
+        if text and text not in keywords:
+            keywords.append(text)
+    return keywords
+
+
+def _filter_view(item: dict[str, Any]) -> dict[str, Any]:
+    """Flatten an extracted-content row into the shape the source filter expects."""
+    source_meta = dict(item.get("source_meta") or {})
+    return {
+        "url": str(item.get("url") or "").strip(),
+        "title": str(item.get("title") or "").strip(),
+        "text": str(item.get("text") or "").strip(),
+        "domain": str(source_meta.get("domain") or "").strip(),
+        "source_type": str(source_meta.get("source_type") or "unknown").strip(),
+    }
+
+
+def _filter_extracted_contents(
+    *,
+    topic: str,
+    keywords: list[str],
+    extracted_contents: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Drop off-topic, low-quality, duplicated and over-concentrated sources.
+
+    Runs before sufficiency evaluation and evidence packing so filtering actually
+    changes what the article is built from, and records why each source was dropped.
+    """
+    if not extracted_contents:
+        return [], {"kept": 0, "dropped": 0, "reasons": {}, "insufficient": True, "dropped_items": []}
+
+    result = filter_sources(
+        topic,
+        [_filter_view(item) for item in extracted_contents],
+        keywords=keywords,
+    )
+    kept_urls = {str(item.get("url") or "").strip() for item in result.kept}
+    kept = [item for item in extracted_contents if str(item.get("url") or "").strip() in kept_urls]
+    return kept, result.summary()
 
 
 def _default_contract(state: WorkflowState, queries: list[dict[str, Any]]) -> dict[str, Any]:
@@ -293,7 +347,21 @@ async def run_research_node(state: WorkflowState) -> dict[str, Any]:
             for item in _append_queries(queries, queued_queries)
             if str(item.get("query") or "").strip()
         }
-        evidence_items = _build_evidence_items(aggregated_extracted_contents, angle_by_query)
+
+        # Filter before evaluating sufficiency so the article is only ever built from
+        # sources that passed the relevance, quality, duplicate and diversity gates.
+        filtered_extracted, filtering_summary = _filter_extracted_contents(
+            topic=str(search_contract.get("topic") or state.get("keywords") or "").strip(),
+            keywords=_topic_keywords(state),
+            extracted_contents=aggregated_extracted_contents,
+        )
+        source_filtering = {
+            key: value for key, value in filtering_summary.items() if key != "dropped_items"
+        }
+        source_filtering["round"] = round_index
+        source_filtering["dropped_items"] = list(filtering_summary.get("dropped_items") or [])
+
+        evidence_items = _build_evidence_items(filtered_extracted, angle_by_query)
         final_evaluation = evaluate_search_sufficiency(
             contract=search_contract,
             evidence_items=evidence_items,
@@ -317,6 +385,16 @@ async def run_research_node(state: WorkflowState) -> dict[str, Any]:
         for gap in final_evaluation["missing_questions"]:
             if gap not in research_gaps:
                 research_gaps.append(gap)
+
+    sources_insufficient = bool(source_filtering.get("insufficient"))
+    manual_review_reasons = list(final_evaluation.get("missing_questions") or [])
+    if sources_insufficient:
+        # Per product decision: keep going with a warning rather than failing the task,
+        # but the article must be reviewed by a human before it is published.
+        reason = "usable_sources_below_threshold"
+        if reason not in manual_review_reasons:
+            manual_review_reasons.append(reason)
+
     return {
         "status": "running",
         "current_skill": "run_research",
@@ -327,12 +405,15 @@ async def run_research_node(state: WorkflowState) -> dict[str, Any]:
             "search_contract": search_contract,
             "search_runs": search_runs,
             "search_evaluation": final_evaluation,
-            "manual_review_reasons": list(final_evaluation.get("missing_questions") or [])
-            if final_evaluation.get("manual_review_required")
-            else [],
+            "source_filtering": source_filtering,
+            "manual_review_reasons": manual_review_reasons,
             "search_results": aggregated_search_results,
-            "extracted_contents": aggregated_extracted_contents,
+            "extracted_contents": filtered_extracted,
             "evidence_items": evidence_items,
         },
-        "human_review_required": bool(state.get("human_review_required")) or bool(final_evaluation.get("manual_review_required")),
+        "human_review_required": (
+            bool(state.get("human_review_required"))
+            or bool(final_evaluation.get("manual_review_required"))
+            or sources_insufficient
+        ),
     }

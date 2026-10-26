@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   BgColorsOutlined,
@@ -28,6 +27,7 @@ import {
   type StyleConfig,
 } from '@/api'
 import { HeroPanel, SectionBlock, SignalCard } from '@/components/workbench'
+import styles from './StyleConfig.module.css'
 
 const { Text, Paragraph } = Typography
 const { TextArea } = Input
@@ -185,40 +185,6 @@ function downloadJson(filename: string, payload: unknown) {
   anchor.download = filename
   anchor.click()
   URL.revokeObjectURL(url)
-}
-
-const guidanceListStyle: CSSProperties = {
-  display: 'grid',
-  gap: 8,
-  margin: 0,
-  paddingInlineStart: 20,
-  listStyleType: 'disc',
-  listStylePosition: 'outside',
-  color: 'var(--text-secondary)',
-  fontSize: 13,
-  lineHeight: 1.6,
-}
-
-const panelStyle: CSSProperties = {
-  display: 'grid',
-  gap: 16,
-  padding: 20,
-  borderRadius: 16,
-  border: '1px solid var(--app-border)',
-  background: 'var(--app-surface)',
-}
-
-const panelHeadingStyle: CSSProperties = {
-  margin: 0,
-  fontSize: 15,
-  fontWeight: 600,
-  color: 'var(--app-text)',
-}
-
-const previewHeaderStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
 }
 
 export default function StyleConfigPage() {
@@ -435,7 +401,7 @@ export default function StyleConfigPage() {
         title="品牌样式管理台"
         description="把公众号文章的 Markdown 预览、当前生效样式和主题资产放在同一块后台界面里。"
       >
-        <ul style={guidanceListStyle} aria-label="样式提示">
+        <ul className={styles.guidanceList} aria-label="样式提示">
           <li>先查看实时预览，再保存当前样式。</li>
           <li>需要复用时进入主题中心编辑或另存。</li>
           <li>样式范围直接对应 Markdown 常见元素。</li>
@@ -459,29 +425,28 @@ export default function StyleConfigPage() {
         }
       >
         <div className="backstage-grid backstage-grid--preview">
-          <div className="backstage-surface-card" style={panelStyle}>
-            <div style={previewHeaderStyle}>
-              <span style={panelHeadingStyle}>Markdown 预览</span>
+          <div className={styles.panel}>
+            <div className={styles.previewHeader}>
+              <span className={styles.panelHeading}>Markdown 预览</span>
               <Tag color="geekblue">{activeThemeName}</Tag>
             </div>
             <TextArea
               value={previewMarkdown}
               onChange={(event) => setPreviewMarkdown(event.target.value)}
               autoSize={{ minRows: 28, maxRows: 28 }}
-              className="backstage-code-area"
-              style={{ resize: 'none' }}
+              className={`${styles.codeArea} ${styles.textAreaFixed}`}
             />
           </div>
 
-          <div className="backstage-surface-card" style={panelStyle}>
-            <div style={previewHeaderStyle}>
+          <div className={styles.panel}>
+            <div className={styles.previewHeader}>
               <EyeOutlined />
-              <span style={panelHeadingStyle}>微信样式预览</span>
+              <span className={styles.panelHeading}>微信样式预览</span>
             </div>
-            <div className="backstage-preview-frame" style={{ minHeight: 560 }}>
+            <div className="backstage-preview-frame">
               <div
                 dangerouslySetInnerHTML={{ __html: pagePreviewHtml }}
-                style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}
+                className={styles.breakWord}
               />
             </div>
           </div>
@@ -494,8 +459,8 @@ export default function StyleConfigPage() {
           aside={<Text type="secondary">保留主题编辑、导入导出和另存为能力。</Text>}
         >
           <div className="backstage-stack">
-            <div style={panelStyle}>
-              <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            <div className={styles.panel}>
+              <Paragraph type="secondary" className={styles.fieldFlush}>
                 当前样式会直接作用于预览窗口。若要沉淀为可复用资产，先在主题中心创建副本。
               </Paragraph>
               <Space size={[8, 8]} wrap>
@@ -527,8 +492,8 @@ export default function StyleConfigPage() {
         </SectionBlock>
 
         <SectionBlock title="样式范围">
-          <div style={panelStyle}>
-            <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+          <div className={styles.panel}>
+            <Paragraph type="secondary" className={styles.fieldFlush}>
               当前编辑器覆盖容器、标题、正文、引用、链接、代码块和表格等微信公众号常见元素。
             </Paragraph>
             <Space size={[8, 8]} wrap>
@@ -546,7 +511,7 @@ export default function StyleConfigPage() {
         ref={importRef}
         type="file"
         accept="application/json"
-        style={{ display: 'none' }}
+        className={styles.hiddenInput}
         onChange={async (event) => {
           const file = event.target.files?.[0]
           if (file) {
@@ -572,20 +537,8 @@ export default function StyleConfigPage() {
         }
         styles={{ body: { padding: 0 } }}
       >
-        <div style={{ height: '72vh', minHeight: 620, maxHeight: 760, display: 'flex', overflow: 'hidden' }}>
-          <div
-            style={{
-              width: 260,
-              flexShrink: 0,
-              borderRight: '1px solid #f0f0f0',
-              background: '#fafafa',
-              padding: 18,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 16,
-              overflow: 'hidden',
-            }}
-          >
+        <div className={styles.studioShell}>
+          <div className={styles.studioThemes}>
             <Button type="primary" icon={<PlusOutlined />} size="large" block onClick={handleCreateTheme}>
               新建自定义主题
             </Button>
@@ -593,15 +546,15 @@ export default function StyleConfigPage() {
               导入主题
             </Button>
 
-            <div style={{ minHeight: 0, overflow: 'auto', paddingRight: 4 }}>
-              <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            <div className={styles.studioScroll}>
+              <Space direction="vertical" size={8} className={styles.fullWidth}>
                 {themeButtons.map((item) => (
                   <Button
                     key={item.key}
                     type={selectedThemeKey === item.key ? 'primary' : 'default'}
                     onClick={() => handleThemeSelect(item.key)}
                     block
-                    style={{ textAlign: 'left' }}
+                    className={styles.textLeft}
                   >
                     {item.label}
                   </Button>
@@ -610,17 +563,8 @@ export default function StyleConfigPage() {
             </div>
           </div>
 
-          <div
-            style={{
-              flex: 1,
-              minWidth: 0,
-              borderRight: '1px solid #f0f0f0',
-              background: '#f8fafc',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid #f0f0f0', background: '#fff' }}>
+          <div className={styles.studioPreview}>
+            <div className={styles.studioPreviewHeader}>
               <Space size={10}>
                 <Text strong>实时预览</Text>
                 <Tag
@@ -636,30 +580,20 @@ export default function StyleConfigPage() {
                 </Tag>
               </Space>
             </div>
-            <div style={{ padding: 24, overflow: 'auto', minHeight: 0 }}>
-              <div className="backstage-preview-frame" style={{ minHeight: 560 }}>
+            <div className={styles.studioPreviewBody}>
+              <div className="backstage-preview-frame">
                 <div
                   dangerouslySetInnerHTML={{ __html: draftPreviewHtml }}
-                  style={{ wordWrap: 'break-word', overflowWrap: 'break-word' }}
+                  className={styles.breakWord}
                 />
               </div>
             </div>
           </div>
 
-          <div
-            style={{
-              width: 440,
-              flexShrink: 0,
-              padding: 20,
-              display: 'flex',
-              flexDirection: 'column',
-              minHeight: 0,
-              overflow: 'hidden',
-            }}
-          >
-            <Space align="center" style={{ justifyContent: 'space-between', width: '100%' }}>
+          <div className={styles.studioInspector}>
+            <Space align="center" className={styles.spaceBetween}>
               <Space size={10}>
-                <Text strong style={{ fontSize: 16 }}>
+                <Text strong className={styles.inspectorTitle}>
                   主题编辑
                 </Text>
                 <Tag>{editorMode === 'create' ? '新建' : editorMode === 'edit' ? '编辑' : '浏览'}</Tag>
@@ -707,45 +641,30 @@ export default function StyleConfigPage() {
               </Space>
             </Space>
 
-            <Divider style={{ margin: '16px 0' }} />
+            <Divider className={styles.dividerTight} />
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minHeight: 0, overflow: 'hidden' }}>
+            <div className={styles.inspectorStack}>
               <div>
                 <Text strong>主题名称</Text>
                 <Input
                   value={draftThemeName}
                   onChange={(event) => setDraftThemeName(event.target.value)}
                   disabled={selectedThemeSource === 'preset' && editorMode === 'browse'}
-                  style={{ marginTop: 8 }}
+                  className={styles.fieldTop}
                 />
               </div>
 
-              <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <div className={styles.inspectorBody}>
                 <Text strong>CSS 样式</Text>
                 <TextArea
                   value={themeCssText}
                   onChange={(event) => handleCssChange(event.target.value)}
                   disabled={selectedThemeSource === 'preset' && editorMode === 'browse'}
-                  className="backstage-code-area"
-                  style={{
-                    marginTop: 8,
-                    height: '100%',
-                    minHeight: 420,
-                    resize: 'none',
-                  }}
+                  className={`${styles.codeArea} ${styles.cssEditor}`}
                 />
               </div>
 
-              <div
-                style={{
-                  padding: '12px 14px',
-                  borderRadius: 12,
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  color: '#475569',
-                  fontSize: 13,
-                }}
-              >
+              <div className={styles.readOnlyNote}>
                 内置主题保持只读。若要调整，请先从当前配置另存为自定义主题，再继续编辑。
               </div>
             </div>

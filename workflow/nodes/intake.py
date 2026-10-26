@@ -22,6 +22,8 @@ async def intake_task_brief_node(state: WorkflowState) -> dict[str, Any]:
         "mode": str(state.get("mode") or config_snapshot.get("mode") or "manual"),
         "audience_roles": list(config.get("audience_roles") or []),
         "article_goal": str(config.get("article_goal") or "").strip(),
+        # Operator override for the article type; empty means "let the agent decide".
+        "requested_article_type": str(config.get("requested_article_type") or "").strip(),
         "runtime_profile": str(config.get("runtime_profile") or "quality_first"),
         "account_profile": account_profile,
         "content_template": content_template,

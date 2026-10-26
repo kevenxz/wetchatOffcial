@@ -105,6 +105,7 @@ def normalize_generation_config(config: Mapping[str, Any] | None) -> dict[str, A
     strategy = DEFAULT_ARTICLE_STRATEGY
     style_hint = DEFAULT_STYLE_HINT
     runtime_profile = DEFAULT_RUNTIME_PROFILE
+    requested_article_type = ""
     image_policy: dict[str, Any] = {}
     research_policy: dict[str, Any] = {}
 
@@ -130,6 +131,13 @@ def normalize_generation_config(config: Mapping[str, Any] | None) -> dict[str, A
         if isinstance(raw_runtime_profile, str):
             runtime_profile = raw_runtime_profile.strip() or DEFAULT_RUNTIME_PROFILE
 
+        raw_requested_type = config.get("requested_article_type")
+        if isinstance(raw_requested_type, str):
+            requested_article_type = raw_requested_type.strip()
+            # "auto" is the UI's way of saying "let the agent decide".
+            if requested_article_type.lower() == "auto":
+                requested_article_type = ""
+
         raw_image_policy = config.get("image_policy")
         if isinstance(raw_image_policy, Mapping):
             image_policy = dict(raw_image_policy)
@@ -148,6 +156,10 @@ def normalize_generation_config(config: Mapping[str, Any] | None) -> dict[str, A
         "article_strategy": strategy,
         "style_hint": style_hint,
         "runtime_profile": runtime_profile,
+        # Empty means "let the planning agent decide the article type". This key has to
+        # survive normalization: dropping it here is what silently discarded the
+        # operator's explicit type choice before.
+        "requested_article_type": requested_article_type,
         "image_policy": image_policy,
         "research_policy": research_policy,
     }

@@ -7,10 +7,12 @@ import AccountConfigPage from '@/pages/AccountConfig'
 import ArticleManage from '@/pages/ArticleManage'
 import History from '@/pages/History'
 import ImageManage from '@/pages/ImageManage'
+import LandingPage from '@/pages/Landing'
 import LoginPage from '@/pages/Login'
 import ModelConfigPage from '@/pages/ModelConfig'
 import ReviewCenter from '@/pages/ReviewCenter'
 import ScheduleManage from '@/pages/ScheduleManage'
+import Stats from '@/pages/Stats'
 import StyleConfigPage from '@/pages/StyleConfig'
 import TaskCreate from '@/pages/TaskCreate'
 import TaskDetail from '@/pages/TaskDetail'
@@ -49,9 +51,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public surfaces. The landing page is the only front door a jury (or a
+            prospective operator) sees, and it must not sit behind auth. */}
+        <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route element={<RequireAuth />}>
-          <Route path="/" element={<Navigate to="/task" replace />} />
           <Route element={<WorkbenchShell />}>
             <Route path="/topics" element={<TopicCenter />} />
             <Route path="/task" element={<TaskManage />} />
@@ -59,6 +63,7 @@ export default function App() {
             <Route path="/task/:id" element={<TaskDetail />} />
             <Route path="/reviews" element={<ReviewCenter />} />
             <Route path="/history" element={<History />} />
+            <Route path="/stats" element={<Stats />} />
             <Route path="/articles" element={<ArticleManage />} />
             <Route path="/images" element={<ImageManage />} />
             <Route path="/schedules" element={<ScheduleManage />} />

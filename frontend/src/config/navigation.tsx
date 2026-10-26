@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import {
+  BarChartOutlined,
   CalendarOutlined,
   FileTextOutlined,
   HistoryOutlined,
@@ -32,6 +33,14 @@ export const routeMetadata: RouteMeta[] = [
     contextEyebrow: 'Workspace',
     contextDescription: '查看系统运行概览、近期任务和关键产出。',
     icon: <HistoryOutlined />,
+  },
+  {
+    path: '/stats',
+    navLabel: '数据看板',
+    contextTitle: '数据看板',
+    contextEyebrow: 'Analytics',
+    contextDescription: '查看文章产出、发布量与阅读互动数据的趋势和排行。',
+    icon: <BarChartOutlined />,
   },
   {
     path: '/task',
@@ -94,10 +103,10 @@ export const routeMetadata: RouteMeta[] = [
   },
   {
     path: '/schedules',
-    navLabel: '发布记录',
-    contextTitle: '发布记录',
+    navLabel: '定时计划',
+    contextTitle: '定时计划',
     contextEyebrow: 'Publishing',
-    contextDescription: '查看发布动作、定时计划和运行结果。',
+    contextDescription: '管理定时发布计划，并查看每次计划的执行结果与推送记录。',
     icon: <CalendarOutlined />,
   },
   {

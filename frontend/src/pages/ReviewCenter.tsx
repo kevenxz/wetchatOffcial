@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button, Card, Empty, Select, Space, Statistic, Typography, message } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
 import {
   approveReview,
   listReviews,
@@ -29,6 +30,7 @@ export default function ReviewCenter() {
   const [status, setStatus] = useState<ReviewFilter>('pending')
   const [loading, setLoading] = useState(false)
   const [actionLoadingId, setActionLoadingId] = useState('')
+  const navigate = useNavigate()
 
   const fetchReviews = async (nextStatus = status) => {
     setLoading(true)
@@ -107,6 +109,8 @@ export default function ReviewCenter() {
               onApprove={(reviewId) => void runReviewAction(reviewId, 'approve')}
               onReject={(reviewId) => void runReviewAction(reviewId, 'reject')}
               onRequestRevision={(reviewId) => void runReviewAction(reviewId, 'revision')}
+              onViewTask={(taskId) => navigate(`/task/${taskId}`)}
+              onViewArticle={() => navigate('/articles')}
             />
           )}
         </Card>

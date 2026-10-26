@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from workflow import runtime_settings
 from workflow.agents.writer import compose_draft_node
 
 
@@ -284,7 +285,10 @@ async def test_compose_draft_uses_model_to_generate_structured_draft() -> None:
     assert llm_kwargs["model"] == "text-model"
     assert llm_kwargs["api_key"] == "text-key"
     assert llm_kwargs["base_url"] == "https://text.example.com/v1"
-    assert llm_kwargs["max_tokens"] == 4000
+    # Budget is tier-aware: widened when the stage lands on a reasoning model, whose
+    # hidden reasoning would otherwise consume the whole completion budget and return
+    # no parseable JSON.
+    assert llm_kwargs["max_tokens"] == runtime_settings.budget_for_tier("compose_draft", "strong")
     assert llm_kwargs["temperature"] == 0.45
     # The factory always applies a bounded timeout and retry budget.
     assert llm_kwargs["timeout"] > 0

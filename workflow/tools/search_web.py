@@ -430,6 +430,7 @@ async def search_web_node(state: WorkflowState) -> dict:
                     provider=provider_name,
                     query=query,
                     error=str(exc),
+                    exc_info=True,
                 )
 
         try:
@@ -449,6 +450,7 @@ async def search_web_node(state: WorkflowState) -> dict:
                 provider="duckduckgo",
                 query=query,
                 error=str(exc),
+                exc_info=True,
             )
 
         raw_results.extend(query_results)

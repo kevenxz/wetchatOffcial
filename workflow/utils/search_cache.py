@@ -44,7 +44,7 @@ async def get_cached_search(provider: str, query: str, limit: int) -> list[dict[
     try:
         raw = await client.get(cache_key(provider, query, limit))
     except Exception as exc:  # noqa: BLE001
-        logger.warning("search_cache_get_failed", error=str(exc))
+        logger.warning("search_cache_get_failed", error=str(exc), exc_info=True)
         return None
 
     if not raw:
@@ -72,4 +72,4 @@ async def set_cached_search(provider: str, query: str, limit: int, results: list
             ex=runtime_settings.search_cache_ttl_seconds(),
         )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("search_cache_set_failed", error=str(exc))
+        logger.warning("search_cache_set_failed", error=str(exc), exc_info=True)

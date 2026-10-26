@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from api.store import resolve_theme_style
 from workflow.state import WorkflowState
 from workflow.utils.markdown_to_wechat import markdown_to_wechat_html
 
@@ -42,15 +43,43 @@ def _merge_visuals(article: dict[str, Any], visual_state: dict[str, Any]) -> dic
     return merged
 
 
+def source_image_attributions(assets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attribution records for every harvested photograph in the asset list."""
+    records: list[dict[str, Any]] = []
+    for asset in assets:
+        if not isinstance(asset, dict) or str(asset.get("provider") or "") != "source":
+            continue
+        attribution = dict(asset.get("attribution") or {})
+        if not attribution:
+            continue
+        attribution["role"] = str(asset.get("role") or "")
+        records.append(attribution)
+    return records
+
+
 def _build_publish_decision(
     quality_state: dict[str, Any],
     config_snapshot: dict[str, Any],
     skip_auto_push: bool,
+    *,
+    source_attributions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     quality_report = dict(quality_state.get("quality_report") or {})
     review_policy = dict(config_snapshot.get("review_policy") or {})
     publish_policy = dict(config_snapshot.get("publish_policy") or {})
     blocking_reasons = list(quality_report.get("blocking_reasons") or [])
+
+    # Photographs harvested from third-party articles always go through a human. This is the
+    # approved policy: we cannot clear rights automatically, so a person confirms before the
+    # article becomes visible to readers. It is an *additional* reason, so it can only add
+    # review — the operator's own review policy still applies unchanged.
+    harvested = list(source_attributions or [])
+    if harvested:
+        blocking_reasons.append(
+            f"图片来源需人工确认：正文/封面使用了 {len(harvested)} 张参考文章的照片，"
+            "请核对版权与出处后再发布"
+        )
+
     require_human = bool(
         review_policy.get("require_human_review")
         or publish_policy.get("require_manual_confirmation")
@@ -64,6 +93,7 @@ def _build_publish_decision(
         "human_review_required": require_human,
         "auto_publish_to_draft": auto_publish_to_draft,
         "blocking_reasons": blocking_reasons,
+        "source_image_attributions": harvested,
         "next_step": "human_review" if require_human else ("push_to_draft" if auto_publish_to_draft else "manual_push"),
     }
 
@@ -76,14 +106,22 @@ async def assemble_article_node(state: WorkflowState) -> dict[str, Any]:
     config_snapshot = dict(state.get("config_snapshot") or {})
     final_article = _merge_visuals(generated_article, visual_state)
     illustrations = [str(item).strip() for item in list(final_article.get("illustrations") or []) if str(item).strip()]
+
+    # Render with the same theme the push stage will use so the stored preview and
+    # the delivered article cannot diverge.
+    theme_name, style_config = resolve_theme_style(state.get("article_theme"))
     final_article["html_content"] = markdown_to_wechat_html(
         str(final_article.get("content") or ""),
         illustrations,
+        style_config=style_config,
     )
+    final_article["article_theme"] = theme_name
+    attributions = source_image_attributions(list(visual_state.get("assets") or []))
     publish_decision = _build_publish_decision(
         quality_state,
         config_snapshot,
         bool(state.get("skip_auto_push")),
+        source_attributions=attributions,
     )
     final_article.update(
         {

@@ -1,23 +1,28 @@
 import { useEffect, useState } from 'react'
-import { Button, Card, Empty, Popconfirm, Space, Table, Tag, Tooltip, message } from 'antd'
+import { Button, Popconfirm, Space, Table, Tag, Tooltip, message } from 'antd'
 import { DeleteOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import { ARTICLE_STRATEGY_LABELS, deleteTask, listTasks, type TaskResponse } from '@/api'
-import { HeroPanel } from '@/components/workbench'
+import { EmptyState, PageHeader, Panel, Stat, StatGrid } from '@/components/layout'
+import styles from './History.module.css'
 
 const statusColorMap: Record<TaskResponse['status'], string> = {
   pending: 'default',
+  queued: 'cyan',
   running: 'processing',
   done: 'success',
   failed: 'error',
+  cancelled: 'warning',
 }
 
 const statusTextMap: Record<TaskResponse['status'], string> = {
-  pending: '排队中',
+  pending: '等待中',
+  queued: '排队中',
   running: '执行中',
   done: '已完成',
   failed: '失败',
+  cancelled: '已取消',
 }
 
 export default function History() {
@@ -51,6 +56,10 @@ export default function History() {
     }
   }
 
+  const doneCount = tasks.filter((task) => task.status === 'done').length
+  const runningCount = tasks.filter((task) => task.status === 'running' || task.status === 'queued').length
+  const failedCount = tasks.filter((task) => task.status === 'failed').length
+
   const columns = [
     {
       title: '任务 ID',
@@ -59,7 +68,7 @@ export default function History() {
       width: 150,
       render: (taskId: string) => (
         <Tooltip title={taskId}>
-          <span style={{ fontFamily: 'monospace', color: '#94a3b8' }}>{taskId.slice(0, 8)}...</span>
+          <span className={styles.taskId}>{taskId.slice(0, 8)}...</span>
         </Tooltip>
       ),
     },
@@ -74,16 +83,14 @@ export default function History() {
       key: 'generation_config',
       width: 240,
       render: (_: unknown, record: TaskResponse) => (
-        <Space size={[4, 8]} wrap>
+        <div className={styles.roles}>
           {record.generation_config?.audience_roles?.map((role) => (
-            <Tag color="blue" key={role}>
-              {role}
-            </Tag>
+            <Tag key={role}>{role}</Tag>
           ))}
-          <Tag color="purple">
+          <Tag>
             {ARTICLE_STRATEGY_LABELS[record.generation_config?.article_strategy || 'auto']}
           </Tag>
-        </Space>
+        </div>
       ),
     },
     {
@@ -133,30 +140,33 @@ export default function History() {
   ]
 
   return (
-    <div className="backstage-page">
-      <HeroPanel
+    <div className={styles.page}>
+      <PageHeader
         eyebrow="Asset Archive"
         title="内容资产"
         description="统一回看历史任务、文章策略和执行状态，让可复用的内容沉淀成可浏览资产。"
-      >
-        <Space wrap style={{ marginTop: 12, justifyContent: 'space-between', width: '100%' }}>
-          <Space wrap>
-            <Tag bordered={false} color="cyan">
-              共 {tasks.length} 条
-            </Tag>
-            <Tag bordered={false} color="success">
-              已完成 {tasks.filter((task) => task.status === 'done').length} 条
-            </Tag>
-          </Space>
+        actions={
           <Button icon={<ReloadOutlined />} onClick={() => void fetchTasks()}>
             刷新
           </Button>
-        </Space>
-      </HeroPanel>
+        }
+      />
 
-      <Card className="backstage-surface-card">
+      <StatGrid>
+        <Stat label="任务总数" value={tasks.length} />
+        <Stat label="已完成" value={doneCount} tone={doneCount > 0 ? 'positive' : 'neutral'} />
+        <Stat label="排队与执行中" value={runningCount} />
+        <Stat label="失败" value={failedCount} tone={failedCount > 0 ? 'negative' : 'neutral'} />
+      </StatGrid>
+
+      <Panel title="历史任务" aside={`共 ${tasks.length} 条记录`} flush>
         {tasks.length === 0 && !loading ? (
-          <Empty description="还没有历史内容资产" />
+          <div className={styles.emptyPad}>
+            <EmptyState
+              title="还没有历史内容资产"
+              description="在「新建任务」里启动一次创作流程后，任务会出现在这里。"
+            />
+          </div>
         ) : (
           <Table
             columns={columns}
@@ -167,7 +177,7 @@ export default function History() {
             size="middle"
           />
         )}
-      </Card>
+      </Panel>
     </div>
   )
 }

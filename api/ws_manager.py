@@ -20,14 +20,16 @@ class ConnectionManager:
         """接受并注册一个 WebSocket 连接。"""
         await ws.accept()
         self._connections[task_id].add(ws)
-        logger.info("ws_connected", task_id=task_id)
+        # DEBUG: a page refresh plus a reconnect storm produced ~640 lines per audit window
+        # with no diagnostic value. Failures to send still log below at their own level.
+        logger.debug("ws_connected", task_id=task_id)
 
     def disconnect(self, task_id: str, ws: WebSocket) -> None:
         """移除一个 WebSocket 连接。"""
         self._connections[task_id].discard(ws)
         if not self._connections[task_id]:
             del self._connections[task_id]
-        logger.info("ws_disconnected", task_id=task_id)
+        logger.debug("ws_disconnected", task_id=task_id)
 
     async def broadcast(self, task_id: str, data: dict) -> None:
         """向指定 task_id 的所有客户端广播 JSON 消息。"""

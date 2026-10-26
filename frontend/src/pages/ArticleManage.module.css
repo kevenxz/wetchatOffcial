@@ -37,6 +37,59 @@
   width: 150px;
 }
 
+.publishSelect {
+  width: 170px;
+}
+
+.publishErrors {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--app-text-secondary);
+  font-size: 13px;
+}
+
+.illustrationEditor {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: var(--app-surface-muted);
+}
+
+.illustrationHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--app-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.illustrationEmpty {
+  margin: 0;
+  color: var(--app-text-tertiary);
+  font-size: 13px;
+}
+
+.illustrationRow {
+  display: flex;
+  width: 100%;
+}
+
+.illustrationRow :global(.ant-space-item):first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.pushSwitchRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .articleList {
   display: grid;
   gap: 14px;
@@ -194,6 +247,16 @@
   color: var(--app-text-secondary);
   font-size: 13px;
   line-height: 1.6;
+}
+
+/* Textarea that should not be draggable (replaces an inline `resize: none`). */
+.textAreaFixed {
+  resize: none;
+}
+
+/* Breathing room around an `EmptyState`, replacing an inline `padding: 72`. */
+.emptyPad {
+  padding: var(--space-12) 0;
 }
 
 @media (max-width: 900px) {

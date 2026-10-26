@@ -87,6 +87,11 @@ def sync_task_from_workflow_event(task: TaskResponse, data: dict[str, Any]) -> N
         or None
     )
     _sync_push_records(task, result)
+
+    completed_nodes = result.get("completed_nodes")
+    if isinstance(completed_nodes, list):
+        task.completed_nodes = [str(item) for item in completed_nodes]
+
     task.human_review_required = bool(
         result.get("human_review_required")
         or (task.quality_report and not task.quality_report.get("ready_to_publish"))

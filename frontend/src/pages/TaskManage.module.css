@@ -1,120 +1,93 @@
+/* Task list — Swiss. The summary figures and the table shell now come from the
+   `StatGrid` / `Panel` primitives, so those local card classes were removed. */
+
 .page {
   display: grid;
-  gap: 18px;
+  gap: var(--space-5);
 }
 
 .toolbar {
   display: grid;
   grid-template-columns: minmax(280px, 470px) 1fr auto;
-  gap: 14px;
+  gap: var(--space-4);
   align-items: center;
 }
 
 .filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: var(--space-2);
 }
 
 .actions {
   display: flex;
-  gap: 10px;
+  gap: var(--space-2);
   justify-content: flex-end;
 }
 
 .filterButton {
   min-width: 76px;
   height: 44px;
-  border-radius: 10px;
-  border-color: var(--app-border);
-  color: var(--app-text-secondary);
-  background: var(--app-surface);
+  border-radius: var(--radius-hair);
+  border-color: var(--border-hairline);
+  color: var(--text-secondary);
+  background: var(--surface-raised);
 }
 
+/* Swiss: the active filter is marked by fill and colour, not by a glow. */
 .filterButtonActive {
-  border-color: var(--app-primary);
-  color: var(--app-sidebar-active-text);
-  background: var(--app-primary);
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--app-primary) 25%, transparent);
-}
-
-.summaryGrid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.summaryCard {
-  min-height: 104px;
-  padding: 20px 22px;
-  border: 1px solid var(--app-border);
-  border-radius: 18px;
-  background: var(--app-surface);
-  box-shadow: var(--app-shadow-sm);
-}
-
-.summaryLabel {
-  color: var(--app-text-tertiary);
-  font-size: 14px;
-}
-
-.summaryValue {
-  margin-top: 8px;
-  color: var(--app-text);
-  font-size: 32px;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.tableCard {
-  overflow: hidden;
-  border: 1px solid var(--app-border);
-  border-radius: 18px;
-  background: var(--app-surface);
-  box-shadow: var(--app-shadow-sm);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
+  background: var(--accent);
+  box-shadow: none;
 }
 
 .taskTitle {
   display: grid;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .taskTitle strong {
-  color: var(--app-text);
-  font-size: 16px;
-  font-weight: 500;
+  color: var(--text-primary);
+  font-size: var(--type-md);
+  font-weight: var(--weight-medium);
 }
 
 .taskTitle span {
-  color: var(--app-text-tertiary);
-  font-size: 13px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
 }
 
-.categoryTag {
+.categoryTag,
+.statusTag {
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-hair);
 }
 
 .mode {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  color: var(--app-text-secondary);
+  gap: var(--space-1);
+  color: var(--text-secondary);
 }
 
 .modeHot {
-  color: var(--app-warning);
+  color: var(--status-warning-text);
 }
 
 .statusTag {
   min-width: 74px;
   justify-content: center;
-  border-radius: 999px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .iconAction {
-  color: var(--app-text-tertiary);
+  color: var(--text-tertiary);
+}
+
+.emptyPad {
+  padding: var(--space-10) 0;
 }
 
 @media (max-width: 1180px) {
@@ -124,15 +97,5 @@
 
   .actions {
     justify-content: flex-start;
-  }
-
-  .summaryGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 720px) {
-  .summaryGrid {
-    grid-template-columns: 1fr;
   }
 }

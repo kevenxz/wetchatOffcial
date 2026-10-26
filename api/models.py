@@ -41,10 +41,12 @@ def _normalize_tophub_path(value: str) -> str:
 
 
 class TaskStatus(str, Enum):
+    queued = "queued"
     pending = "pending"
     running = "running"
     done = "done"
     failed = "failed"
+    cancelled = "cancelled"
 
 
 class TopicStatus(str, Enum):
@@ -113,6 +115,23 @@ class WorkflowImagePolicyConfig(BaseModel):
     style: str = Field(default="", max_length=200)
     brand_colors: list[str] = Field(default_factory=list)
     title_safe_area: bool = True
+    style_preset: str = Field(
+        default="editorial_photo",
+        max_length=40,
+        description="Named image style preset; replaces the old free-text English style blurb",
+    )
+    allow_text_overlay: bool = Field(
+        default=False,
+        description="Whether generated pictures may contain text. Off by default: image models "
+        "render Chinese text as garbage, which is what made every picture look like a poster.",
+    )
+    prompt_max_chars: int = Field(
+        default=400,
+        ge=120,
+        le=900,
+        description="Upper bound on the assembled image prompt. Long prompts make image models "
+        "lose the subject and fall back to drawing the text they were given.",
+    )
 
     @field_validator("brand_colors")
     @classmethod
@@ -152,6 +171,15 @@ class GenerationConfig(BaseModel):
         description="Article writing strategy",
     )
     style_hint: str = Field(default="", max_length=500, description="Optional user-provided style hint")
+    requested_article_type: str = Field(
+        default="",
+        max_length=40,
+        description=(
+            "Operator-specified article type. Empty (the default) means the planning agent "
+            "decides the type from the source material and names it itself; a non-empty value "
+            "overrides that choice."
+        ),
+    )
     account_profile: AccountProfileConfig = Field(default_factory=AccountProfileConfig)
     content_template: ContentTemplateConfig = Field(default_factory=ContentTemplateConfig)
     review_policy: ReviewPolicyConfig = Field(default_factory=ReviewPolicyConfig)
@@ -173,6 +201,13 @@ class GenerationConfig(BaseModel):
     @classmethod
     def normalize_style_hint(cls, value: str) -> str:
         return value.strip()
+
+    @field_validator("requested_article_type")
+    @classmethod
+    def normalize_requested_article_type(cls, value: str) -> str:
+        # "auto" is what the UI sends for "let the agent decide", so treat it as unset.
+        cleaned = value.strip()
+        return "" if cleaned.lower() in {"", "auto"} else cleaned
 
 
 class TextModelConfig(BaseModel):
@@ -718,6 +753,14 @@ class TaskResponse(BaseModel):
     article_theme: Optional[str] = Field(default=None, description="Theme name for this article push")
     final_article: Optional[dict] = Field(default=None, description="Final assembled article package")
     push_records: list[PushRecord] = Field(default_factory=list, description="All push records")
+    completed_nodes: list[str] = Field(
+        default_factory=list,
+        description="Workflow nodes that finished successfully; used to resume from the failed node",
+    )
+    publish_account_ids: list[str] = Field(
+        default_factory=list,
+        description="Accounts bound as publish targets for this task",
+    )
 
 
 class WsMessage(BaseModel):
@@ -811,6 +854,7 @@ class BatchPushResponse(BaseModel):
 class ScheduleMode(str, Enum):
     once = "once"
     interval = "interval"
+    cron = "cron"
 
 
 class ScheduleStatus(str, Enum):
@@ -822,6 +866,10 @@ class HotspotSource(str, Enum):
     tophub = "tophub"
     ranking_page = "ranking_page"
     rss_or_feed = "rss_or_feed"
+    # Structured multi-platform hot list from the newsnow API — the same upstream
+    # endpoint TrendRadar consumes, so this covers its 16 platforms from one JSON call
+    # instead of scraping ranking HTML.
+    newsnow = "newsnow"
 
 
 class HotspotFilters(BaseModel):
@@ -891,7 +939,11 @@ class HotspotPlatformConfig(BaseModel):
 
 class HotspotCaptureConfig(BaseModel):
     enabled: bool = Field(default=False)
-    source: HotspotSource = Field(default=HotspotSource.tophub)
+    # `newsnow` is the structured multi-platform source the background refresher fills the
+    # snapshot from. This field is only descriptive (dispatch is per-platform via
+    # `_platform_source`), but defaulting it to the legacy `tophub` misreported what a new
+    # task was actually doing, and TopHub is the unreliable path we moved away from.
+    source: HotspotSource = Field(default=HotspotSource.newsnow)
     categories: list[str] = Field(default_factory=list)
     platforms: list[HotspotPlatformConfig] = Field(default_factory=list)
     filters: HotspotFilters = Field(default_factory=HotspotFilters)
@@ -992,6 +1044,12 @@ class ScheduleConfig(BaseModel):
     mode: ScheduleMode
     run_at: Optional[datetime] = None
     interval_minutes: Optional[int] = Field(default=None, ge=1, le=10080)
+    cron_expression: Optional[str] = Field(
+        default=None,
+        max_length=120,
+        description="Standard 5-field cron expression, e.g. '0 8 * * 1-5'",
+    )
+    timezone: str = Field(default="Asia/Shanghai", max_length=64, description="IANA timezone for cron schedules")
     theme_name: str = Field(default="__current__", min_length=1, max_length=100)
     account_ids: list[str] = Field(default_factory=list)
     hot_topics: list[str] = Field(default_factory=list)
@@ -1002,6 +1060,7 @@ class ScheduleConfig(BaseModel):
     last_run_at: Optional[datetime] = None
     next_run_at: Optional[datetime] = None
     last_error: Optional[str] = None
+    missed_runs: int = Field(default=0, ge=0, description="Runs skipped while the process was down")
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -1036,6 +1095,8 @@ class CreateScheduleRequest(BaseModel):
     mode: ScheduleMode
     run_at: Optional[datetime] = None
     interval_minutes: Optional[int] = Field(default=None, ge=1, le=10080)
+    cron_expression: Optional[str] = Field(default=None, max_length=120)
+    timezone: str = Field(default="Asia/Shanghai", max_length=64)
     theme_name: str = Field(default="__current__", min_length=1, max_length=100)
     account_ids: list[str] = Field(default_factory=list)
     hot_topics: list[str] = Field(default_factory=list)
@@ -1074,6 +1135,8 @@ class UpdateScheduleRequest(BaseModel):
     mode: Optional[ScheduleMode] = None
     run_at: Optional[datetime] = None
     interval_minutes: Optional[int] = Field(default=None, ge=1, le=10080)
+    cron_expression: Optional[str] = Field(default=None, max_length=120)
+    timezone: Optional[str] = Field(default=None, max_length=64)
     theme_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     account_ids: Optional[list[str]] = None
     hot_topics: Optional[list[str]] = None
@@ -1118,3 +1181,107 @@ class UpdateScheduleRequest(BaseModel):
 class ScheduleExecuteResponse(BaseModel):
     message: str
     task_id: Optional[str] = None
+
+
+class ArticleStats(BaseModel):
+    """Post-publish reading metrics for one article."""
+
+    task_id: str = Field(..., description="Task id the stats belong to")
+    article_id: str = Field(default="", description="WeChat media_id or publish_id")
+    title: str = Field(default="", max_length=300, description="Published title")
+    published_at: Optional[datetime] = Field(default=None, description="Publish timestamp")
+    read_num: int = Field(default=0, ge=0, description="Read count")
+    like_num: int = Field(default=0, ge=0, description="Like count")
+    share_num: int = Field(default=0, ge=0, description="Share count")
+    collect_num: int = Field(default=0, ge=0, description="Collect count")
+    fav_num: int = Field(default=0, ge=0, description="Favourite count")
+    source: str = Field(default="manual", max_length=32, description="manual | datacube")
+    created_at: datetime = Field(..., description="Created at")
+    updated_at: Optional[datetime] = Field(default=None, description="Updated at")
+
+    @field_validator("task_id")
+    @classmethod
+    def task_id_not_blank(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("task_id cannot be blank")
+        return cleaned
+
+
+class UpdateArticleStatsRequest(BaseModel):
+    """Manual entry of article metrics (the fallback when datacube is unavailable)."""
+
+    read_num: Optional[int] = Field(default=None, ge=0)
+    like_num: Optional[int] = Field(default=None, ge=0)
+    share_num: Optional[int] = Field(default=None, ge=0)
+    collect_num: Optional[int] = Field(default=None, ge=0)
+    fav_num: Optional[int] = Field(default=None, ge=0)
+    title: Optional[str] = Field(default=None, max_length=300)
+    article_id: Optional[str] = Field(default=None, max_length=200)
+    published_at: Optional[datetime] = None
+
+
+class StatsOverview(BaseModel):
+    """Aggregate counters for the dashboard header."""
+
+    total_articles: int = 0
+    total_published: int = 0
+    total_drafts: int = 0
+    total_reads: int = 0
+    total_shares: int = 0
+    total_collects: int = 0
+    total_likes: int = 0
+
+
+class StatsTrendPoint(BaseModel):
+    date: str
+    published: int = 0
+    reads: int = 0
+
+
+class StatsTopArticle(BaseModel):
+    task_id: str
+    title: str = ""
+    reads: int = 0
+    shares: int = 0
+    collects: int = 0
+    likes: int = 0
+    published_at: Optional[datetime] = None
+
+
+class StatsArticlesResponse(BaseModel):
+    range_days: int = 7
+    trend: list[StatsTrendPoint] = Field(default_factory=list)
+    top_articles: list[StatsTopArticle] = Field(default_factory=list)
+
+
+class StatsSyncResponse(BaseModel):
+    synced: int = 0
+    failed: int = 0
+    message: str = ""
+
+
+class HealthResponse(BaseModel):
+    status: str = "ok"
+    database: str = "disabled"
+    redis: str = "disabled"
+    scheduler: str = "unknown"
+    version: str = ""
+
+
+class SearchResponse(BaseModel):
+    """Unified search results across tasks, articles and topics."""
+
+    tasks: list["TaskResponse"] = Field(default_factory=list)
+    articles: list["TaskResponse"] = Field(default_factory=list)
+    topics: list[TopicCandidate] = Field(default_factory=list)
+
+
+class UpdateArticleContentRequest(BaseModel):
+    """Operator edits applied to a generated article before pushing it."""
+
+    title: Optional[str] = Field(default=None, max_length=300)
+    summary: Optional[str] = Field(default=None, max_length=2000)
+    content: Optional[str] = Field(default=None, max_length=200000)
+    cover_image: Optional[str] = Field(default=None, max_length=1000)
+    illustrations: Optional[list[str]] = Field(default=None, max_length=20)

@@ -1,12 +1,17 @@
-"""Shared in-memory and JSON-backed storage."""
+"""Shared in-memory and JSON/database-backed storage."""
 from __future__ import annotations
 
 import json
 import os
 from pathlib import Path
+from typing import Any
 
+import structlog
+
+from api import persistence
 from api.models import (
     AccountConfig,
+    ArticleStats,
     ImageModelConfig,
     ModelConfig,
     ReviewQueueItem,
@@ -17,6 +22,10 @@ from api.models import (
     UserAccount,
     WorkflowRunStepRecord,
 )
+
+# structlog, so this module's lines carry the same timestamp/level/logger fields as the
+# rest of the application (a stdlib logger loses all three through the structlog formatter).
+logger = structlog.get_logger(__name__)
 
 DATA_DIR = Path("data")
 TASKS_FILE = DATA_DIR / "tasks.json"
@@ -29,94 +38,120 @@ SCHEDULES_FILE = DATA_DIR / "schedules.json"
 TOPICS_FILE = DATA_DIR / "topics.json"
 REVIEWS_FILE = DATA_DIR / "reviews.json"
 WORKFLOW_RUN_STEPS_FILE = DATA_DIR / "workflow_run_steps.json"
+ARTICLE_STATS_FILE = DATA_DIR / "article_stats.json"
 
 task_store: dict[str, TaskResponse] = {}
 topic_store: dict[str, TopicCandidate] = {}
 review_store: dict[str, ReviewQueueItem] = {}
 workflow_run_step_store: dict[str, WorkflowRunStepRecord] = {}
+article_stat_store: dict[str, ArticleStats] = {}
+
+# Entity kind -> (in-memory container, legacy JSON path, Pydantic model)
+_KIND_REGISTRY: dict[str, tuple[dict, Path, Any]] = {
+    persistence.TASK_KIND: (task_store, TASKS_FILE, TaskResponse),
+    persistence.TOPIC_KIND: (topic_store, TOPICS_FILE, TopicCandidate),
+    persistence.REVIEW_KIND: (review_store, REVIEWS_FILE, ReviewQueueItem),
+    persistence.WORKFLOW_STEP_KIND: (workflow_run_step_store, WORKFLOW_RUN_STEPS_FILE, WorkflowRunStepRecord),
+    persistence.ARTICLE_STAT_KIND: (article_stat_store, ARTICLE_STATS_FILE, ArticleStats),
+}
 
 
-def _ensure_data_dir() -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+def container_for_kind(kind: str) -> dict:
+    """Return the in-memory container for one entity kind."""
+    return _KIND_REGISTRY[kind][0]
+
+
+def model_for_kind(kind: str) -> Any:
+    """Return the Pydantic model class for one entity kind."""
+    entry = _KIND_REGISTRY.get(kind)
+    return entry[2] if entry else None
+
+
+def json_path_for_kind(kind: str) -> Path | None:
+    """Return the legacy JSON file path for one entity kind."""
+    entry = _KIND_REGISTRY.get(kind)
+    return entry[1] if entry else None
+
+
+def _load_kind(kind: str) -> None:
+    """Load one entity kind from the configured backend into memory.
+
+    Tolerates a not-yet-migrated database: :func:`bootstrap_storage` creates the
+    schema at startup and reloads, so a missing table here must not abort import.
+    """
+    container, json_path, model = _KIND_REGISTRY[kind]
+    try:
+        records = persistence.load_all(kind, json_path=json_path)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "store_load_skipped",
+            kind=kind,
+            error=str(exc),
+            note="schema will be prepared by bootstrap_storage",
+            exc_info=True,
+        )
+        return
+    for record_id, payload in records.items():
+        try:
+            container[record_id] = model(**payload)
+        except Exception:  # noqa: BLE001
+            continue
+
+
+def _save_kind(kind: str) -> None:
+    """Persist one entity kind through the configured backend."""
+    container, json_path, _model = _KIND_REGISTRY[kind]
+    payload = {record_id: record.model_dump(mode="json") for record_id, record in container.items()}
+    persistence.persist(kind, payload, json_path=json_path)
 
 
 def _write_json(path: Path, payload: dict) -> None:
-    _ensure_data_dir()
-    temp_file = path.with_suffix(".tmp")
-    with open(temp_file, "w", encoding="utf-8") as file:
-        json.dump(payload, file, ensure_ascii=False, indent=2)
-    temp_file.replace(path)
+    """Atomically write a configuration document (style / themes / models).
+
+    These are operator configuration rather than business entities, so they stay
+    file-based even when a database is configured.
+    """
+    persistence.write_json_file(path, payload)
 
 
 def load_tasks() -> None:
-    if not TASKS_FILE.exists():
-        return
-    try:
-        with open(TASKS_FILE, "r", encoding="utf-8") as file:
-            data = json.load(file)
-        for task_id, payload in data.items():
-            task_store[task_id] = TaskResponse(**payload)
-    except Exception:
-        return
+    _load_kind(persistence.TASK_KIND)
 
 
 def save_tasks() -> None:
-    payload = {task_id: task.model_dump(mode="json") for task_id, task in task_store.items()}
-    _write_json(TASKS_FILE, payload)
+    _save_kind(persistence.TASK_KIND)
 
 
 def load_topics() -> None:
-    if not TOPICS_FILE.exists():
-        return
-    try:
-        with open(TOPICS_FILE, "r", encoding="utf-8") as file:
-            data = json.load(file)
-        for topic_id, payload in data.items():
-            topic_store[topic_id] = TopicCandidate(**payload)
-    except Exception:
-        return
+    _load_kind(persistence.TOPIC_KIND)
 
 
 def save_topics() -> None:
-    payload = {topic_id: topic.model_dump(mode="json") for topic_id, topic in topic_store.items()}
-    _write_json(TOPICS_FILE, payload)
+    _save_kind(persistence.TOPIC_KIND)
 
 
 def load_reviews() -> None:
-    if not REVIEWS_FILE.exists():
-        return
-    try:
-        with open(REVIEWS_FILE, "r", encoding="utf-8") as file:
-            data = json.load(file)
-        for review_id, payload in data.items():
-            review_store[review_id] = ReviewQueueItem(**payload)
-    except Exception:
-        return
+    _load_kind(persistence.REVIEW_KIND)
 
 
 def save_reviews() -> None:
-    payload = {review_id: item.model_dump(mode="json") for review_id, item in review_store.items()}
-    _write_json(REVIEWS_FILE, payload)
+    _save_kind(persistence.REVIEW_KIND)
 
 
 def load_workflow_run_steps() -> None:
-    if not WORKFLOW_RUN_STEPS_FILE.exists():
-        return
-    try:
-        with open(WORKFLOW_RUN_STEPS_FILE, "r", encoding="utf-8") as file:
-            data = json.load(file)
-        for run_step_id, payload in data.items():
-            workflow_run_step_store[run_step_id] = WorkflowRunStepRecord(**payload)
-    except Exception:
-        return
+    _load_kind(persistence.WORKFLOW_STEP_KIND)
 
 
 def save_workflow_run_steps() -> None:
-    payload = {
-        run_step_id: step.model_dump(mode="json")
-        for run_step_id, step in workflow_run_step_store.items()
-    }
-    _write_json(WORKFLOW_RUN_STEPS_FILE, payload)
+    _save_kind(persistence.WORKFLOW_STEP_KIND)
+
+
+def load_article_stats() -> None:
+    _load_kind(persistence.ARTICLE_STAT_KIND)
+
+
+def save_article_stats() -> None:
+    _save_kind(persistence.ARTICLE_STAT_KIND)
 
 
 DEFAULT_STYLE: dict[str, str] = {
@@ -409,61 +444,43 @@ _account_store: dict[str, AccountConfig] = {}
 _user_store: dict[str, UserAccount] = {}
 schedule_store: dict[str, ScheduleConfig] = {}
 
+# Register the remaining entity kinds now that their containers exist.
+_KIND_REGISTRY.update(
+    {
+        persistence.ACCOUNT_KIND: (_account_store, ACCOUNTS_FILE, AccountConfig),
+        persistence.USER_KIND: (_user_store, USERS_FILE, UserAccount),
+        persistence.SCHEDULE_KIND: (schedule_store, SCHEDULES_FILE, ScheduleConfig),
+    }
+)
+
 
 def load_accounts() -> None:
-    """从 JSON 文件加载账号配置到内存。"""
-    if not ACCOUNTS_FILE.exists():
-        return
-    try:
-        with open(ACCOUNTS_FILE, "r", encoding="utf-8") as file:
-            data = json.load(file)
-        for account_id, payload in data.items():
-            _account_store[account_id] = AccountConfig(**payload)
-    except Exception:
-        return
+    """从后端加载账号配置到内存。"""
+    _load_kind(persistence.ACCOUNT_KIND)
 
 
 def load_users() -> None:
-    """Load system users from JSON file."""
-    if not USERS_FILE.exists():
-        return
-    try:
-        with open(USERS_FILE, "r", encoding="utf-8") as file:
-            data = json.load(file)
-        for user_id, payload in data.items():
-            _user_store[user_id] = UserAccount(**payload)
-    except Exception:
-        return
+    """Load system users from the configured backend."""
+    _load_kind(persistence.USER_KIND)
 
 
 def _save_accounts() -> None:
-    """原子写入账号配置到 JSON 文件。"""
-    payload = {aid: acc.model_dump(mode="json") for aid, acc in _account_store.items()}
-    _write_json(ACCOUNTS_FILE, payload)
+    """原子写入账号配置。"""
+    _save_kind(persistence.ACCOUNT_KIND)
 
 
 def _save_users() -> None:
-    payload = {uid: user.model_dump(mode="json") for uid, user in _user_store.items()}
-    _write_json(USERS_FILE, payload)
+    _save_kind(persistence.USER_KIND)
 
 
 def load_schedules() -> None:
-    """Load schedule configs from JSON file."""
-    if not SCHEDULES_FILE.exists():
-        return
-    try:
-        with open(SCHEDULES_FILE, "r", encoding="utf-8") as file:
-            data = json.load(file)
-        for schedule_id, payload in data.items():
-            schedule_store[schedule_id] = ScheduleConfig(**payload)
-    except Exception:
-        return
+    """Load schedule configs from the configured backend."""
+    _load_kind(persistence.SCHEDULE_KIND)
 
 
 def save_schedules() -> None:
-    """Persist schedule configs to JSON file."""
-    payload = {sid: schedule.model_dump(mode="json") for sid, schedule in schedule_store.items()}
-    _write_json(SCHEDULES_FILE, payload)
+    """Persist schedule configs through the configured backend."""
+    _save_kind(persistence.SCHEDULE_KIND)
 
 
 def list_accounts() -> list[AccountConfig]:
@@ -646,10 +663,116 @@ def update_workflow_run_step(run_step_id: str, patch: dict) -> WorkflowRunStepRe
     return updated
 
 
-load_tasks()
-load_topics()
-load_reviews()
-load_workflow_run_steps()
-load_accounts()
-load_users()
-load_schedules()
+# --------------------------------------------------------------------------- #
+# Article statistics
+# --------------------------------------------------------------------------- #
+
+
+def list_article_stats() -> list[ArticleStats]:
+    """All article stats, newest publish first."""
+    return sorted(
+        article_stat_store.values(),
+        key=lambda item: item.published_at or item.created_at,
+        reverse=True,
+    )
+
+
+def get_article_stats(task_id: str) -> ArticleStats | None:
+    return article_stat_store.get(task_id)
+
+
+def upsert_article_stats(stats: ArticleStats) -> ArticleStats:
+    """Create or replace the stats row for one article."""
+    article_stat_store[stats.task_id] = stats
+    save_article_stats()
+    return stats
+
+
+def update_article_stats(task_id: str, patch: dict) -> ArticleStats:
+    """Apply a partial update to one article's stats."""
+    existing = article_stat_store.get(task_id)
+    if existing is None:
+        raise ValueError(f"article stats for {task_id!r} not found")
+    updated = existing.model_copy(update=patch)
+    article_stat_store[task_id] = updated
+    save_article_stats()
+    return updated
+
+
+def delete_article_stats(task_id: str) -> None:
+    if task_id in article_stat_store:
+        del article_stat_store[task_id]
+        save_article_stats()
+
+
+# --------------------------------------------------------------------------- #
+# Bootstrap
+# --------------------------------------------------------------------------- #
+
+
+def load_all_stores() -> None:
+    """Load every entity kind from the configured backend."""
+    load_tasks()
+    load_topics()
+    load_reviews()
+    load_workflow_run_steps()
+    load_accounts()
+    load_users()
+    load_schedules()
+    load_article_stats()
+
+
+def bootstrap_storage() -> dict[str, Any]:
+    """Prepare storage at startup.
+
+    With ``DATABASE_URL`` configured this creates the schema, imports any legacy
+    JSON documents into an empty database (renaming them to ``*.imported`` as a
+    backup) and then loads everything from the database. Without a database the
+    legacy JSON files are loaded directly.
+    """
+    from api import db
+
+    summary: dict[str, Any] = {
+        "backend": "database" if db.database_enabled() else "json",
+        "created_tables": False,
+        "imported": {},
+        "backed_up": [],
+    }
+    if not db.database_enabled():
+        load_all_stores()
+        return summary
+
+    db.init_db()
+    summary["created_tables"] = True
+
+    legacy_paths = {
+        persistence.TASK_KIND: TASKS_FILE,
+        persistence.TOPIC_KIND: TOPICS_FILE,
+        persistence.REVIEW_KIND: REVIEWS_FILE,
+        persistence.WORKFLOW_STEP_KIND: WORKFLOW_RUN_STEPS_FILE,
+        persistence.ACCOUNT_KIND: ACCOUNTS_FILE,
+        persistence.USER_KIND: USERS_FILE,
+        persistence.SCHEDULE_KIND: SCHEDULES_FILE,
+        persistence.ARTICLE_STAT_KIND: ARTICLE_STATS_FILE,
+    }
+
+    for kind, path in legacy_paths.items():
+        legacy = persistence.read_json_file(path)
+        if not legacy:
+            continue
+        imported = persistence.import_json_into_db(kind, legacy)
+        if imported:
+            summary["imported"][kind] = imported
+            backup = persistence.backup_json(path)
+            if backup is not None:
+                summary["backed_up"].append(str(backup))
+
+    # The schema now exists, so load every kind from the database — including rows
+    # that were just imported from the legacy JSON documents.
+    persistence.reset_state()
+    load_all_stores()
+    return summary
+
+
+load_all_stores()
+

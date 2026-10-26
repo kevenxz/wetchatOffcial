@@ -24,14 +24,14 @@
   place-items: center;
   gap: 14px;
   min-height: 320px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--border-hairline);
   border-radius: 28px;
-  background: var(--app-surface);
+  background: var(--surface-raised);
 }
 
 .loadingWrap p {
   margin: 0;
-  color: var(--app-text-secondary);
+  color: var(--text-secondary);
 }
 
 .workspaceLayout {
@@ -53,7 +53,7 @@
 }
 
 .sectionStatus {
-  color: var(--app-text-secondary);
+  color: var(--text-secondary);
   line-height: 1.6;
   text-align: right;
 }
@@ -65,7 +65,7 @@
   padding: 24px;
   border: 1px dashed rgba(56, 189, 248, 0.24);
   border-radius: 22px;
-  background: var(--app-primary-bg);
+  background: var(--accent-subtle);
   align-content: center;
 }
 
@@ -82,7 +82,7 @@
 
 .pendingBody,
 .altTitles {
-  color: var(--app-text-secondary);
+  color: var(--text-secondary);
   line-height: 1.7;
 }
 
@@ -207,13 +207,13 @@
   display: grid;
   gap: 6px;
   padding: 16px 18px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--border-hairline);
   border-radius: 20px;
-  background: var(--app-surface-muted);
+  background: var(--surface-sunken);
 }
 
 .metaItem dt {
-  color: var(--app-text-tertiary);
+  color: var(--text-tertiary);
   font-size: 0.8rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -229,17 +229,40 @@
   gap: 14px;
 }
 
+.publishErrors {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--status-danger-text) 45%, var(--border-hairline));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--status-danger-text) 10%, var(--surface-raised));
+  list-style: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.publishErrors li {
+  display: grid;
+  gap: 2px;
+}
+
+.publishErrors strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 .signalCard {
   display: grid;
   gap: 8px;
   padding: 16px 18px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--border-hairline);
   border-radius: 20px;
-  background: var(--app-surface-muted);
+  background: var(--surface-sunken);
 }
 
 .signalCard span {
-  color: var(--app-text-tertiary);
+  color: var(--text-tertiary);
   font-size: 0.8rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -256,7 +279,7 @@
   word-break: break-word;
   font-family: inherit;
   line-height: 1.7;
-  color: var(--app-text-secondary);
+  color: var(--text-secondary);
 }
 
 .citationList {
@@ -268,15 +291,15 @@
   display: grid;
   gap: 4px;
   padding: 10px 12px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--border-hairline);
   border-radius: 12px;
-  color: var(--app-text-primary);
+  color: var(--text-primary);
   text-decoration: none;
-  background: var(--app-surface);
+  background: var(--surface-raised);
 }
 
 .citationList small {
-  color: var(--app-text-secondary);
+  color: var(--text-secondary);
 }
 
 .stepTraceList {
@@ -285,9 +308,9 @@
 }
 
 .stepTraceItem {
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--border-hairline);
   border-radius: 12px;
-  background: var(--app-surface);
+  background: var(--surface-raised);
 }
 
 .stepTraceItem summary {
@@ -306,7 +329,7 @@
 
 .stepTraceItem summary small {
   margin-left: auto;
-  color: var(--app-text-secondary);
+  color: var(--text-secondary);
 }
 
 .stepTraceGrid {
@@ -323,7 +346,7 @@
 
 .stepTraceGrid h4 {
   margin: 0;
-  color: var(--app-text-primary);
+  color: var(--text-primary);
   font-size: 0.86rem;
 }
 
@@ -353,4 +376,35 @@
   .sectionStatus {
     text-align: left;
   }
+}
+
+/* Replaces an inline `<ul style={{ margin: 0, paddingInlineStart: 20 }}>` inside the
+   degraded-run alert. */
+.noticeList {
+  margin: 0;
+  padding-inline-start: var(--space-5);
+}
+
+/* Provenance of a photograph taken from a reference article. Using one forces human review,
+   so the reviewer must be able to read where it came from without opening the payload. */
+.imageSource {
+  color: var(--text-tertiary);
+  font-size: var(--type-xs);
+  overflow-wrap: anywhere;
+}
+
+.imageSource a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.imageSource a:hover {
+  text-decoration: underline;
+}
+
+/* A large cover crop might have removed the subject; nothing here can tell, so say so. */
+.imageWarning {
+  color: var(--status-warning-text);
+  font-size: var(--type-xs);
+  line-height: 1.45;
 }

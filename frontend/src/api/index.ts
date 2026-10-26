@@ -34,11 +34,27 @@ export interface WorkflowImagePolicyConfig {
   style: string
   brand_colors: string[]
   title_safe_area: boolean
+  style_preset: string
+  allow_text_overlay: boolean
+  prompt_max_chars: number
+}
+
+export interface ImageStylePreset {
+  style_id: string
+  name: string
+  description: string
+  default_palette: string[]
 }
 
 export interface PublishPolicyConfig {
   auto_publish_to_draft: boolean
   require_manual_confirmation: boolean
+  // Opt-in direct publishing: the draft is submitted to the official account
+  // instead of only filling the draft box.
+  auto_publish: boolean
+  publish_retry_limit: number
+  publish_poll_interval_seconds: number
+  publish_poll_max_attempts: number
 }
 
 export interface ResearchPolicyConfig {
@@ -54,6 +70,11 @@ export interface ResearchPolicyConfig {
 export interface GenerationConfig {
   audience_roles: string[]
   article_strategy: ArticleStrategy
+  /**
+   * Operator-specified article type. Empty means the planning agent decides the type
+   * from the source material — which is the default, since structures must not be fixed.
+   */
+  requested_article_type?: string
   style_hint: string
   account_profile?: AccountProfileConfig
   content_template?: ContentTemplateConfig
@@ -66,6 +87,7 @@ export interface GenerationConfig {
 export const DEFAULT_GENERATION_CONFIG: GenerationConfig = {
   audience_roles: ['泛科技读者'],
   article_strategy: 'auto',
+  requested_article_type: '',
   style_hint: '',
   account_profile: {
     positioning: '',
@@ -96,10 +118,17 @@ export const DEFAULT_GENERATION_CONFIG: GenerationConfig = {
     style: '',
     brand_colors: [],
     title_safe_area: true,
+    style_preset: 'editorial_photo',
+    allow_text_overlay: false,
+    prompt_max_chars: 400,
   },
   publish_policy: {
     auto_publish_to_draft: true,
     require_manual_confirmation: false,
+    auto_publish: false,
+    publish_retry_limit: 3,
+    publish_poll_interval_seconds: 5,
+    publish_poll_max_attempts: 10,
   },
   research_policy: {
     search_mode: 'standard',
@@ -131,12 +160,19 @@ export interface CreateTaskRequest {
   keywords: string
   generation_config: GenerationConfig
   hotspot_capture_config?: HotspotCaptureConfig | null
+  /** Publish targets bound to this task; empty falls back to WECHAT_APP_ID/SECRET. */
+  account_ids?: string[]
+  theme_name?: string
 }
+
+export type ArticlePushStatus = 'draft_only' | 'publishing' | 'published' | 'publish_failed' | 'failed'
+
+/** Publish progress of a push record, see `PushRecord.publish_status`. */
+export type PublishStatus = ArticlePushStatus
 
 export type PushStatus = 'success' | 'failed'
 
 export type PlatformType = 'wechat_mp' | 'toutiao'
-
 export interface PushRecord {
   push_id: string
   account_id: string
@@ -146,7 +182,13 @@ export interface PushRecord {
   status: PushStatus
   draft_info?: Record<string, any> | null
   error?: string | null
+  publish_status?: PublishStatus
+  publish_id?: string | null
+  theme_name?: string | null
+  attempt?: number
 }
+
+export type TaskStatus = 'pending' | 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
 
 export interface TaskResponse {
   task_id: string
@@ -154,7 +196,7 @@ export interface TaskResponse {
   keywords: string
   original_keywords?: string | null
   generation_config: GenerationConfig
-  status: 'pending' | 'running' | 'done' | 'failed'
+  status: TaskStatus
   created_at: string
   updated_at: string | null
   error: string | null
@@ -267,6 +309,48 @@ export const deleteTask = (taskId: string): Promise<void> =>
 export const retryTask = (taskId: string): Promise<TaskResponse> =>
   http.post(`/tasks/${taskId}/retry`)
 
+/** Cancels a pending/queued/running task; the backend moves it to `cancelled`. */
+export const cancelTask = (taskId: string): Promise<TaskResponse> =>
+  http.post(`/tasks/${taskId}/cancel`)
+
+export interface UpdateArticleContentRequest {
+  title?: string
+  summary?: string
+  content?: string
+  cover_image?: string
+  illustrations?: string[]
+}
+
+/** Persists operator edits to the generated article content. */
+export const updateArticleContent = (
+  taskId: string,
+  payload: UpdateArticleContentRequest,
+): Promise<TaskResponse> =>
+  http.put(`/articles/${taskId}/content`, payload)
+
+export interface SearchResponse {
+  tasks: TaskResponse[]
+  articles: TaskResponse[]
+  topics: TopicCandidate[]
+}
+
+/** Global search across tasks, articles and hotspot topics. */
+export const searchAll = (query: string, limit = 20): Promise<SearchResponse> => {
+  const trimmed = query.trim()
+  if (!trimmed) return Promise.resolve({ tasks: [], articles: [], topics: [] })
+  return http.get('/search', { params: { q: trimmed, limit } })
+}
+
+export interface HealthResponse {
+  status: string
+  database: string
+  redis: string
+  scheduler: string
+  version: string
+}
+
+export const getHealth = (): Promise<HealthResponse> => http.get('/health')
+
 export const listWorkflowRunSteps = (params: { task_id?: string; run_id?: string }): Promise<WorkflowRunStepRecord[]> =>
   http.get('/workflow-runs/steps', { params })
 
@@ -318,7 +402,32 @@ export interface ImageModelConfig {
 
 export interface ModelConfig {
   text: TextModelConfig
+  /**
+   * Model used by the structured-output stages (blueprint, draft, reviews,
+   * strategy). All of them request structured JSON, so this should be a
+   * **non-reasoning** model; an empty key falls back to `text`.
+   */
+  text_fast: TextModelConfig
   image: ImageModelConfig
+}
+
+export interface EffectiveStageRouting {
+  stage: string
+  tier: 'fast' | 'strong'
+  model: string
+  base_url: string
+  max_tokens: number
+  key_configured: boolean
+  fast_tier_configured: boolean
+}
+
+export interface EffectiveModelRouting {
+  structured_tier: 'fast' | 'strong'
+  strong_stages: string[]
+  fast_tier_configured: boolean
+  truncation_retry_factor: number
+  stages: EffectiveStageRouting[]
+  warning: string | null
 }
 
 export const getModelConfig = (): Promise<ModelConfig> =>
@@ -326,6 +435,15 @@ export const getModelConfig = (): Promise<ModelConfig> =>
 
 export const updateModelConfig = (config: ModelConfig): Promise<ModelConfig> =>
   http.put('/config/model', config)
+
+/**
+ * Resolved model tier and token budget per pipeline stage.
+ *
+ * Used to surface a misrouted structured tier, which otherwise only shows up as
+ * every generated article sharing the same structure.
+ */
+export const getEffectiveModelRouting = (): Promise<EffectiveModelRouting> =>
+  http.get('/config/model/effective')
 
 export interface AccountConfig {
   account_id: string
@@ -395,15 +513,26 @@ export const pushArticle = (
   taskId: string,
   accountIds: string[],
   themeName?: string,
+  autoPublish = false,
 ): Promise<BatchPushResponse> =>
-  http.post(`/articles/${taskId}/push`, { account_ids: accountIds, theme_name: themeName })
+  http.post(`/articles/${taskId}/push`, {
+    account_ids: accountIds,
+    theme_name: themeName,
+    auto_publish: autoPublish,
+  })
 
 export const batchPushArticles = (
   taskIds: string[],
   accountIds: string[],
   taskThemes?: Record<string, string>,
+  autoPublish = false,
 ): Promise<BatchPushResponse> =>
-  http.post('/articles/batch-push', { task_ids: taskIds, account_ids: accountIds, task_themes: taskThemes })
+  http.post('/articles/batch-push', {
+    task_ids: taskIds,
+    account_ids: accountIds,
+    task_themes: taskThemes,
+    auto_publish: autoPublish,
+  })
 
 export const updateArticleTheme = (
   taskId: string,
@@ -413,7 +542,11 @@ export const updateArticleTheme = (
 
 export type ScheduleMode = 'once' | 'interval'
 export type ScheduleStatus = 'running' | 'stopped'
-export type HotspotSource = 'tophub' | 'ranking_page' | 'rss_or_feed'
+/**
+ * `newsnow` is the structured multi-platform hot list API that TrendRadar itself
+ * consumes; one JSON call per platform replaces scraping ranking HTML.
+ */
+export type HotspotSource = 'tophub' | 'ranking_page' | 'rss_or_feed' | 'newsnow'
 
 export interface HotspotFilters {
   top_n_per_platform: number
@@ -782,3 +915,119 @@ export const updateUser = (userId: string, data: UpdateUserRequest): Promise<Use
 
 export const deleteUser = (userId: string): Promise<void> =>
   http.delete(`/users/${userId}`)
+
+export interface StatsOverview {
+  total_articles: number
+  total_published: number
+  total_drafts: number
+  total_reads: number
+  total_shares: number
+  total_collects: number
+  total_likes: number
+}
+
+export interface StatsTrendPoint {
+  date: string
+  published: number
+  reads: number
+}
+
+export interface StatsTopArticle {
+  task_id: string
+  title: string
+  reads: number
+  shares: number
+  collects: number
+  likes: number
+  published_at: string | null
+}
+
+export interface StatsArticlesResponse {
+  range_days: number
+  trend: StatsTrendPoint[]
+  top_articles: StatsTopArticle[]
+}
+
+export type StatsRangeDays = 7 | 30
+
+export interface ArticleStats {
+  task_id: string
+  article_id: string
+  title: string
+  published_at: string | null
+  read_num: number
+  like_num: number
+  share_num: number
+  collect_num: number
+  fav_num: number
+  source: string
+  updated_at: string | null
+}
+
+export interface UpdateArticleStatsRequest {
+  read_num?: number
+  like_num?: number
+  share_num?: number
+  collect_num?: number
+  fav_num?: number
+}
+
+export interface SyncArticleStatsResponse {
+  synced: number
+  failed: number
+  message: string
+}
+
+export interface ImageVisualSpec {
+  asset_index?: number
+  role?: string
+  subject?: string
+  setting?: string
+  composition?: string
+  section_link?: string
+  usable?: boolean
+}
+
+export interface ImageAssetItem {
+  task_id: string
+  role: string
+  ref: string
+  prompt: string
+  visual_spec: ImageVisualSpec
+  generated: boolean
+  degraded: boolean
+  style_id: string
+  article_title: string
+  created_at: string
+}
+
+export interface ImageAssetListResponse {
+  items: ImageAssetItem[]
+  total: number
+  offset: number
+  limit: number
+}
+
+export const listImages = (params?: {
+  task_id?: string
+  limit?: number
+  offset?: number
+  degraded_only?: boolean
+}): Promise<ImageAssetListResponse> => http.get('/images', { params })
+
+export const getImageStyles = (): Promise<{ items: ImageStylePreset[] }> => http.get('/images/styles')
+
+export const getStatsOverview = (): Promise<StatsOverview> => http.get('/stats/overview')
+
+export const getStatsArticles = (rangeDays: StatsRangeDays): Promise<StatsArticlesResponse> =>
+  http.get('/stats/articles', { params: { range: rangeDays } })
+
+export const syncArticleStats = (): Promise<SyncArticleStatsResponse> => http.post('/stats/sync')
+
+export const getArticleStats = (taskId: string): Promise<ArticleStats> =>
+  http.get(`/stats/${taskId}`)
+
+export const updateArticleStats = (
+  taskId: string,
+  payload: UpdateArticleStatsRequest,
+): Promise<ArticleStats> => http.put(`/stats/${taskId}`, payload)

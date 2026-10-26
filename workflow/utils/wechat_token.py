@@ -42,7 +42,7 @@ async def _read_shared_token(app_id: str, now: float) -> str:
     try:
         raw = await client.get(token_cache_key(app_id))
     except Exception as exc:  # noqa: BLE001
-        logger.warning("wechat_token_read_failed", error=str(exc))
+        logger.warning("wechat_token_read_failed", error=str(exc), exc_info=True)
         return ""
     if not raw:
         return ""
@@ -72,7 +72,7 @@ async def _store_shared_token(app_id: str, token: str, expires_at: float, now: f
             ex=ttl,
         )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("wechat_token_write_failed", error=str(exc))
+        logger.warning("wechat_token_write_failed", error=str(exc), exc_info=True)
 
 
 async def get_access_token(app_id: str, app_secret: str, client: httpx.AsyncClient) -> str:
@@ -111,4 +111,4 @@ async def invalidate_access_token(app_id: str) -> None:
     try:
         await client.delete(token_cache_key(app_id))
     except Exception as exc:  # noqa: BLE001
-        logger.warning("wechat_token_invalidate_failed", error=str(exc))
+        logger.warning("wechat_token_invalidate_failed", error=str(exc), exc_info=True)

@@ -137,7 +137,7 @@ async def _publish_draft(
     except WeChatPublishError as exc:
         if exc.token_expired:
             await invalidate_access_token(app_id)
-        logger.warning("wechat_publish_submit_failed", media_id=media_id, error=str(exc))
+        logger.warning("wechat_publish_submit_failed", media_id=media_id, error=str(exc), exc_info=True)
         return {**result, "publish_status": "publish_failed", "publish_error": str(exc)}
 
     try:
@@ -149,7 +149,7 @@ async def _publish_draft(
             max_attempts=poll_max_attempts,
         )
     except WeChatPublishError as exc:
-        logger.warning("wechat_publish_poll_failed", publish_id=publish_id, error=str(exc))
+        logger.warning("wechat_publish_poll_failed", publish_id=publish_id, error=str(exc), exc_info=True)
         return {
             **result,
             "publish_id": publish_id,

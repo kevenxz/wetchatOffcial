@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getAntdTheme } from '../../theme'
+import { darkTokens, primitiveTokens } from '../../styles/tokens'
 import {
   STORAGE_KEY,
   applyResolvedTheme,
@@ -198,12 +199,16 @@ describe('themeStore helpers', () => {
     const lightTheme = getAntdTheme('light')
     const darkTheme = getAntdTheme('dark')
 
-    expect(lightTheme.token?.colorBgLayout).toBe('#f4f0e8')
-    expect(darkTheme.token?.colorBgLayout).toBe('#0b1020')
-    expect(lightTheme.token?.colorPrimary).toBe('#0f766e')
-    expect(darkTheme.token?.colorPrimary).toBe('#2dd4bf')
-    expect(lightTheme.components?.Layout?.siderBg).toBe('#fffdf8')
-    expect(darkTheme.components?.Layout?.siderBg).toBe('#0e1627')
+    // Values come from the token layer, which `tokenParity.test.ts` keeps in sync.
+    expect(lightTheme.token?.colorBgLayout).toBe(primitiveTokens['--paper-50'])
+    expect(darkTheme.token?.colorBgLayout).toBe(darkTokens['--surface-page'])
+    expect(lightTheme.token?.colorPrimary).toBe(primitiveTokens['--accent-600'])
+    expect(darkTheme.token?.colorPrimary).toBe(primitiveTokens['--accent-400'])
+    expect(lightTheme.components?.Layout?.siderBg).toBe(primitiveTokens['--paper-0'])
+    expect(darkTheme.components?.Layout?.siderBg).toBe(darkTokens['--surface-raised'])
+    // Swiss re-skin: corners are square and shadows are gone.
+    expect(lightTheme.token?.borderRadius).toBe(2)
+    expect(lightTheme.token?.boxShadow).toBe('none')
   })
 
   it('boots the real startup path from matchMedia and feeds the resolved theme into the provider', () => {

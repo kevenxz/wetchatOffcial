@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Empty, Progress, Select, Switch, Tag, Tooltip, message } from 'antd'
+import { Button, Progress, Select, Switch, Tag, Tooltip, message } from 'antd'
 import {
   CheckCircleOutlined,
   DownOutlined,
@@ -25,6 +25,7 @@ import {
   type HotspotPlatformCatalogItem,
   type TopicStatus,
 } from '@/api'
+import { EmptyState, TruncatedText } from '@/components/layout'
 import styles from './TopicCenter.module.css'
 
 type TopicFilter = 'all' | '科技' | 'AI' | '财经' | '军事' | '国际' | '社会' | '汽车'
@@ -116,7 +117,8 @@ function getTags(topic: HotspotMonitorItem) {
     ...listValue(meta.tags),
     ...listValue(meta.keywords),
   ]
-  return Array.from(new Set(tags.map((item) => item.trim()).filter(Boolean))).slice(0, 5)
+  // 后端返回的 tags 可能包含 null/非字符串，先强制转成字符串再 trim。
+  return Array.from(new Set(tags.map((item) => String(item ?? '').trim()).filter(Boolean))).slice(0, 5)
 }
 
 function riskTone(score: number) {
@@ -312,7 +314,7 @@ export default function TopicCenter() {
           </div>
           <div className={styles.topicContent}>
             <div className={styles.topicHeader}>
-              <h2>{topic.title}</h2>
+              <TruncatedText as="h2" lines={2}>{topic.title}</TruncatedText>
               <div className={styles.topicActions}>
                 {recommended ? (
                   <Tag className={styles.recommendTag} icon={<StarFilled />}>
@@ -360,7 +362,7 @@ export default function TopicCenter() {
 
         {expanded ? (
           <div className={styles.topicDetail}>
-            <p>{summary}</p>
+            <TruncatedText as="p" lines={3}>{summary}</TruncatedText>
             <div className={styles.scoreGrid}>
               <div className={styles.scoreBox}>
                 <span>热度评分</span>
@@ -487,7 +489,12 @@ export default function TopicCenter() {
 
       <div className={styles.topicList} aria-busy={loading}>
         {filteredTopics.length === 0 && !loading ? (
-          <Empty description="暂无热点候选" style={{ padding: 64 }} />
+          <div className={styles.emptyPad}>
+            <EmptyState
+              title="暂无热点候选"
+              description="点击「立即抓取」按分类拉取榜单，或调整平台与筛选条件。"
+            />
+          </div>
         ) : (
           filteredTopics.map(renderTopic)
         )}

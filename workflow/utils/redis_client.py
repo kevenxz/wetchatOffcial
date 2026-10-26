@@ -45,7 +45,7 @@ async def get_redis() -> Any | None:
         await client.ping()
     except Exception as exc:  # noqa: BLE001
         _unavailable_until = time.monotonic() + _RETRY_COOLDOWN_SECONDS
-        logger.warning("redis_unavailable", error=str(exc))
+        logger.warning("redis_unavailable", error=str(exc), exc_info=True)
         return None
 
     _client = client

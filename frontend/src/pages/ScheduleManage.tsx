@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import type { ReactNode } from 'react'
 import {
@@ -108,7 +108,8 @@ const buildDefaultHotspotCapture = (): HotspotCaptureConfig => ({
 const normalizeUniqueTags = (items?: string[]): string[] => {
   const normalized: string[] = []
   ;(items || []).forEach((item) => {
-    const cleaned = item.trim()
+    // 后端数组可能含 null/非字符串，先强制转字符串避免 .trim() 抛错。
+    const cleaned = String(item ?? '').trim()
     if (cleaned && !normalized.includes(cleaned)) {
       normalized.push(cleaned)
     }
@@ -831,19 +832,19 @@ export default function ScheduleManage() {
 
               <Row gutter={16}>
                 <Col xs={24} md={12}>
-                  <Form.Item label="Research depth" name="search_mode">
+                  <Form.Item label="检索深度" name="search_mode">
                     <Select
                       options={[
-                        { label: 'Quick', value: 'quick' },
-                        { label: 'Standard', value: 'standard' },
-                        { label: 'Deep', value: 'deep' },
-                        { label: 'Strict', value: 'strict' },
+                        { label: '快速', value: 'quick' },
+                        { label: '标准', value: 'standard' },
+                        { label: '深度', value: 'deep' },
+                        { label: '严格', value: 'strict' },
                       ]}
                     />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={12}>
-                  <Form.Item label="Freshness window days" name="freshness_window_days">
+                  <Form.Item label="内容时效窗口" name="freshness_window_days">
                     <InputNumber min={1} max={365} style={{ width: '100%' }} />
                   </Form.Item>
                 </Col>
@@ -851,17 +852,17 @@ export default function ScheduleManage() {
 
               <Row gutter={16}>
                 <Col xs={24} md={8}>
-                  <Form.Item label="Minimum sources" name="min_sources">
+                  <Form.Item label="最少来源数" name="min_sources">
                     <InputNumber min={1} max={30} style={{ width: '100%' }} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={8}>
-                  <Form.Item label="Official sources" name="min_official_sources">
+                  <Form.Item label="最少官方来源数" name="min_official_sources">
                     <InputNumber min={0} max={10} style={{ width: '100%' }} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={8}>
-                  <Form.Item label="Source domains" name="min_cross_sources">
+                  <Form.Item label="最少来源域名数" name="min_cross_sources">
                     <InputNumber min={1} max={20} style={{ width: '100%' }} />
                   </Form.Item>
                 </Col>
@@ -869,7 +870,7 @@ export default function ScheduleManage() {
 
               <Row gutter={16}>
                 <Col xs={24} md={12}>
-                  <Form.Item label="Require risk/opposing view" name="require_opposing_view">
+                  <Form.Item label="要求风险与反向观点" name="require_opposing_view">
                     <Radio.Group
                       options={[
                         { label: '是', value: true },
@@ -879,7 +880,7 @@ export default function ScheduleManage() {
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={12}>
-                  <Form.Item label="Auto deepen sensitive categories" name="auto_deepen_for_sensitive_categories">
+                  <Form.Item label="敏感题材自动加深检索" name="auto_deepen_for_sensitive_categories">
                     <Radio.Group
                       options={[
                         { label: '是', value: true },

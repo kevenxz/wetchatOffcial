@@ -18,6 +18,8 @@ from api.store import (
     save_style_config,
     update_custom_theme,
 )
+from workflow import runtime_settings
+from workflow.model_factory import effective_routing
 
 logger = structlog.get_logger(__name__)
 
@@ -44,6 +46,34 @@ async def update_styles(body: dict[str, str] = Body(...)) -> dict[str, str]:
 @router.get("/model", response_model=ModelConfig)
 async def get_models() -> ModelConfig:
     return get_model_config()
+
+
+@router.get("/model/effective")
+async def get_effective_model_routing() -> dict:
+    """Show the model tier and token budget actually used by each pipeline stage.
+
+    Every stage in this pipeline requests a structured payload, and a reasoning model
+    spends its completion budget on hidden reasoning before emitting any JSON. That
+    failure mode is silent — the stages just fall back to deterministic templates and
+    the article looks "generated" but structurally identical every time. Exposing the
+    resolved routing makes the misconfiguration visible.
+    """
+    rows = effective_routing()
+    fast_configured = any(row["fast_tier_configured"] for row in rows)
+    return {
+        "structured_tier": runtime_settings.structured_tier(),
+        "strong_stages": sorted(runtime_settings.strong_stages()),
+        "fast_tier_configured": fast_configured,
+        "truncation_retry_factor": runtime_settings.truncation_retry_factor(),
+        "stages": rows,
+        "warning": None
+        if fast_configured or runtime_settings.structured_tier() == "strong"
+        else (
+            "未配置「结构化模型」(text_fast)。当前结构化阶段会回退到主模型；"
+            "若主模型是推理模型，结构化输出可能因 token 耗尽而失败并退回模板。"
+            "建议在模型配置中为结构化模型指定一个非推理模型。"
+        ),
+    }
 
 
 @router.put("/model", response_model=ModelConfig)

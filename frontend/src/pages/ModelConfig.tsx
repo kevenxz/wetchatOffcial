@@ -8,8 +8,8 @@ import {
   SaveOutlined,
   WarningOutlined,
 } from '@ant-design/icons'
-import { Button, Form, Input, Space, Spin, Switch, Typography, message } from 'antd'
-import { getModelConfig, updateModelConfig, type ModelConfig } from '@/api'
+import { Alert, Button, Form, Input, Space, Spin, Switch, Typography, message } from 'antd'
+import { getEffectiveModelRouting, getModelConfig, updateModelConfig, type ModelConfig } from '@/api'
 import { HeroPanel, SectionBlock, SignalCard } from '@/components/workbench'
 
 const { Text } = Typography
@@ -19,6 +19,11 @@ const EMPTY_CONFIG: ModelConfig = {
     api_key: '',
     base_url: '',
     model: 'gpt-4o',
+  },
+  text_fast: {
+    api_key: '',
+    base_url: '',
+    model: '',
   },
   image: {
     enabled: false,
@@ -60,6 +65,7 @@ export default function ModelConfigPage() {
   const [form] = Form.useForm<ModelConfig>()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [routingWarning, setRoutingWarning] = useState('')
   const imageEnabled = Form.useWatch(['image', 'enabled'], form) ?? false
   const textModel = Form.useWatch(['text', 'model'], form) ?? EMPTY_CONFIG.text.model
   const imageModel = Form.useWatch(['image', 'model'], form) ?? EMPTY_CONFIG.image.model
@@ -77,6 +83,11 @@ export default function ModelConfigPage() {
           base_url: config.text.base_url || '',
           model: config.text.model || EMPTY_CONFIG.text.model,
         },
+        text_fast: {
+          api_key: config.text_fast?.api_key || '',
+          base_url: config.text_fast?.base_url || '',
+          model: config.text_fast?.model || '',
+        },
         image: {
           enabled: Boolean(config.image.enabled),
           api_key: config.image.api_key || '',
@@ -84,6 +95,14 @@ export default function ModelConfigPage() {
           model: config.image.model || EMPTY_CONFIG.image.model,
         },
       })
+      // Surface the routing the backend actually resolved: a reasoning model on the
+      // structured stages silently degrades every stage to a fixed template.
+      try {
+        const routing = await getEffectiveModelRouting()
+        setRoutingWarning(routing.warning || '')
+      } catch {
+        setRoutingWarning('')
+      }
     } catch (err: any) {
       message.error(err.message || '加载模型配置失败')
       form.setFieldsValue(EMPTY_CONFIG)
@@ -105,6 +124,11 @@ export default function ModelConfigPage() {
           base_url: values.text.base_url?.trim() || null,
           model: values.text.model?.trim() || EMPTY_CONFIG.text.model,
         },
+        text_fast: {
+          api_key: values.text_fast?.api_key?.trim() || '',
+          base_url: values.text_fast?.base_url?.trim() || null,
+          model: values.text_fast?.model?.trim() || values.text.model?.trim() || EMPTY_CONFIG.text.model,
+        },
         image: {
           enabled: Boolean(values.image.enabled),
           api_key: values.image.api_key?.trim() || '',
@@ -118,6 +142,11 @@ export default function ModelConfigPage() {
           api_key: updated.text.api_key || '',
           base_url: updated.text.base_url || '',
           model: updated.text.model || EMPTY_CONFIG.text.model,
+        },
+        text_fast: {
+          api_key: updated.text_fast?.api_key || '',
+          base_url: updated.text_fast?.base_url || '',
+          model: updated.text_fast?.model || '',
         },
         image: {
           enabled: Boolean(updated.image.enabled),
@@ -198,6 +227,38 @@ export default function ModelConfigPage() {
                 rules={[{ required: true, message: '请输入文本模型名称' }]}
               >
                 <Input placeholder="例如：gpt-4o / qwen-max / deepseek-chat" />
+              </Form.Item>
+            </section>
+
+            <section style={panelStyle}>
+              <h3 style={panelTitleStyle}>结构化模型（建议必填）</h3>
+              <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>
+                流程中<strong>每个阶段</strong>都要求结构化 JSON 输出。请在此配置一个
+                <strong>非推理模型</strong>（例如 deepseek-chat / qwen-plus / gpt-4o-mini）。
+              </p>
+              <p style={{ margin: '8px 0 0', color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>
+                留空 API Key 时，结构化阶段会回退到上方的文本模型；若该模型是<strong>推理模型</strong>，
+                推理过程会耗尽输出预算，JSON 被截断后各阶段会退回固定模板，导致生成的文章结构千篇一律。
+              </p>
+              {routingWarning ? (
+                <Alert
+                  style={{ marginTop: 12 }}
+                  type="warning"
+                  showIcon
+                  message="当前结构化模型未配置"
+                  description={routingWarning}
+                />
+              ) : null}
+              <Form.Item label="API Key" name={['text_fast', 'api_key']}>
+                <Input.Password placeholder="留空则复用文本模型的 API Key" />
+              </Form.Item>
+
+              <Form.Item label="Base URL" name={['text_fast', 'base_url']} tooltip="留空则复用文本模型的地址">
+                <Input placeholder="例如：https://api.example.com/v1" />
+              </Form.Item>
+
+              <Form.Item label="模型名称" name={['text_fast', 'model']}>
+                <Input placeholder="例如：deepseek-chat / qwen-plus / gpt-4o-mini" />
               </Form.Item>
             </section>
 

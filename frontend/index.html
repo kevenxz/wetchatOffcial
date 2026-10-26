@@ -2,8 +2,27 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <!-- Previously referenced /vite.svg, which did not exist in public/, so the tab
+         icon was a 404 and the default Vite logo was never even shown. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <meta name="theme-color" content="#fafafa" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="description"
+      content="中文公众号内容生产自动化：热点捕获、热点原文优先、来源过滤、动态文章结构、双重评审，一键推送草稿箱或发布。"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="微信公众号文章自动发布系统" />
+    <meta
+      property="og:description"
+      content="从热点到草稿箱的全流程自动生成：热点捕获、原文优先、来源过滤、动态结构、双重评审。"
+    />
+    <meta property="og:image" content="/og-image.svg" />
+    <meta name="twitter:card" content="summary_large_image" />
     <script>
       ;(() => {
         const storageKey = 'app-theme-mode'

@@ -1,5 +1,5 @@
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { beforeEach, expect, test, vi } from 'vitest'
 import type { ModelConfig, TaskResponse } from '@/api'
 import History from '@/pages/History'
@@ -41,6 +41,11 @@ beforeEach(() => {
       api_key: '',
       base_url: '',
       model: 'gpt-4o',
+    },
+    text_fast: {
+      api_key: '',
+      base_url: '',
+      model: '',
     },
     image: {
       enabled: false,
@@ -115,8 +120,12 @@ test('renders the history page as a table-first archive', async () => {
 
   expect(await screen.findByRole('heading', { name: '内容资产' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /刷新/ })).toBeInTheDocument()
-  expect(screen.getByText('共 9 条')).toBeInTheDocument()
-  expect(screen.getByText('已完成 9 条')).toBeInTheDocument()
+  // Counts are presented as hairline figures rather than inline tags; scope the
+  // query to the figure block because the status column also says "已完成".
+  const figures = screen.getByRole('group', { name: '关键指标' })
+  expect(within(figures).getByText('任务总数')).toBeInTheDocument()
+  expect(within(figures).getByText('已完成')).toBeInTheDocument()
+  expect(within(figures).getAllByText('9')).toHaveLength(2)
   expect(screen.queryByRole('button', { name: '卡片视图' })).not.toBeInTheDocument()
   expect(screen.getByText('任务 ID')).toBeInTheDocument()
   expect(screen.getByText('task-0')).toBeInTheDocument()

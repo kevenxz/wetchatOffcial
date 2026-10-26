@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from workflow import runtime_settings
 from workflow.agents.writer import compose_draft_node
 
 
@@ -51,7 +52,7 @@ def _mock_chain(result: dict) -> tuple[MagicMock, MagicMock]:
 
 async def _run(state: dict, result: dict) -> tuple[MagicMock, MagicMock]:
     prompt, chain = _mock_chain(result)
-    with patch("workflow.agents.writer.build_chat_model") as mock_build:
+    with patch("workflow.model_factory.build_chat_model") as mock_build:
         with patch("workflow.agents.writer.ChatPromptTemplate") as mock_prompt_class:
             mock_build.return_value = MagicMock()
             mock_prompt_class.from_messages.return_value = prompt
@@ -84,7 +85,12 @@ async def test_revision_uses_a_smaller_token_budget() -> None:
         {"title": "t", "content": _valid_content(), "summary": "s", "alt_titles": []},
     )
 
-    assert mock_build.call_args.kwargs["max_tokens"] == 2500
+    # A targeted revision edits an existing draft, so it gets its own (smaller) budget,
+    # configured via LLM_MAX_TOKENS_DRAFT_REVISION. The budget is then widened for the
+    # tier the stage actually runs on (see runtime_settings.budget_for_tier).
+    assert mock_build.call_args.kwargs["max_tokens"] == runtime_settings.budget_for_tier(
+        "compose_draft_revision", "strong"
+    )
 
 
 @pytest.mark.asyncio
@@ -94,7 +100,9 @@ async def test_first_pass_uses_the_full_token_budget_without_previous_draft() ->
         {"title": "t", "content": _valid_content(), "summary": "s", "alt_titles": []},
     )
 
-    assert mock_build.call_args.kwargs["max_tokens"] == 4000
+    assert mock_build.call_args.kwargs["max_tokens"] == runtime_settings.budget_for_tier(
+        "compose_draft", "strong"
+    )
     first_payload = chain.ainvoke.await_args_list[0].args[0]
     assert first_payload["previous_draft"] == {}
     assert first_payload["draft_violations"] == []

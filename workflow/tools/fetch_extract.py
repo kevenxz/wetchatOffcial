@@ -65,7 +65,7 @@ async def _fetch_and_extract_single(item: dict, client: httpx.AsyncClient) -> di
         resp.raise_for_status()
         html_content = resp.text
     except Exception as exc:  # noqa: BLE001
-        logger.warning("fetch_failed", url=url, error=str(exc))
+        logger.warning("fetch_failed", url=url, error=str(exc), exc_info=True)
         return None
 
     extracted_text = trafilatura.extract(html_content, include_images=False, include_links=False)

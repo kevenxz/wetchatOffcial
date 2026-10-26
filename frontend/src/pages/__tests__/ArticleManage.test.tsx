@@ -13,6 +13,7 @@ const {
   listAccountsMock,
   listArticlesMock,
   pushArticleMock,
+  updateArticleContentMock,
 } = vi.hoisted(() => ({
   deleteTaskMock: vi.fn(),
   getCustomThemesMock: vi.fn<() => Promise<Record<string, StyleConfig>>>(),
@@ -21,6 +22,7 @@ const {
   listAccountsMock: vi.fn<() => Promise<AccountConfig[]>>(),
   listArticlesMock: vi.fn<() => Promise<TaskResponse[]>>(),
   pushArticleMock: vi.fn(),
+  updateArticleContentMock: vi.fn(),
 }))
 
 vi.mock('@/api', async () => {
@@ -34,6 +36,7 @@ vi.mock('@/api', async () => {
     listAccounts: listAccountsMock,
     listArticles: listArticlesMock,
     pushArticle: pushArticleMock,
+    updateArticleContent: updateArticleContentMock,
   }
 })
 
@@ -46,6 +49,7 @@ beforeEach(() => {
   listAccountsMock.mockResolvedValue([])
   deleteTaskMock.mockResolvedValue(undefined)
   pushArticleMock.mockResolvedValue({ total: 1, success: 1, failed: 0, results: [] })
+  updateArticleContentMock.mockResolvedValue(undefined)
 
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
@@ -59,6 +63,12 @@ beforeEach(() => {
       removeEventListener: () => undefined,
       dispatchEvent: () => false,
     }),
+  })
+
+  const originalGetComputedStyle = window.getComputedStyle.bind(window)
+  Object.defineProperty(window, 'getComputedStyle', {
+    writable: true,
+    value: (element: Element) => originalGetComputedStyle(element),
   })
 })
 
@@ -168,6 +178,69 @@ test('pushes an article to the selected wechat draft box', async () => {
   await user.click(within(dialog).getByRole('button', { name: '推送到草稿箱' }))
 
   await waitFor(() => {
-    expect(pushArticleMock).toHaveBeenCalledWith('article-1', ['wechat-1'], '__current__')
+    expect(pushArticleMock).toHaveBeenCalledWith('article-1', ['wechat-1'], '__current__', false)
+  })
+})
+
+test('publishes directly to the official account when the switch is enabled', async () => {
+  const user = userEvent.setup()
+  mockArticleList()
+
+  renderArticleManage()
+
+  expect(await screen.findByText('首篇文章')).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: '推送到公众号草稿箱' }))
+
+  const dialog = await screen.findByRole('dialog')
+  expect(within(dialog).queryByText('该操作不可撤回')).not.toBeInTheDocument()
+
+  await user.click(within(dialog).getByRole('switch'))
+
+  expect(await within(dialog).findByText('该操作不可撤回')).toBeInTheDocument()
+
+  await user.click(within(dialog).getByRole('button', { name: '直接发布到公众号' }))
+
+  await waitFor(() => {
+    expect(pushArticleMock).toHaveBeenCalledWith('article-1', ['wechat-1'], '__current__', true)
+  })
+})
+
+test('edits the article content inline and saves it through the api', async () => {
+  const user = userEvent.setup()
+  mockArticleList()
+
+  renderArticleManage()
+
+  expect(await screen.findByText('首篇文章')).toBeInTheDocument()
+
+  await user.click(screen.getByRole('button', { name: '编辑文章' }))
+
+  const dialog = await screen.findByRole('dialog')
+  expect(within(dialog).getByText('编辑文章内容')).toBeInTheDocument()
+
+  const titleInput = within(dialog).getByLabelText('标题')
+  expect(titleInput).toHaveValue('首篇文章')
+
+  await user.clear(titleInput)
+  await user.type(titleInput, '修改后的标题')
+  await user.clear(within(dialog).getByLabelText('摘要'))
+  await user.type(within(dialog).getByLabelText('摘要'), '修改后的摘要')
+
+  await user.click(within(dialog).getByRole('button', { name: '添加插图' }))
+  const illustrationInput = within(dialog).getByLabelText('插图 1')
+  await user.clear(illustrationInput)
+  await user.type(illustrationInput, 'https://cdn.example.com/one.png')
+
+  await user.click(within(dialog).getByRole('button', { name: /保\s*存/ }))
+
+  await waitFor(() => {
+    expect(updateArticleContentMock).toHaveBeenCalledWith('article-1', {
+      title: '修改后的标题',
+      summary: '修改后的摘要',
+      content: '# 首篇文章\n\n这是一段预览内容。',
+      cover_image: '',
+      illustrations: ['https://cdn.example.com/one.png'],
+    })
   })
 })

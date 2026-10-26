@@ -124,7 +124,10 @@ test('renders hotspot cards and converts a recommended topic to task', async () 
 
   expect(await screen.findByText('AI 搜索产品进入新一轮竞争')).toBeInTheDocument()
   expect(screen.getByText('推荐选题')).toBeInTheDocument()
-  expect(screen.getByText('账号匹配')).toBeInTheDocument()
+  // The first card is auto-expanded by a *follow-up* effect once the list has
+  // loaded, so the detail panel commits one render after the title. Asserting
+  // synchronously here raced that render and failed intermittently under load.
+  expect(await screen.findByText('账号匹配')).toBeInTheDocument()
 
   await user.click(screen.getByRole('button', { name: /立即生成文章/ }))
 

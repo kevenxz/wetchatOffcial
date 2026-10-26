@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, HTTPException
 
@@ -14,7 +14,7 @@ from api.models import (
     ScheduleStatus,
     UpdateScheduleRequest,
 )
-from api.scheduler import scheduler_engine
+from api.scheduler import compute_next_run, scheduler_engine, validate_schedule_fields
 from api.store import save_schedules, schedule_store
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])
@@ -25,24 +25,23 @@ def _utc_now() -> datetime:
     return datetime.now(tz=timezone.utc)
 
 
-def _validate_schedule(mode: ScheduleMode, run_at: datetime | None, interval_minutes: int | None) -> None:
+def _validate_schedule(
+    mode: ScheduleMode,
+    run_at: datetime | None,
+    interval_minutes: int | None,
+    cron_expression: str | None = None,
+    timezone_name: str | None = None,
+) -> None:
     """Validate required fields for each schedule mode."""
-    if mode == ScheduleMode.once and run_at is None:
-        raise HTTPException(status_code=400, detail="run_at is required when mode=once")
-    if mode == ScheduleMode.interval and not interval_minutes:
-        raise HTTPException(status_code=400, detail="interval_minutes is required when mode=interval")
+    try:
+        validate_schedule_fields(mode, run_at, interval_minutes, cron_expression, timezone_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def _compute_next_run(schedule: ScheduleConfig) -> datetime | None:
     """Calculate next run time for displaying/updating schedule state."""
-    now = _utc_now()
-    if schedule.mode == ScheduleMode.once:
-        if not schedule.run_at:
-            return None
-        return schedule.run_at if schedule.run_at > now else now
-    if schedule.mode == ScheduleMode.interval and schedule.interval_minutes:
-        return now + timedelta(minutes=schedule.interval_minutes)
-    return None
+    return compute_next_run(schedule)
 
 
 from datetime import timedelta
@@ -57,7 +56,13 @@ async def list_schedules() -> list[ScheduleConfig]:
 @router.post("", response_model=ScheduleConfig, status_code=201)
 async def create_schedule(body: CreateScheduleRequest) -> ScheduleConfig:
     """Create a new schedule config and persist it."""
-    _validate_schedule(body.mode, body.run_at, body.interval_minutes)
+    _validate_schedule(
+        body.mode,
+        body.run_at,
+        body.interval_minutes,
+        body.cron_expression,
+        body.timezone,
+    )
     now = _utc_now()
     schedule = ScheduleConfig(
         schedule_id=str(uuid.uuid4()),
@@ -65,6 +70,8 @@ async def create_schedule(body: CreateScheduleRequest) -> ScheduleConfig:
         mode=body.mode,
         run_at=body.run_at,
         interval_minutes=body.interval_minutes,
+        cron_expression=body.cron_expression,
+        timezone=body.timezone,
         theme_name=body.theme_name,
         account_ids=body.account_ids,
         hot_topics=body.hot_topics,
@@ -72,7 +79,19 @@ async def create_schedule(body: CreateScheduleRequest) -> ScheduleConfig:
         generation_config=body.generation_config,
         enabled=body.enabled,
         status=ScheduleStatus.running if body.enabled else ScheduleStatus.stopped,
-        next_run_at=(body.run_at if body.mode == ScheduleMode.once else now + timedelta(minutes=body.interval_minutes or 1))
+        next_run_at=compute_next_run(
+            ScheduleConfig(
+                schedule_id="pending",
+                name=body.name.strip(),
+                mode=body.mode,
+                run_at=body.run_at,
+                interval_minutes=body.interval_minutes,
+                cron_expression=body.cron_expression,
+                timezone=body.timezone,
+                created_at=now,
+            ),
+            now,
+        )
         if body.enabled
         else None,
         created_at=now,
@@ -95,16 +114,14 @@ async def update_schedule(schedule_id: str, body: UpdateScheduleRequest) -> Sche
     mode = merged.get("mode", schedule.mode)
     run_at = merged.get("run_at", schedule.run_at)
     interval_minutes = merged.get("interval_minutes", schedule.interval_minutes)
-    _validate_schedule(mode, run_at, interval_minutes)
+    cron_expression = merged.get("cron_expression", schedule.cron_expression)
+    timezone_name = merged.get("timezone", schedule.timezone)
+    _validate_schedule(mode, run_at, interval_minutes, cron_expression, timezone_name)
 
     updated_schedule = ScheduleConfig(**merged)
     updated_schedule.updated_at = _utc_now()
     if updated_schedule.status == ScheduleStatus.running and updated_schedule.enabled:
-        updated_schedule.next_run_at = (
-            updated_schedule.run_at
-            if updated_schedule.mode == ScheduleMode.once
-            else _utc_now() + timedelta(minutes=updated_schedule.interval_minutes or 1)
-        )
+        updated_schedule.next_run_at = compute_next_run(updated_schedule)
     schedule_store[schedule_id] = updated_schedule
     save_schedules()
     return updated_schedule
@@ -125,15 +142,17 @@ async def start_schedule(schedule_id: str) -> ScheduleConfig:
     schedule = schedule_store.get(schedule_id)
     if schedule is None:
         raise HTTPException(status_code=404, detail=f"schedule {schedule_id!r} not found")
-    _validate_schedule(schedule.mode, schedule.run_at, schedule.interval_minutes)
+    _validate_schedule(
+        schedule.mode,
+        schedule.run_at,
+        schedule.interval_minutes,
+        schedule.cron_expression,
+        schedule.timezone,
+    )
     schedule.status = ScheduleStatus.running
     schedule.enabled = True
     schedule.updated_at = _utc_now()
-    schedule.next_run_at = (
-        schedule.run_at
-        if schedule.mode == ScheduleMode.once
-        else _utc_now() + timedelta(minutes=schedule.interval_minutes or 1)
-    )
+    schedule.next_run_at = compute_next_run(schedule)
     save_schedules()
     return schedule
 

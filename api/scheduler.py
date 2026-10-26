@@ -18,6 +18,7 @@ from api.models import (
     TaskResponse,
     TaskStatus,
 )
+from api.hotspot_snapshot import maybe_refresh_hotspot_snapshot
 from api.store import (
     get_account,
     get_custom_themes,
@@ -64,6 +65,34 @@ def _resolve_theme_config(theme_name: str | None) -> tuple[str, dict[str, str]]:
     raise ValueError(f"theme {normalized!r} not found")
 
 
+def _cron_next_run(expression: str, timezone_name: str, now: datetime) -> datetime | None:
+    """Next fire time for a cron expression, evaluated in its own timezone.
+
+    APScheduler's ``CronTrigger`` is used for parsing so the accepted syntax
+    matches the documented 5-field cron form. The result is always strictly in the
+    future: a fire time equal to ``now`` would otherwise be re-selected on every
+    scheduler tick and the plan would fire continuously.
+    """
+    cleaned = (expression or "").strip()
+    if not cleaned:
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+
+        from apscheduler.triggers.cron import CronTrigger
+
+        zone = ZoneInfo(timezone_name or "Asia/Shanghai")
+        trigger = CronTrigger.from_crontab(cleaned, timezone=zone)
+        reference = now.astimezone(zone)
+        next_fire = trigger.get_next_fire_time(None, reference)
+        if next_fire is not None and next_fire <= reference:
+            next_fire = trigger.get_next_fire_time(next_fire, reference + timedelta(seconds=1))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("cron_parse_failed", expression=cleaned, timezone=timezone_name, error=str(exc))
+        return None
+    return next_fire.astimezone(timezone.utc) if next_fire else None
+
+
 def _compute_next_run(schedule: ScheduleConfig, now: datetime | None = None) -> datetime | None:
     """Compute next trigger time based on schedule mode and current time."""
     now = now or _utc_now()
@@ -76,7 +105,61 @@ def _compute_next_run(schedule: ScheduleConfig, now: datetime | None = None) -> 
 
     if schedule.mode == ScheduleMode.interval and schedule.interval_minutes:
         return now + timedelta(minutes=schedule.interval_minutes)
+
+    if schedule.mode == ScheduleMode.cron:
+        return _cron_next_run(schedule.cron_expression or "", schedule.timezone, now)
     return None
+
+
+def _count_missed_runs(schedule: ScheduleConfig, now: datetime) -> int:
+    """How many triggers were skipped while the process was down."""
+    next_run = schedule.next_run_at
+    if next_run is None or next_run >= now:
+        return 0
+
+    if schedule.mode == ScheduleMode.interval and schedule.interval_minutes:
+        window = timedelta(minutes=schedule.interval_minutes)
+        return max(1, int((now - next_run) // window))
+    # once / cron: only the single overdue trigger is treated as missed.
+    return 1
+
+
+def validate_schedule_fields(
+    mode: ScheduleMode,
+    run_at: datetime | None,
+    interval_minutes: int | None,
+    cron_expression: str | None = None,
+    timezone_name: str | None = None,
+) -> None:
+    """Validate the required fields for one schedule mode.
+
+    Raises :class:`ValueError` with an operator-facing Chinese message.
+    """
+    if mode == ScheduleMode.once and run_at is None:
+        raise ValueError("mode=once 时必须提供 run_at")
+    if mode == ScheduleMode.interval and not interval_minutes:
+        raise ValueError("mode=interval 时必须提供 interval_minutes")
+
+    # The timezone is validated first because cron evaluation depends on it, and a
+    # bad timezone would otherwise surface as a confusing cron-parse error.
+    if timezone_name:
+        try:
+            from zoneinfo import ZoneInfo
+
+            ZoneInfo(timezone_name)
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError(f"timezone {timezone_name!r} 不是有效的时区") from exc
+
+    if mode == ScheduleMode.cron:
+        if not (cron_expression or "").strip():
+            raise ValueError("mode=cron 时必须提供 cron_expression")
+        if _cron_next_run(cron_expression or "", timezone_name or "Asia/Shanghai", _utc_now()) is None:
+            raise ValueError("cron_expression 无法解析，请使用标准 5 段式表达式，例如 '0 8 * * 1-5'")
+
+
+def compute_next_run(schedule: ScheduleConfig, now: datetime | None = None) -> datetime | None:
+    """Public wrapper around the next-run computation used by the API layer."""
+    return _compute_next_run(schedule, now)
 
 
 def _resolve_schedule_keywords(schedule: ScheduleConfig) -> str:
@@ -110,6 +193,10 @@ class SchedulerEngine:
             return
         self._task = asyncio.create_task(self._run_loop())
         logger.info("scheduler_started")
+
+    def status(self) -> str:
+        """Return ``running`` / ``stopped`` for the health endpoint."""
+        return "running" if self._task and not self._task.done() else "stopped"
 
     async def stop(self) -> None:
         """Gracefully stop background scheduler loop."""
@@ -149,8 +236,46 @@ class SchedulerEngine:
                 logger.exception("scheduler_tick_failed", error=str(exc))
             await asyncio.sleep(20)
 
+    async def reconcile_on_startup(self) -> None:
+        """Reconcile schedule state after a restart.
+
+        Overdue :class:`ScheduleMode.once` plans are re-armed to fire immediately;
+        recurring plans record how many triggers were skipped while the process was
+        down and roll forward to the next real occurrence instead of firing a burst.
+        """
+        now = _utc_now()
+        reconciled = 0
+        for schedule in list(schedule_store.values()):
+            if schedule.status != ScheduleStatus.running or not schedule.enabled:
+                continue
+            missed = _count_missed_runs(schedule, now)
+            if missed:
+                schedule.missed_runs = int(schedule.missed_runs or 0) + missed
+                logger.warning(
+                    "schedule_missed_runs",
+                    schedule_id=schedule.schedule_id,
+                    missed=missed,
+                    last_next_run_at=schedule.next_run_at.isoformat() if schedule.next_run_at else None,
+                )
+            if schedule.mode == ScheduleMode.once and schedule.next_run_at and schedule.next_run_at <= now:
+                # A one-shot plan that was due while offline still deserves to run.
+                schedule.next_run_at = now
+            else:
+                schedule.next_run_at = _compute_next_run(schedule, now)
+            schedule.updated_at = now
+            reconciled += 1
+
+        if reconciled:
+            save_schedules()
+            logger.info("scheduler_reconciled", schedules=reconciled)
+
     async def _tick(self) -> None:
-        """Single scheduler tick: find due running schedules and execute them."""
+        """Single scheduler tick: refresh hotspots if due, then run due schedules."""
+        # Hotspot refresh rides the existing 20s loop rather than a second timer. It is
+        # internally rate-limited by HOTSPOT_REFRESH_INTERVAL_MINUTES and swallows its own
+        # errors, so it can never block or fail schedule execution.
+        await maybe_refresh_hotspot_snapshot()
+
         now = _utc_now()
         for schedule in list(schedule_store.values()):
             if not schedule.enabled or schedule.status != ScheduleStatus.running:
@@ -189,6 +314,7 @@ class SchedulerEngine:
             created_at=now,
             hotspot_capture_config=hotspot_capture_config,
             article_theme=schedule.theme_name,
+            publish_account_ids=list(schedule.account_ids),
         )
         task_store[task.task_id] = task
         self._running_task_ids[schedule.schedule_id] = task.task_id

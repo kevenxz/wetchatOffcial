@@ -4,6 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
+import structlog
 from fastapi import APIRouter, HTTPException
 
 from api.models import (
@@ -16,6 +17,7 @@ from api.models import (
     PushRecord,
     PushStatus,
     TaskResponse,
+    UpdateArticleContentRequest,
     UpdateArticleThemeRequest,
 )
 from api.store import (
@@ -26,7 +28,10 @@ from api.store import (
     save_tasks,
     task_store,
 )
+from workflow.utils.markdown_to_wechat import markdown_to_wechat_html
 from workflow.utils.wechat_draft_service import push_article_to_wechat_draft
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/articles", tags=["articles"])
 
@@ -172,6 +177,58 @@ async def update_article_theme(task_id: str, body: UpdateArticleThemeRequest) ->
     return task
 
 
+@router.put("/{task_id}/content", response_model=TaskResponse)
+async def update_article_content(task_id: str, body: UpdateArticleContentRequest) -> TaskResponse:
+    """Apply operator edits to a generated article before it is pushed.
+
+    Edited text is written back into both ``final_article`` and
+    ``generated_article`` so the stored preview, the theme-styled HTML and any
+    later push all agree on the same content.
+    """
+    task = task_store.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail=f"task {task_id!r} not found")
+    if not (task.final_article or task.generated_article):
+        raise HTTPException(status_code=400, detail="task does not have generated article")
+
+    article = dict(task.final_article or task.generated_article or {})
+    patch = body.model_dump(exclude_unset=True)
+
+    if patch.get("title") is not None:
+        cleaned = str(patch["title"]).strip()
+        if not cleaned:
+            raise HTTPException(status_code=400, detail="title cannot be blank")
+        article["title"] = cleaned
+    if patch.get("summary") is not None:
+        article["summary"] = str(patch["summary"]).strip()
+    if patch.get("content") is not None:
+        article["content"] = str(patch["content"])
+    if patch.get("cover_image") is not None:
+        article["cover_image"] = str(patch["cover_image"]).strip()
+    if patch.get("illustrations") is not None:
+        article["illustrations"] = [
+            str(item).strip() for item in list(patch["illustrations"] or []) if str(item).strip()
+        ]
+
+    # Re-render the theme HTML so the stored preview matches what would be pushed.
+    theme_name, style_config = _resolve_theme_config(task.article_theme)
+    article["html_content"] = markdown_to_wechat_html(
+        str(article.get("content") or ""),
+        [str(item) for item in list(article.get("illustrations") or [])],
+        style_config=style_config,
+    )
+    article["edited_by_operator"] = True
+
+    task.final_article = article
+    task.generated_article = article
+    task.article_theme = theme_name
+    task.updated_at = datetime.now(tz=timezone.utc)
+    save_tasks()
+
+    logger.info("article_content_updated", task_id=task_id, title=article.get("title"))
+    return task
+
+
 @router.post("/{task_id}/push", response_model=BatchPushResponse)
 async def push_article(task_id: str, body: PushArticleRequest) -> BatchPushResponse:
     """Push one article to multiple accounts with selected theme."""
@@ -185,7 +242,9 @@ async def push_article(task_id: str, body: PushArticleRequest) -> BatchPushRespo
     theme_name, style_config = _resolve_theme_config(body.theme_name or task.article_theme)
     results: list[PushOperationResult] = []
     for account in accounts:
-        results.append(await _push_single(task, account, theme_name, style_config))
+        results.append(
+            await _push_single(task, account, theme_name, style_config, auto_publish=body.auto_publish)
+        )
 
     save_tasks()
     success = sum(1 for item in results if item.status == PushStatus.success)
@@ -238,7 +297,9 @@ async def batch_push_articles(body: BatchPushRequest) -> BatchPushResponse:
         # Resolve theme per task so different selected rows can use different styles.
         theme_name, style_config = _resolve_theme_config(task_theme)
         for account in accounts:
-            results.append(await _push_single(task, account, theme_name, style_config))
+            results.append(
+                await _push_single(task, account, theme_name, style_config, auto_publish=body.auto_publish)
+            )
 
     save_tasks()
     success = sum(1 for item in results if item.status == PushStatus.success)

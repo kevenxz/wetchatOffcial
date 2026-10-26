@@ -5,20 +5,23 @@ import base64
 import hashlib
 import hmac
 import json
-import logging
 import os
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+import structlog
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from api.models import UserAccount, UserPublic, UserRole
 from api.store import create_user, get_user, get_user_by_username, list_users
 
-logger = logging.getLogger(__name__)
+# structlog, not stdlib `logging`: a stdlib logger rendered through the structlog formatter
+# loses the timestamp, level and logger name, producing lines that cannot be filtered or
+# parsed. Every other module already uses structlog.
+logger = structlog.get_logger(__name__)
 
 _PASSWORD_HASH_ALGO = "pbkdf2_sha256"
 _DEFAULT_PASSWORD_ITERATIONS = 120_000
@@ -191,4 +194,6 @@ def ensure_default_admin_user() -> None:
         created_at=datetime.now(tz=timezone.utc),
     )
     create_user(user)
-    logger.warning("default_admin_created username=%s", username)
+    # structlog has no %-style interpolation, so the old `"...=%s", username` form would
+    # have printed a literal `%s`. Pass the value as a structured field instead.
+    logger.warning("default_admin_created", username=username)

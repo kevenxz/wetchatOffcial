@@ -1,17 +1,22 @@
-﻿import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
-import { Button, Empty, Result, Spin, Tag, message } from 'antd'
+import { ArrowLeftOutlined, EditOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import { Alert, Button, Collapse, Empty, Popconfirm, Result, Spin, Table, Tag, message } from 'antd'
+import type { ColumnsType } from 'antd/es/table'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import {
   ARTICLE_STRATEGY_LABELS,
+  cancelTask,
   getTask,
   listWorkflowRunSteps,
   retryTask,
+  type PushRecord,
+  type PublishStatus,
   type TaskResponse,
   type WorkflowRunStepRecord,
 } from '@/api'
+import { TruncatedText } from '@/components/layout'
 import { HeroPanel, SectionBlock, StatusRail, ViralityScorecard, type StatusRailStep } from '@/components/workbench'
 import styles from './TaskDetail.module.css'
 
@@ -26,15 +31,35 @@ const SKILL_STEPS: StatusRailStep[] = [
   { key: 'resolve_article_type', title: '策略路由', description: '根据目标和证据选择文章类型。' },
   { key: 'design_viral_strategy', title: '传播策略', description: '定义读者张力、内容承诺与分享触发点。' },
   { key: 'outline_planner', title: '文章大纲', description: '基于搜索素材提炼标题、子标题、结构和证据映射。' },
+  { key: 'merge_outline_strategy', title: '大纲策略融合', description: '把传播策略并入大纲，形成统一的写作骨架。' },
   { key: 'compose_draft', title: '写作成稿', description: '输出标题、摘要和公众号正文。' },
-  { key: 'review_article_draft', title: '文章审核', description: '检查结构、事实支撑和表达风险。' },
-  { key: 'review_viral_potential', title: '传播评审', description: '独立评估点击、留存、共鸣、分享与可信度。' },
+  { key: 'normalize_draft', title: '稿件归一化', description: '统一正文结构、插图占位和排版字段。' },
   { key: 'plan_visual_assets', title: '图片规划', description: '决定封面和文内配图需求。' },
-  { key: 'image_agent', title: '生图 Agent', description: '使用配置的图片模型生成封面和文内插图。' },
-  { key: 'review_visual_assets', title: '图片审核', description: '检查图片完整性和内容适配度。' },
+  // 图片生成与图片审核在同一个节点内完成，使两条并发分支深度一致，
+  // 质量门禁才能真正等到两侧都结束后再判定。
+  { key: 'parallel_review', title: '并行审核', description: '同时执行文章质量审核与传播潜力评审。' },
+  { key: 'image_agent', title: '生图与图片审核', description: '生成封面和文内插图，并检查完整性与内容适配度。' },
   { key: 'quality_gate', title: '质量门禁', description: '决定发布、修订或人工处理。' },
   { key: 'push_to_draft', title: '推送草稿', description: '推送至微信公众号草稿箱。' },
 ]
+
+const PUBLISH_STATUS_LABELS: Record<PublishStatus, string> = {
+  draft_only: '仅草稿',
+  publishing: '发布中',
+  published: '已发布',
+  publish_failed: '发布失败',
+  failed: '推送失败',
+}
+
+const PUBLISH_STATUS_COLORS: Record<PublishStatus, string> = {
+  draft_only: 'default',
+  publishing: 'processing',
+  published: 'success',
+  publish_failed: 'error',
+  failed: 'error',
+}
+
+const CANCELLABLE_STATUSES: ReadonlyArray<TaskResponse['status']> = ['pending', 'queued', 'running']
 
 interface WsPayload {
   task_id: string
@@ -49,14 +74,26 @@ interface WsPayload {
 
 const STATUS_COPY: Record<string, string> = {
   pending: '等待执行',
+  queued: '排队中',
   running: '执行中',
   done: '结果已交付',
   failed: '需要处理',
+  cancelled: '已取消',
 }
 
 function formatDate(value: string | null | undefined) {
   if (!value) return '-'
   return new Date(value).toLocaleString('zh-CN')
+}
+
+function publishStatusOf(record: PushRecord): PublishStatus {
+  if (record.publish_status) return record.publish_status
+  return record.status === 'success' ? 'draft_only' : 'failed'
+}
+
+function draftUrlOf(record: PushRecord): string {
+  const url = record.draft_info?.url
+  return typeof url === 'string' && url.trim() ? url.trim() : ''
 }
 
 function renderValue(value: unknown) {
@@ -101,15 +138,50 @@ function normalizeArticleHtml(html: string | undefined) {
   return doc.body.innerHTML
 }
 
-function collectImageRefs(article: Record<string, any> | undefined) {
+/**
+ * Provenance for a photograph harvested from a reference article.
+ *
+ * Using a third-party photo forces human review, so the reviewer must be able to see where each
+ * one came from — and be warned when a cover crop was aggressive, since nothing in this system
+ * can tell whether the crop removed the subject.
+ */
+export interface ImageProvenance {
+  label: string
+  url: string
+  warning?: string
+}
+
+function readProvenance(asset: Record<string, any>): ImageProvenance | undefined {
+  if (String(asset.provider || '') !== 'source') return undefined
+  const attribution = (asset.attribution || {}) as Record<string, any>
+  const label = String(attribution.source_title || attribution.source_domain || '').trim()
+  const url = String(attribution.source_url || '').trim()
+  const notes = Array.isArray(asset.notes) ? asset.notes.filter(Boolean).join('；') : ''
+  if (!label && !notes) return undefined
+  return { label, url, warning: notes || undefined }
+}
+
+export function collectImageRefs(article: Record<string, any> | undefined) {
   if (!article) return []
-  const refs: Array<{ role: string; src: string; prompt?: string; purpose?: string }> = []
+  const refs: Array<{
+    role: string
+    src: string
+    prompt?: string
+    purpose?: string
+    provenance?: ImageProvenance
+  }> = []
   const seen = new Set<string>()
-  const pushRef = (role: string, rawSrc: string | undefined, prompt?: string, purpose?: string) => {
+  const pushRef = (
+    role: string,
+    rawSrc: string | undefined,
+    prompt?: string,
+    purpose?: string,
+    provenance?: ImageProvenance,
+  ) => {
     const src = normalizeImageSrc(rawSrc)
     if (!src || seen.has(src)) return
     seen.add(src)
-    refs.push({ role, src, prompt, purpose })
+    refs.push({ role, src, prompt, purpose, provenance })
   }
   pushRef('cover', article.cover_image)
   ;(article.illustrations || []).forEach((item: string, index: number) => pushRef(`插图${index + 1}`, item))
@@ -123,6 +195,7 @@ function collectImageRefs(article: Record<string, any> | undefined) {
       String(asset.url || asset.path || asset.src || asset.ref || ''),
       String(asset.prompt || ''),
       String(asset.purpose || asset.section || ''),
+      readProvenance(asset),
     )
   })
   return refs
@@ -166,6 +239,19 @@ export default function TaskDetail() {
       setStatusMessage('尝试恢复连接...')
     } catch (error: any) {
       message.error(error.message || '重试请求失败')
+    }
+  }
+
+  const handleCancel = async () => {
+    if (!taskId) return
+    try {
+      const result = await cancelTask(taskId)
+      setTask((prev) => (prev ? { ...prev, status: result.status } : result))
+      setWsStatus(result.status)
+      setStatusMessage('任务已取消')
+      message.success('任务已取消')
+    } catch (error: any) {
+      message.error(error.message || '取消任务失败')
     }
   }
 
@@ -295,6 +381,30 @@ export default function TaskDetail() {
   const searchEvaluation = task?.research_state?.search_evaluation || task?.research_state?.evidence_pack?.search_evaluation
   const searchRuns = task?.research_state?.search_runs || []
   const citations = task?.research_state?.evidence_pack?.citations || []
+  const sourceFiltering = task?.research_state?.source_filtering
+  const hotspotSourceStatus = task?.research_state?.hotspot_source_status
+  const blueprintSource = task?.planning_state?.blueprint_source
+  const draftGenerationMode = task?.writing_state?.draft_generation_mode
+  // A degraded run silently produces a template article; surface it prominently
+  // instead of burying it in the diagnostics panel.
+  const degradationNotices: string[] = []
+  if (blueprintSource === 'fallback') {
+    degradationNotices.push(
+      `文章结构由本地模板生成（原因：${task?.planning_state?.blueprint_degraded_reason || '模型未返回可用结构'}）。
+       请检查「模型配置」中的结构化模型是否为非推理模型。`,
+    )
+  }
+  if (typeof draftGenerationMode === 'string' && draftGenerationMode.startsWith('fallback')) {
+    degradationNotices.push(
+      `正文由本地模板生成（原因：${task?.writing_state?.draft_degraded_reason || '模型调用失败'}）。`,
+    )
+  }
+  if (sourceFiltering?.insufficient) {
+    degradationNotices.push('过滤后可用来源不足，本文已标记为需要人工复核。')
+  }
+  if (hotspotSourceStatus && hotspotSourceStatus !== 'resolved') {
+    degradationNotices.push(`未读取到热点原文（状态：${hotspotSourceStatus}），结构将主要依据搜索结果。`)
+  }
   const stepByName = workflowSteps.reduce<Record<string, WorkflowRunStepRecord[]>>((acc, step) => {
     acc[step.step_name] = [...(acc[step.step_name] || []), step]
     return acc
@@ -303,6 +413,69 @@ export default function TaskDetail() {
     ...SKILL_STEPS.flatMap((step) => stepByName[step.key] || []),
     ...workflowSteps.filter((step) => !SKILL_STEPS.some((known) => known.key === step.step_name)),
   ]
+  const pushRecords = task?.push_records ?? []
+  const pushColumns: ColumnsType<PushRecord> = [
+    {
+      title: '账号',
+      dataIndex: 'account_name',
+      key: 'account_name',
+      render: (_value, record) => record.account_name || record.account_id || '-',
+    },
+    {
+      title: '推送状态',
+      key: 'status',
+      render: (_value, record) => (
+        <Tag color={record.status === 'success' ? 'success' : 'error'}>
+          {record.status === 'success' ? '推送成功' : '推送失败'}
+        </Tag>
+      ),
+    },
+    {
+      title: '发布状态',
+      key: 'publish_status',
+      render: (_value, record) => {
+        const status = publishStatusOf(record)
+        return <Tag color={PUBLISH_STATUS_COLORS[status]}>{PUBLISH_STATUS_LABELS[status]}</Tag>
+      },
+    },
+    {
+      title: '发布 ID',
+      dataIndex: 'publish_id',
+      key: 'publish_id',
+      render: (value: string | null | undefined) => value || '-',
+    },
+    {
+      title: '主题',
+      dataIndex: 'theme_name',
+      key: 'theme_name',
+      render: (value: string | null | undefined) => value || '-',
+    },
+    {
+      title: '尝试次数',
+      dataIndex: 'attempt',
+      key: 'attempt',
+      render: (value: number | undefined) => (value === undefined ? '-' : String(value)),
+    },
+    {
+      title: '时间',
+      dataIndex: 'pushed_at',
+      key: 'pushed_at',
+      render: (value: string) => formatDate(value),
+    },
+    {
+      title: '操作',
+      key: 'action',
+      render: (_value, record) =>
+        draftUrlOf(record) ? (
+          <a href={draftUrlOf(record)} target="_blank" rel="noreferrer">
+            查看草稿
+          </a>
+        ) : (
+          '-'
+        ),
+    },
+  ]
+  const pushErrorRecords = pushRecords.filter((record) => Boolean(record.error))
   const metaItems = task
     ? [
         { label: '任务 ID', value: task.task_id },
@@ -338,17 +511,43 @@ export default function TaskDetail() {
         description="聚焦当前任务的执行轨迹、结构化结果和草稿交付状态。"
       >
         <div className={styles.heroActions} role="toolbar" aria-label="任务操作">
-          <Tag color={wsStatus === 'done' ? 'success' : wsStatus === 'failed' ? 'error' : 'processing'}>
+          <Tag
+            color={
+              wsStatus === 'done'
+                ? 'success'
+                : wsStatus === 'failed'
+                  ? 'error'
+                  : wsStatus === 'cancelled'
+                    ? 'warning'
+                    : 'processing'
+            }
+          >
             {STATUS_COPY[wsStatus] ?? wsStatus}
           </Tag>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/task')}>
             返回创作台
           </Button>
+          {CANCELLABLE_STATUSES.includes(wsStatus as TaskResponse['status']) ? (
+            <Popconfirm
+              title="确认取消任务"
+              description="取消后本次任务将停止执行，已产生的中间结果会保留。"
+              okText="取消任务"
+              cancelText="再想想"
+              onConfirm={() => void handleCancel()}
+            >
+              <Button danger icon={<StopOutlined />}>
+                取消任务
+              </Button>
+            </Popconfirm>
+          ) : null}
           {wsStatus === 'failed' ? (
             <Button type="primary" icon={<ReloadOutlined />} onClick={handleRetry}>
               从断点重试
             </Button>
           ) : null}
+          <Button icon={<EditOutlined />} onClick={() => navigate('/articles')}>
+            编辑文章
+          </Button>
         </div>
       </HeroPanel>
 
@@ -399,7 +598,9 @@ export default function TaskDetail() {
                         ) : null}
                         <header className={styles.articleHeader}>
                           <p className={styles.kicker}>Generated Article</p>
-                          <h3>{finalArticle?.title || '未返回标题'}</h3>
+                          <TruncatedText as="h3" lines={2}>
+                            {finalArticle?.title || '未返回标题'}
+                          </TruncatedText>
                           {finalArticle?.alt_titles?.length ? (
                             <p className={styles.altTitles}>
                               备选标题：{finalArticle.alt_titles.join(' / ')}
@@ -418,6 +619,21 @@ export default function TaskDetail() {
                                 <figcaption>
                                   <strong>{image.role}</strong>
                                   {image.purpose ? <span>{image.purpose}</span> : null}
+                                  {image.provenance ? (
+                                    <span className={styles.imageSource}>
+                                      来源：
+                                      {image.provenance.url ? (
+                                        <a href={image.provenance.url} target="_blank" rel="noreferrer">
+                                          {image.provenance.label || image.provenance.url}
+                                        </a>
+                                      ) : (
+                                        image.provenance.label
+                                      )}
+                                    </span>
+                                  ) : null}
+                                  {image.provenance?.warning ? (
+                                    <span className={styles.imageWarning}>{image.provenance.warning}</span>
+                                  ) : null}
                                 </figcaption>
                               </figure>
                             ))}
@@ -442,6 +658,12 @@ export default function TaskDetail() {
                       </Button>,
                     ]}
                   />
+                ) : wsStatus === 'cancelled' ? (
+                  <Result
+                    status="warning"
+                    title="任务已取消"
+                    subTitle="本次任务已停止执行，已生成的中间结果仍保留在下方开发者诊断中。"
+                  />
                 ) : (
                   <div className={styles.pendingState}>
                     <p className={styles.pendingLead}>任务仍在执行，结果区会持续接收实时更新。</p>
@@ -455,6 +677,21 @@ export default function TaskDetail() {
           </SectionBlock>
 
           <div className={styles.detailLayout}>
+            {degradationNotices.length ? (
+              <Alert
+                type="warning"
+                showIcon
+                message="本次生成已降级，结果可能不达标"
+                description={
+                  <ul className={styles.noticeList}>
+                    {degradationNotices.map((notice) => (
+                      <li key={notice}>{notice}</li>
+                    ))}
+                  </ul>
+                }
+              />
+            ) : null}
+
             <SectionBlock title="任务信息">
               <dl className={styles.metaGrid}>
                 {metaItems.map((item) => (
@@ -466,7 +703,46 @@ export default function TaskDetail() {
               </dl>
             </SectionBlock>
 
-            <SectionBlock title="结构信号">
+            <SectionBlock title="发布状态">
+              {pushRecords.length ? (
+                <div className={styles.signalStack}>
+                  <Table
+                    columns={pushColumns}
+                    dataSource={pushRecords}
+                    rowKey={(record) => record.push_id || record.account_id}
+                    pagination={false}
+                    size="small"
+                    scroll={{ x: 'max-content' }}
+                  />
+                  {pushErrorRecords.length ? (
+                    <ul className={styles.publishErrors} aria-label="推送错误">
+                      {pushErrorRecords.map((record) => (
+                        <li key={`${record.push_id || record.account_id}-error`}>
+                          <strong>{record.account_name || record.account_id}</strong>
+                          <span>{record.error}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {task?.draft_info?.url ? (
+                    <a href={String(task.draft_info.url)} target="_blank" rel="noreferrer">
+                      查看微信草稿预览链接
+                    </a>
+                  ) : null}
+                </div>
+              ) : (
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未产生推送记录。" />
+              )}
+            </SectionBlock>
+
+            <SectionBlock title="开发者诊断">
+              <Collapse
+                defaultActiveKey={[]}
+                items={[
+                  {
+                    key: 'signals',
+                    label: '结构信号（步骤输入输出与原始 JSON）',
+                    children: (
               <div className={styles.signalStack}>
                 <div className={styles.signalCard}>
                   <span>步骤输入输出</span>
@@ -603,6 +879,10 @@ export default function TaskDetail() {
                   <pre>{renderValue(task?.writing_state?.article_review || task?.writing_state)}</pre>
                 </div>
               </div>
+                    ),
+                  },
+                ]}
+              />
             </SectionBlock>
           </div>
         </div>

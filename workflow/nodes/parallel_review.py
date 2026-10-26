@@ -85,6 +85,7 @@ async def parallel_review_node(state: WorkflowState) -> dict[str, Any]:
             "parallel_review_viral_failed",
             task_id=str(state.get("task_id") or ""),
             error=str(exc),
+            exc_info=True,
         )
         viral_result = {}
 

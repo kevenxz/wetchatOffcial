@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from workflow import runtime_settings
 from workflow.agents.reviewer import review_article_draft_node
 
 
@@ -64,8 +65,10 @@ async def test_review_article_draft_uses_model_and_records_revision_guidance() -
     assert llm_kwargs["model"] == "text-model"
     assert llm_kwargs["api_key"] == "text-key"
     assert llm_kwargs["base_url"] == "https://text.example.com/v1"
-    # Review output is a small structured payload, so the token cap is tightened.
-    assert llm_kwargs["max_tokens"] == 600
+    # The budget is configuration driven (LLM_MAX_TOKENS_REVIEW) and then widened for
+    # the tier: a reasoning model needs headroom beyond the JSON payload, because its
+    # hidden reasoning is billed against the same completion budget.
+    assert llm_kwargs["max_tokens"] == runtime_settings.budget_for_tier("review_article_draft", "strong")
     assert llm_kwargs["temperature"] == 0.2
     assert llm_kwargs["timeout"] > 0
     assert llm_kwargs["max_retries"] >= 0

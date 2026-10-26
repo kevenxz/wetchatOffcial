@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from workflow import runtime_settings
 from workflow.article_skills import list_article_skills, select_article_skill
-from workflow.model_factory import build_chat_model, llm_slot, model_context as stage_context
+from workflow.model_factory import invoke_structured, model_context as stage_context, structured_chain
 from workflow.model_logging import log_model_request, log_model_response
 from workflow.state import WorkflowState
 from workflow.utils.article_type_registry import get_article_type_registry
@@ -147,9 +147,6 @@ async def _build_ai_search_contract(
 ) -> dict[str, Any] | None:
     if not state.get("config_snapshot"):
         return None
-    llm = build_chat_model(stage="planner_agent", max_tokens=900, temperature=0.2)
-    if llm is None:
-        return None
     prompt = ChatPromptTemplate.from_messages(
         [
             (
@@ -170,7 +167,14 @@ async def _build_ai_search_contract(
             ),
         ]
     )
-    chain = prompt | llm.with_structured_output(ResearchContractOutput)
+    chain, retry_factory = structured_chain(
+        prompt,
+        stage="planner_agent",
+        schema=ResearchContractOutput,
+        temperature=0.2,
+    )
+    if chain is None:
+        return None
     payload = {
         "topic": fallback_contract["topic"],
         "task_brief": state.get("task_brief") or {},
@@ -182,14 +186,24 @@ async def _build_ai_search_contract(
     context = stage_context("planner_agent", structured_output="ResearchContractOutput")
     log_model_request(logger, task_id=state["task_id"], skill="planner_agent", context=context, request=payload)
     try:
-        async with llm_slot():
-            result = await chain.ainvoke(payload)
+        result = await invoke_structured(
+            chain,
+            payload,
+            stage="planner_agent",
+            build_retry_chain=retry_factory,
+        )
         contract = result.model_dump()
         log_model_response(logger, task_id=state["task_id"], skill="planner_agent", context=context, response=contract)
         contract["planner_source"] = "ai"
         return contract
     except Exception as exc:  # noqa: BLE001
-        logger.warning("research_planner_ai_failed", task_id=state["task_id"], error=str(exc))
+        logger.warning(
+            "research_planner_ai_failed",
+            task_id=state["task_id"],
+            degraded_reason=getattr(exc, "reason", "") or "error",
+            error=str(exc),
+            exc_info=True,
+        )
         return None
 
 
